@@ -108,7 +108,7 @@ export default function ListingEditor({ id, doc }: { id: string; doc: ListingDoc
 function NotReady({ id, doc }: { id: string; doc: ListingDoc | null }) {
   return (
     <div className="flex max-w-xl flex-col gap-4 pt-8">
-      <h1 className="text-[length:var(--t-2xl)] font-bold">
+      <h1 className="text-[2.25rem]">
         {doc?.status === "rejected" ? "We couldn't list this one" : doc?.status === "failed" ? "Something went wrong" : "Still working on it"}
       </h1>
       <p className="text-ink-2">{doc?.rejection?.match_check.reason ?? doc?.error ?? "Your listing isn't ready yet."}</p>
@@ -183,7 +183,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
   const splatUrl = m.splat_url ?? (mock ? sampleSplatFor(entry.id) : null);
   const priceOk = !validateFields({ ...fields, title: "x", description: "x" }).price;
   const fieldCls = (bad: boolean) =>
-    `w-full rounded-md border bg-surface px-3 ${bad ? "border-2 border-coral" : "border-line-strong"}`;
+    `field px-4 ${bad ? "outline outline-2 outline-offset-0 outline-coral" : ""}`;
   const err = (k: keyof Fields) =>
     errors[k] && (
       <p id={`f-${k}-err`} className="mt-1 flex items-center gap-1.5 text-sm font-semibold">
@@ -232,7 +232,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
               rows={2}
               autoComplete="off"
               {...aria("title")}
-              className={`${fieldCls(!!errors.title)} mt-1 block resize-none py-2 font-display text-[length:var(--t-xl)] font-bold leading-tight [field-sizing:content]`}
+              className={`${fieldCls(!!errors.title)} mt-1.5 block resize-none py-3 font-display text-[1.75rem] leading-tight [field-sizing:content] [font-variation-settings:"SOFT"_100]`}
             />
             {err("title")}
           </div>
@@ -242,8 +242,8 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
             <label htmlFor="f-price" className="mt-2 text-sm font-semibold text-ink-2">
               Your price
             </label>
-            <div className={`${fieldCls(!!errors.price)} flex max-w-56 items-center`}>
-              <span aria-hidden className="font-display text-[length:var(--t-xl)] font-bold text-ink-2">
+            <div className={`${fieldCls(!!errors.price)} mt-1.5 flex max-w-56 items-center has-[input:focus-visible]:bg-raised has-[input:focus-visible]:outline has-[input:focus-visible]:outline-2 has-[input:focus-visible]:outline-[var(--focus)]`}>
+              <span aria-hidden className="text-[1.75rem] font-bold text-ink-2">
                 $
               </span>
               <input
@@ -254,7 +254,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
                 inputMode="numeric"
                 autoComplete="off"
                 {...aria("price")}
-                className="min-h-12 w-full bg-transparent pl-1 font-display text-[length:var(--t-xl)] font-bold"
+                className="min-h-14 w-full bg-transparent pl-1 text-[1.75rem] font-bold tabular-nums focus-visible:outline-none"
               />
             </div>
             {err("price")}
@@ -267,7 +267,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
 
           {l.price_justification.length > 0 && (
             <div className="flex flex-col gap-1">
-              <h2 className="text-[length:var(--t-md)] font-bold">Why this price?</h2>
+              <h2 className="font-sans text-lg font-semibold tracking-normal">Why this price?</h2>
               <ul className="list-disc pl-5 text-sm text-ink-2">
                 {l.price_justification.map((j) => (
                   <li key={j}>{j}</li>
@@ -277,7 +277,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
           )}
 
           <div className="flex flex-col gap-1">
-            <h2 className="text-[length:var(--t-md)] font-bold">Condition: {GRADE_LABEL[l.condition_grade]}</h2>
+            <h2 className="font-sans text-lg font-semibold tracking-normal">Condition: {GRADE_LABEL[l.condition_grade]}</h2>
             {l.condition_notes.length > 0 && (
               <ul className="list-disc pl-5 text-sm text-ink-2">
                 {l.condition_notes.map((n) => (
@@ -288,7 +288,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
           </div>
 
           {l.needs_seller_check && (
-            <div role="note" className="rounded-md border border-amber bg-surface p-4 text-sm">
+            <div role="note" className="rounded-[20px] bg-amber-wash p-5 text-[15px]">
               <p className="font-semibold">Please check before publishing</p>
               <ul className="mt-1 list-disc pl-5">
                 {l.seller_check_reasons.map((r) => (
@@ -310,7 +310,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
             onChange={set("description")}
             rows={4}
             {...aria("description")}
-            className={`${fieldCls(!!errors.description)} mt-1 block py-2`}
+            className={`${fieldCls(!!errors.description)} mt-1.5 block py-3 text-[length:var(--t-lg)] leading-relaxed`}
           />
           {err("description")}
         </div>
@@ -320,7 +320,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
         </div>
 
         <div className="order-5 flex flex-wrap items-center justify-end gap-3 md:col-span-12">
-          <p role="status" aria-live="polite" className="mr-auto text-sm font-semibold text-mint-ink">
+          <p role="status" aria-live="polite" className="mr-auto text-sm font-semibold text-leaf">
             {toast}
           </p>
           {saveError && (
@@ -346,7 +346,7 @@ function Published({ entry }: { entry: LocalListing }) {
   const l = entry.market.listing;
   return (
     <section aria-labelledby="published" className="mx-auto flex max-w-xl flex-col items-start gap-5 pt-8">
-      <h1 id="published" ref={heading} tabIndex={-1} className="text-[length:var(--t-2xl)] font-bold">
+      <h1 id="published" ref={heading} tabIndex={-1} className="text-[2.5rem] md:text-[3.25rem]">
         Published on this device.
       </h1>
       <p className="text-ink-2">

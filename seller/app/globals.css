@@ -158,105 +158,111 @@
   }
 }
 
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: var(--t-md);
-  line-height: 1.55;
-  -webkit-font-smoothing: antialiased;
+/* Base and component rules sit in Tailwind's layers, so a utility class on an element always wins over them. */
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--t-md);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html {
+    scroll-padding-top: 5rem;
+    scroll-behavior: smooth;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  /* Signs: Fraunces at its softest. Card and panel titles (h3 and below) stay in Figtree. */
+  h1,
+  h2,
+  .font-display {
+    font-family: var(--font-display);
+    font-variation-settings: "SOFT" 100, "WONK" 0;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+  h3 {
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--wash);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Skip-link targets take focus only so Tab continues from there; they are not controls, so no ring. */
+  [tabindex="-1"]:focus { outline: none; }
 }
 
-html {
-  scroll-padding-top: 5rem;
-  scroll-behavior: smooth;
-  scrollbar-color: var(--line-strong) transparent;
-}
+@layer components {
+  /* Buttons are full pills that press in (DESIGN.md §4). */
+  .btn-primary,
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    min-height: 3rem;
+    padding: 0 var(--sp-5);
+    border-radius: 999px;
+    font-weight: 600;
+    transition: background-color var(--dur-feedback) var(--ease), transform var(--dur-feedback) var(--ease);
+  }
+  .btn-primary {
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+  }
+  .btn-primary:hover { background: var(--btn-press); }
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .btn-secondary:hover { background: var(--surface-2); }
+  .btn-primary:active,
+  .btn-secondary:active { transform: scale(0.97); }
 
-/* Signs: Fraunces at its softest. Card and panel titles (h3 and below) stay in Figtree. */
-h1,
-h2,
-.font-display {
-  font-family: var(--font-display);
-  font-variation-settings: "SOFT" 100, "WONK" 0;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.08;
-  text-wrap: balance;
-}
-h3 {
-  letter-spacing: -0.01em;
-  text-wrap: balance;
-}
-p {
-  text-wrap: pretty;
-}
+  /* Form fields: a shelf fill, no outline at rest, leaf ring on focus. */
+  .field {
+    width: 100%;
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    transition: background-color var(--dur-feedback) var(--ease);
+  }
+  .field:hover { background: var(--surface-2); }
+  .field::placeholder { color: var(--ink-2); }
+  .field:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; background: var(--raised); }
 
-::selection {
-  background: var(--wash);
-  color: var(--ink);
-}
+  /* "Skip to content": the first Tab stop on every page, hidden until it has focus. */
+  .skip-link {
+    position: absolute;
+    left: var(--sp-4);
+    top: -100px;
+    z-index: 50;
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: 999px;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    font-weight: 600;
+  }
+  .skip-link:focus { top: var(--sp-2); }
 
-/* Buttons are full pills that press in (DESIGN.md §4). */
-.btn-primary,
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--sp-2);
-  min-height: 3rem;
-  padding: 0 var(--sp-5);
-  border-radius: 999px;
-  font-weight: 600;
-  transition: background-color var(--dur-feedback) var(--ease), transform var(--dur-feedback) var(--ease);
-}
-.btn-primary {
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-}
-.btn-primary:hover { background: var(--btn-press); }
-.btn-secondary {
-  background: var(--surface);
-  color: var(--ink);
-}
-.btn-secondary:hover { background: var(--surface-2); }
-.btn-primary:active,
-.btn-secondary:active { transform: scale(0.97); }
-
-/* Form fields: a shelf fill, no outline at rest, leaf ring on focus. */
-.field {
-  width: 100%;
-  border-radius: 12px;
-  background: var(--surface);
-  color: var(--ink);
-  transition: background-color var(--dur-feedback) var(--ease);
-}
-.field:hover { background: var(--surface-2); }
-.field::placeholder { color: var(--ink-2); }
-.field:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; background: var(--raised); }
-
-/* "Skip to content": the first Tab stop on every page, hidden until it has focus. */
-.skip-link {
-  position: absolute;
-  left: var(--sp-4);
-  top: -100px;
-  z-index: 50;
-  padding: var(--sp-2) var(--sp-4);
-  border-radius: 999px;
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  font-weight: 600;
-}
-.skip-link:focus { top: var(--sp-2); }
-/* Skip-link targets take focus only so Tab continues from there; they are not controls, so no ring. */
-[tabindex="-1"]:focus { outline: none; }
-
-/* Image wells: the shelf the scanned object stands on. Flat. */
-.pad { background-color: var(--surface); }
-
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+  /* Image wells: the shelf the scanned object stands on. Flat. */
+  .pad { background-color: var(--surface); }
 }
 
 /* Entrances (DESIGN.md §9): the parts of a section rise in as it scrolls into view. Only where the browser can tie

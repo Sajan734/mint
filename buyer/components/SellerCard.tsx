@@ -23,16 +23,16 @@ export default function SellerCard({
   size?: "sm" | "md";
 }) {
   return (
-    <section aria-label={`Seller ${seller.name}`} className="flex items-center gap-3 rounded-md border border-line bg-surface p-4">
+    <section aria-label={`Seller ${seller.name}`} className="flex items-center gap-3 rounded-md bg-surface p-4">
       <Avatar seller={seller} size={size === "sm" ? 32 : 48} />
       <div className="min-w-0">
         <Link href={`/seller/${seller.id}`} className="font-semibold hover:underline">
           {seller.name}
         </Link>
-        <p className="text-xs text-ink-2">
+        <p className="text-sm text-ink-2">
           {seller.neighbourhood} · {seller.rating.toFixed(1)} ({seller.rating_count})
         </p>
-        {size === "md" && <p className="text-xs text-ink-2">{seller.response_time}</p>}
+        {size === "md" && <p className="text-sm text-ink-2">{seller.response_time}</p>}
         {sale && (
           <Link href={`/sale/${sale.id}`} className="text-sm text-mint-ink hover:underline">
             {sale.name}

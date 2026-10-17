@@ -45,8 +45,8 @@ const FIELDS: { key: keyof Address; label: string; auto: string }[] = [
   { key: "city", label: "City", auto: "address-level2" },
   { key: "postal_code", label: "Postal code", auto: "postal-code" },
 ];
-const btn = "inline-flex min-h-11 items-center justify-center rounded-md px-5 font-semibold focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]";
-const primary = `${btn} bg-ink text-bg disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-2`;
+const btn = "inline-flex min-h-11 items-center justify-center rounded-full px-5 font-semibold transition-[background-color,transform] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]";
+const primary = `${btn} bg-leaf text-btn-fg hover:bg-leaf-press disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-2`;
 const STEPS = ["Delivery", "Details", "Confirm"];
 
 const Alert = () => (
@@ -130,7 +130,7 @@ export default function ReserveSheet({
 
   const errList = Object.values(errors);
   const radio = (m: FulfilmentMethod, title: string, sub: string, off = false) => (
-    <label className={`flex min-h-[72px] items-center gap-3 rounded-md border p-4 has-[:checked]:border-ink has-[:checked]:bg-surface-2 ${off ? "cursor-not-allowed border-line opacity-50" : "cursor-pointer border-line hover:border-ink-2"}`}>
+    <label className={`flex min-h-[72px] items-center gap-3 rounded-[16px] bg-surface p-4 ring-2 ring-transparent has-[:checked]:bg-wash has-[:checked]:ring-leaf ${off ? "cursor-not-allowed opacity-50" : "cursor-pointer hover:bg-surface-2"}`}>
       <input type="radio" name="method" value={m} checked={method === m} disabled={off} onChange={() => setMethod(m)} className="size-5 accent-[var(--ink)]" />
       <span><span className="block font-semibold">{title}</span><span className="text-sm text-ink-2">{sub}</span></span>
     </label>
@@ -152,7 +152,7 @@ export default function ReserveSheet({
         aria-labelledby={titleId}
         onClose={() => setOpen(false)}
         onClick={(e) => { if (e.target === dlg.current) close(); }}
-        className={`${styles.sheet} fixed inset-x-0 bottom-0 top-auto m-0 max-h-[90vh] w-full max-w-none overflow-y-auto rounded-t-lg border border-line bg-surface p-5 text-ink shadow-[var(--shadow-sheet)] sm:inset-auto sm:m-auto sm:max-w-[480px] sm:rounded-lg sm:p-6`}
+        className={`${styles.sheet} fixed inset-x-0 bottom-0 top-auto m-0 max-h-[90vh] w-full max-w-none overflow-y-auto rounded-t-[24px] bg-raised p-5 text-ink shadow-[var(--shadow-sheet)] sm:inset-auto sm:m-auto sm:max-w-[480px] sm:rounded-[24px] sm:p-7`}
       >
         {open && doneId && (
           <div className="flex flex-col items-center gap-4 py-2 text-center" role="status">
@@ -162,7 +162,7 @@ export default function ReserveSheet({
             </svg>
             <h2 id={titleId} className="text-[length:var(--t-xl)] font-bold">Reserved. It is yours.</h2>
             <p className="text-ink-2">{l.title}</p>
-            <ol className="grid w-full list-decimal gap-2 rounded-md bg-surface-2 py-4 pl-9 pr-4 text-left text-sm">
+            <ol className="grid w-full list-decimal gap-2 rounded-[16px] bg-surface py-4 pl-9 pr-4 text-left text-sm">
               {method === "meetup" ? (
                 <>
                   <li>Meet the seller at {slotLabel(slot)}.</li>
@@ -194,13 +194,13 @@ export default function ReserveSheet({
             <ol aria-label={`Step ${step} of 3`} className="grid grid-cols-3 gap-2">
               {STEPS.map((name, i) => (
                 <li key={name} aria-current={i + 1 === step ? "step" : undefined} className="flex flex-col gap-1.5">
-                  <span aria-hidden className={`h-1 rounded-full ${i + 1 <= step ? "bg-ink" : "bg-line"}`} />
+                  <span aria-hidden className={`h-1 rounded-full ${i + 1 <= step ? "bg-leaf" : "bg-surface-2"}`} />
                   <span className={`text-xs ${i + 1 === step ? "font-semibold" : "text-ink-2"}`}>{i + 1}. {name}</span>
                 </li>
               ))}
             </ol>
             {errList.length > 0 && (
-              <div ref={summary} tabIndex={-1} role="alert" className="flex gap-2 rounded-sm border border-coral bg-coral/10 p-3 text-sm">
+              <div ref={summary} tabIndex={-1} role="alert" className="flex gap-2 rounded-sm border border-coral bg-coral-wash p-3 text-sm">
                 <Alert />
                 <div>
                   <p className="font-semibold">Fix {errList.length === 1 ? "this" : "these"} to continue:</p>
@@ -222,7 +222,7 @@ export default function ReserveSheet({
                 <legend className="mb-2 font-semibold">Pickup time in {sale.location.neighbourhood}</legend>
                 {sale.pickup_slots.length === 0 && <p className="text-sm text-ink-2">No pickup times listed.</p>}
                 {sale.pickup_slots.map((s) => (
-                  <label key={s} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-md border border-line px-4 hover:border-ink-2 has-[:checked]:border-ink has-[:checked]:bg-surface-2">
+                  <label key={s} className="flex min-h-12 cursor-pointer items-center gap-3 rounded-[14px] bg-surface px-4 ring-2 ring-transparent hover:bg-surface-2 has-[:checked]:bg-wash has-[:checked]:ring-leaf">
                     <input type="radio" name="slot" value={s} checked={slot === s} onChange={() => setSlot(s)} className="size-5 accent-[var(--ink)]" />
                     {slotLabel(s)}
                   </label>
@@ -255,19 +255,19 @@ export default function ReserveSheet({
               </div>
             )}
             {step === 3 && (
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-md bg-surface-2 p-4 text-sm">
+              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 rounded-[16px] bg-surface p-4 text-sm">
                 <dt className="text-ink-2">Item</dt><dd>{l.title}</dd>
                 <dt className="text-ink-2">Method</dt>
                 <dd>{method === "meetup" ? `Meet in person, ${slotLabel(slot)}` : `Ship to ${addr.name}, ${addr.street}, ${addr.city} ${addr.postal_code.toUpperCase()}`}</dd>
                 <dt className="text-ink-2">Price</dt><dd>{formatPrice(l.price_cad)}</dd>
                 <dt className="text-ink-2">Shipping</dt><dd>{method === "shipping" ? formatPrice(fee) : "Free"}</dd>
-                <dt className="border-t border-line pt-2 font-semibold">Total</dt>
-                <dd className="border-t border-line pt-2 font-display text-[length:var(--t-lg)] font-bold tabular-nums">{formatPrice(total)}</dd>
+                <dt className=" pt-2 font-semibold">Total</dt>
+                <dd className=" pt-2 font-display text-[length:var(--t-lg)] font-bold tabular-nums">{formatPrice(total)}</dd>
               </dl>
             )}
             <p className="text-sm text-ink-2">Payment is simulated in this demo. Mint holds this item for 24 hours.</p>
             <footer className="flex gap-3">
-              <button type="button" onClick={step === 1 ? close : () => { setErrors({}); setStep(step - 1); }} className={`${btn} border border-line`}>
+              <button type="button" onClick={step === 1 ? close : () => { setErrors({}); setStep(step - 1); }} className={`${btn}`}>
                 {step === 1 ? "Cancel" : "Back"}
               </button>
               {step < 3 ? (

@@ -51,13 +51,13 @@ export default function OrderDetail({ id, seed, items, explanation }: Props) {
         </section>
         <section aria-labelledby="details-h" className="grid content-start gap-4">
           <h2 id="details-h" className="text-[length:var(--t-lg)] font-bold">Details</h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-md border border-line bg-surface p-4 text-sm">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 rounded-md bg-surface p-4 text-sm">
             <dt className="text-ink-2">Method</dt><dd>{order.method === "meetup" ? "Meet in person" : "Shipping"}</dd>
             {order.pickup_slot && (<><dt className="text-ink-2">Pickup slot</dt><dd>{new Date(order.pickup_slot).toLocaleString("en-CA", { dateStyle: "medium", timeStyle: "short" })}</dd></>)}
             {order.ship_to && (<><dt className="text-ink-2">Ship to</dt><dd>{order.ship_to.city}</dd></>)}
             <dt className="text-ink-2">Item</dt><dd className="tabular-nums">{formatPrice(order.price_cad)}</dd>
             <dt className="text-ink-2">Shipping</dt><dd className="tabular-nums">{formatPrice(order.shipping_cad)}</dd>
-            <dt className="border-t border-line pt-2 font-semibold">Total</dt><dd className="border-t border-line pt-2 font-semibold tabular-nums">{formatPrice(order.total_cad)}</dd>
+            <dt className=" pt-2 font-semibold">Total</dt><dd className=" pt-2 font-semibold tabular-nums">{formatPrice(order.total_cad)}</dd>
           </dl>
         </section>
       </div>

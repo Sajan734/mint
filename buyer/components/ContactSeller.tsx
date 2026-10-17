@@ -24,14 +24,14 @@ export default function ContactSeller({ seller, itemTitle }: { seller: Seller; i
         onClick={(e) => {
           if (e.target === dlg.current) close();
         }}
-        className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-lg border border-line bg-surface p-5 text-ink backdrop:bg-[oklch(0.1_0.01_170/0.5)] sm:p-6"
+        className="m-auto w-[calc(100%-2rem)] max-w-sm rounded-[24px] bg-raised p-6 text-ink shadow-[var(--shadow-float)] backdrop:bg-[var(--scrim)] sm:p-7"
       >
         <div className="flex items-start justify-between gap-3">
           <div>
-            <h2 id="contact-title" className="text-[length:var(--t-lg)] font-bold">Contact {seller.name}</h2>
-            <p className="mt-1 inline-block rounded-full bg-amber/30 px-2.5 py-0.5 text-xs font-semibold">Demo contact details</p>
+            <h2 id="contact-title" className="text-[length:var(--t-xl)]">Contact {seller.name}</h2>
+            <p className="mt-2 inline-block rounded-full bg-amber-wash px-3 py-1 text-sm font-semibold text-amber">Demo contact details</p>
           </div>
-          <button type="button" onClick={close} aria-label="Close" className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-md hover:bg-surface-2">
+          <button type="button" onClick={close} aria-label="Close" className="-mr-2 -mt-2 grid size-11 shrink-0 place-items-center rounded-full hover:bg-surface">
             <svg aria-hidden viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
               <path d="M6 6l12 12M18 6 6 18" />
             </svg>
@@ -43,7 +43,7 @@ export default function ContactSeller({ seller, itemTitle }: { seller: Seller; i
               <div>
                 <dt className="text-sm text-ink-2">Email</dt>
                 <dd>
-                  <a href={`mailto:${email}?subject=${encodeURIComponent(`About: ${itemTitle}`)}`} className="inline-flex min-h-11 items-center font-semibold underline underline-offset-2 [overflow-wrap:anywhere]">
+                  <a href={`mailto:${email}?subject=${encodeURIComponent(`About: ${itemTitle}`)}`} className="inline-flex min-h-11 items-center font-semibold text-leaf underline underline-offset-4 [overflow-wrap:anywhere]">
                     {email}
                   </a>
                 </dd>
@@ -53,7 +53,7 @@ export default function ContactSeller({ seller, itemTitle }: { seller: Seller; i
               <div>
                 <dt className="text-sm text-ink-2">Phone</dt>
                 <dd>
-                  <a href={telHref(phone)} className="inline-flex min-h-11 items-center font-semibold tabular-nums underline underline-offset-2">
+                  <a href={telHref(phone)} className="inline-flex min-h-11 items-center font-semibold tabular-nums text-leaf underline underline-offset-4">
                     {phone}
                   </a>
                 </dd>

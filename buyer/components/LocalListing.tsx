@@ -43,27 +43,27 @@ export function ListingView({
             <MediaViewer />
           </div>
           <div className="flex flex-col gap-3 md:col-span-5">
-            {note && <p className="self-start rounded-full bg-mint-wash px-2.5 py-1 text-xs font-semibold text-mint-ink">{note}</p>}
-            <h1 className="text-balance text-[length:var(--t-xl)] font-bold md:text-[length:var(--t-2xl)]">{l.title}</h1>
+            {note && <p className="self-start rounded-full bg-wash px-3 py-1 text-sm font-semibold text-leaf">{note}</p>}
+            <h1 className="text-[2rem] md:text-[2.375rem]">{l.title}</h1>
             <p className="text-sm text-ink-2">
               {item.location.neighbourhood}, {item.location.city}
             </p>
             <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2 pt-1">
-              <p className="font-display text-[2.5rem] font-bold leading-none tabular-nums">{formatPrice(l.price_cad)}</p>
+              <p className="text-[2.5rem] font-bold leading-none tracking-tight tabular-nums">{formatPrice(l.price_cad)}</p>
               <PriceBadge price={l.price_cad} reference={item.reference_price_cad} size="lg" />
             </div>
-            <details className="group mt-1 rounded-md border border-line bg-surface">
+            <details className="group mt-2 rounded-[20px] bg-surface">
               <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 px-4 font-semibold [&::-webkit-details-marker]:hidden">
                 Why this price?
                 <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="transition-transform duration-200 group-open:rotate-180"><path d="m6 9 6 6 6-6" /></svg>
               </summary>
-              <ul className="grid gap-2 border-t border-line px-4 py-3 text-sm">
+              <ul className="grid gap-2 px-4 py-3 text-sm">
                 {l.price_justification.map((j) => (
                   <li key={j} className="flex gap-2"><span aria-hidden className="mt-2 size-1.5 shrink-0 rounded-full bg-mint-ink" />{j}</li>
                 ))}
               </ul>
             </details>
-            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3">
               <span className="font-semibold">Condition</span>
               <ConditionPill grade={l.condition_grade} sellerChecking={l.needs_seller_check} />
             </div>
@@ -71,17 +71,17 @@ export function ListingView({
 
           <div className="flex flex-col gap-4 md:col-span-12 md:row-start-3 md:mt-2">
             <section aria-labelledby="about-h" className="flex flex-col gap-4">
-              <h2 id="about-h" className="text-[length:var(--t-xl)] font-bold">About this item</h2>
-              <p className="max-w-[70ch]">{l.description}</p>
+              <h2 id="about-h" className="text-[length:var(--t-xl)] md:text-[length:var(--t-2xl)]">About this item</h2>
+              <p className="max-w-[68ch] text-[length:var(--t-lg)] leading-relaxed">{l.description}</p>
               <MediaTiles />
             </section>
-            <div className="flex flex-col gap-2 border-t border-line pt-4 md:items-end">
+            <div className="flex flex-col gap-2 pt-4 md:items-end">
               <p className="text-sm text-ink-2">Got the item? Scan it to compare with the seller&apos;s scan.</p>
               <div className="flex gap-3">
                 <ContactSeller seller={seller} itemTitle={l.title} />
                 {/* A route handler makes the comparison id and redirects. A plain <a>: next/link would prefetch it (a new id
                     on every visit) and the client router sometimes drops a soft navigation to a route handler. */}
-                <a href={`/listing/${l.item_id}/check`} className="btn-primary flex-1 md:flex-none md:min-w-32">
+                <a href={`/listing/${l.item_id}/check`} className="btn-secondary flex-1 md:flex-none md:min-w-32">
                   Scan
                 </a>
               </div>
@@ -89,7 +89,7 @@ export function ListingView({
           </div>
 
           <div className="flex flex-col gap-4 md:col-span-5 md:col-start-8 md:row-start-2 md:self-start">
-            <section id="reserve" aria-label="Reserve" className="flex scroll-mt-24 flex-col gap-3 rounded-lg border border-line bg-surface p-4">
+            <section id="reserve" aria-label="Reserve" className="flex scroll-mt-24 flex-col gap-4 rounded-[24px] bg-surface p-5">
               <p className="text-sm text-ink-2">
                 {sale.ships ? <>Meet in person, or have it shipped for <strong className="text-ink">{formatPrice(shippingFee(l.attributes))}</strong>.</> : "Pickup only. Meet in person, no fee."}
               </p>
@@ -104,11 +104,11 @@ export function ListingView({
       </MediaProvider>
 
       <div className="mt-10 grid gap-6 md:grid-cols-12 md:gap-10">
-        <section aria-labelledby="trust-h" className="flex flex-col gap-3 self-start rounded-lg bg-mint-wash p-5 md:col-span-7">
+        <section aria-labelledby="trust-h" className="flex flex-col gap-3 self-start rounded-[24px] bg-wash p-6 md:col-span-7">
           <div className="flex items-start gap-3">
             <svg aria-hidden viewBox="0 0 24 24" width="32" height="32" fill="none" stroke="var(--mint-ink)" strokeWidth="2" className="shrink-0"><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" strokeDasharray="3 2" /><path d="m9.5 12 2 2 3-3.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
             <div>
-              <h2 id="trust-h" className="text-[length:var(--t-lg)] font-bold text-mint-ink">Scanned by Mint</h2>
+              <h2 id="trust-h" className="text-[length:var(--t-xl)] text-leaf">Scanned by Mint</h2>
               <p className="text-sm text-ink">{item.usable_view_count} views of this item, nothing hidden.</p>
             </div>
           </div>
@@ -118,7 +118,7 @@ export function ListingView({
             </ul>
           )}
           {l.needs_seller_check && (
-            <div role="note" className="rounded-md bg-surface p-3 text-sm">
+            <div role="note" className="rounded-[16px] bg-raised p-4 text-sm">
               <p className="font-semibold">The seller is double-checking this one.</p>
               <ul className="mt-1 list-disc pl-5 text-ink-2">{l.seller_check_reasons.map((r) => <li key={r}>{r}</li>)}</ul>
             </div>
@@ -126,13 +126,13 @@ export function ListingView({
         </section>
         {(attrs.length > 0 || l.tags.length > 0) && (
           <section aria-labelledby="details-h" className="flex flex-col gap-3 md:col-span-5">
-            <h2 id="details-h" className="text-[length:var(--t-lg)] font-bold">Details</h2>
-            <table className="w-full text-sm">
+            <h2 id="details-h" className="text-[length:var(--t-xl)]">Details</h2>
+            <table className="w-full text-[15px]">
               <caption className="sr-only">Details</caption>
               <tbody>
                 {attrs.map(([k, v]) => (
-                  <tr key={k} className="border-t border-line">
-                    <th scope="row" className="py-2 pr-4 text-left font-normal capitalize text-ink-2">{k.replace(/_/g, " ")}</th>
+                  <tr key={k} className="border-b border-line last:border-0">
+                    <th scope="row" className="py-2.5 pr-4 text-left font-normal capitalize text-ink-2">{k.replace(/_/g, " ")}</th>
                     <td>{v}</td>
                   </tr>
                 ))}
@@ -140,7 +140,7 @@ export function ListingView({
             </table>
             {l.tags.length > 0 && (
               <ul className="flex list-none flex-wrap gap-2 p-0">
-                {l.tags.map((t) => <li key={t} className="rounded-sm bg-surface-2 px-2 py-0.5 text-xs">{t}</li>)}
+                {l.tags.map((t) => <li key={t} className="rounded-full bg-surface px-3 py-1 text-[13px]">{t}</li>)}
               </ul>
             )}
           </section>
@@ -149,7 +149,7 @@ export function ListingView({
 
       {children}
 
-      <div className="fixed inset-x-0 bottom-0 z-10 flex items-center gap-4 border-t border-line bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
+      <div className="fixed inset-x-0 bottom-0 z-10 flex items-center gap-4 bg-surface p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:hidden">
         <span className="font-display text-[length:var(--t-xl)] font-bold tabular-nums">{formatPrice(l.price_cad)}</span>
         <ReserveSheet item={item} sale={sale} disabledLabel={disabledLabel} placement="bar" />
       </div>

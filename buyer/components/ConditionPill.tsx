@@ -15,7 +15,7 @@ export default function ConditionPill({ grade, sellerChecking = false }: { grade
         {conditionLabel(grade)}
       </span>
       {sellerChecking && (
-        <span className="inline-flex items-center rounded-sm border border-dashed border-line-strong px-2 py-0.5 text-sm text-ink-2">
+        <span className="inline-flex items-center rounded-full bg-amber-wash px-3 py-0.5 text-sm font-medium text-amber">
           Seller checking
         </span>
       )}

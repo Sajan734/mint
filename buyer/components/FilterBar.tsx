@@ -8,7 +8,7 @@ const CATS: [string, string][] = [
 ];
 const CONDS: [string, string][] = [["like_new", "Like new"], ["light_wear", "Light wear"], ["moderate_wear", "Moderate wear"], ["heavy_wear", "Heavy wear"]];
 const SORTS: [string, string][] = [["newest", "Newest"], ["price_asc", "Price: low to high"], ["best_deal", "Best deal"]];
-const field = "h-11 w-full rounded-md border border-line-strong bg-surface px-3 text-ink";
+const field = "field h-11 rounded-full px-4 text-[15px]";
 
 export default function FilterBar() {
   const router = useRouter();
@@ -47,15 +47,15 @@ export default function FilterBar() {
           </select>
         </label>
         <label className="col-span-2 flex h-11 items-center gap-2 text-sm md:col-span-1">
-          <input type="checkbox" className="size-5 accent-[var(--mint-ink)]" checked={sp.get("fair") === "1"} onChange={(e) => set({ fair: e.target.checked ? "1" : null })} />
+          <input type="checkbox" className="size-5 accent-[var(--leaf)]" checked={sp.get("fair") === "1"} onChange={(e) => set({ fair: e.target.checked ? "1" : null })} />
           Fair price or better
         </label>
       </div>
-      <div role="group" aria-label="Category" className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:px-0">
+      <div role="group" aria-label="Category" className="-mx-4 flex snap-x gap-2 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:overflow-visible md:px-0">
         {[["", "All"], ...CATS].map(([v, l]) => (
           <button
             key={v} type="button" aria-pressed={(cat ?? "") === v} onClick={() => set({ cat: v || null })}
-            className={`h-11 shrink-0 snap-start rounded-full border px-4 text-sm font-medium transition-colors ${(cat ?? "") === v ? "border-transparent bg-btn-bg text-btn-fg" : "border-line-strong bg-surface hover:border-ink"}`}
+            className={`h-11 shrink-0 snap-start rounded-full px-4 text-[15px] font-medium transition-colors active:scale-[0.97] ${(cat ?? "") === v ? "bg-pine text-on-pine" : "bg-surface hover:bg-surface-2"}`}
           >
             {l}
           </button>
