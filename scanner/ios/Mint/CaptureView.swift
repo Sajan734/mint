@@ -67,7 +67,7 @@ private struct CameraView: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 }
 
-// MARK: - The scanner: brackets on the item, and a wide ring on the table around it that turns with the paper
+// MARK: - The scanner: brackets on the item while it's being found, and the coverage ring round the scan button
 
 struct ScannerHUD: View {
     @ObservedObject var session: CaptureSession
@@ -84,8 +84,8 @@ struct ScannerHUD: View {
 
             GeometryReader { geo in
                 TimelineView(.animation) { ctx in
-                    ScanCanvas(session: session, time: ctx.date,
-                               offset: CGPoint(x: geo.safeAreaInsets.leading, y: geo.safeAreaInsets.top))
+                    Brackets(session: session, time: ctx.date,
+                             offset: CGPoint(x: geo.safeAreaInsets.leading, y: geo.safeAreaInsets.top))
                 }
                 .ignoresSafeArea()
             }
@@ -94,7 +94,6 @@ struct ScannerHUD: View {
             VStack(spacing: 10) {
                 topBar
                 jobChip
-                coverageReadout.padding(.top, 4)
                 Spacer()
                 if session.phase == .review {
                     ReviewCard(session: session)
@@ -169,26 +168,7 @@ struct ScannerHUD: View {
         }
     }
 
-    // The measured coverage of one lap.
-    @ViewBuilder private var coverageReadout: some View {
-        if session.phase != .ready {
-            let done = session.percent >= 100
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                (Text("\(session.percent)").font(.system(size: 52, weight: .heavy, design: .rounded)).monospacedDigit()
-                    + Text("%").font(.system(size: 24, weight: .bold, design: .rounded)))
-                    .foregroundStyle(done ? Color.brandMint : .white)
-                    .shadow(color: done ? .brandMint.opacity(0.6) : .black.opacity(0.4), radius: 12)
-                    .contentTransition(.numericText(value: Double(session.percent)))
-                    .animation(.snappy(duration: 0.25), value: session.percent)
-                Label(done ? "FULL LAP" : "LAP COVERAGE", systemImage: done ? "checkmark.circle.fill" : "arrow.clockwise")
-                    .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.4)
-                    .foregroundStyle(done ? Color.brandMint : .white.opacity(0.75))
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.9)))
-        }
-    }
-
-    // Bottom: cancel, and the shutter (start / stop).
+    // Bottom: cancel, and the scan button inside the coverage ring.
     private var controls: some View {
         HStack {
             Button {
@@ -201,7 +181,14 @@ struct ScannerHUD: View {
             .disabled(session.phase != .ready)
             .accessibilityLabel("Cancel this scan")
             Spacer()
-            Shutter(phase: session.phase, action: session.primaryAction)
+            TimelineView(.animation) { ctx in
+                CoverageRing(session: session, time: ctx.date)
+            }
+            .frame(width: 214, height: 214)
+            .contentShape(Circle())
+            .onTapGesture { session.primaryAction() }
+            .accessibilityLabel(session.isRecording ? "Stop this pass" : "Start scanning")
+            .accessibilityAddTraits(.isButton)
             Spacer()
             Color.clear.frame(width: 50, height: 50)
         }
@@ -209,133 +196,145 @@ struct ScannerHUD: View {
     }
 }
 
-/// Draws, over the camera: corner brackets on the item (what the paper encloses), and a wide ring lying
-/// flat on the table around it, seen in perspective (flatter the lower the camera). The ring is 72 ticks,
-/// one per 5° of the item's sides, and it turns with the paper: a side's tick lights mint once that side
-/// has been seen head-on, and the bright spot at the front of the ring is where the camera is looking now.
-struct ScanCanvas: View {
+/// Corner brackets on the item (what the sheet of paper encloses): they show it's been found, and stay
+/// until the lap is about half covered, then fade away for the rest of the pass.
+struct Brackets: View {
     @ObservedObject var session: CaptureSession
     let time: Date
     let offset: CGPoint   // view (safe area) → canvas (full screen)
 
+    static let hideAtPercent = 50
+
     var body: some View {
-        Canvas { ctx, size in
+        let shown = session.phase == .ready || (session.isRecording && session.percent < Self.hideAtPercent)
+        Canvas { ctx, _ in
+            guard let box = session.itemBox?.offsetBy(dx: offset.x, dy: offset.y) else { return }
             let t = time.timeIntervalSinceReferenceDate
-            let recording = session.isRecording
-            let live = recording || session.phase.isFinished
-            let mint = Color.brandMint
-            let box = session.itemBox?.offsetBy(dx: offset.x, dy: offset.y)
+            let vis = session.itemVisible ? 1.0 : 0.3
+            let r = box.insetBy(dx: -16, dy: -16)
+            let len = min(30, r.width / 3.5, r.height / 3.5)
+            var path = Path()
+            for (c, dx, dy) in [(CGPoint(x: r.minX, y: r.minY), 1.0, 1.0), (CGPoint(x: r.maxX, y: r.minY), -1.0, 1.0),
+                                (CGPoint(x: r.minX, y: r.maxY), 1.0, -1.0), (CGPoint(x: r.maxX, y: r.maxY), -1.0, -1.0)] {
+                path.move(to: CGPoint(x: c.x + dx * len, y: c.y))
+                path.addLine(to: c)
+                path.addLine(to: CGPoint(x: c.x, y: c.y + dy * len))
+            }
+            let colour = session.isRecording ? Color.brandMint : .white
+            let pulse = 0.75 + 0.25 * sin(t * (session.isRecording ? 4 : 2))
+            ctx.drawLayer { l in
+                l.addFilter(.blur(radius: 6))
+                l.stroke(path, with: .color(colour.opacity(0.7 * pulse * vis)), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
+            }
+            ctx.stroke(path, with: .color(colour.opacity(vis)), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+            ctx.draw(Text(session.isRecording ? "SCANNING" : "ITEM").font(.system(size: 11, weight: .heavy, design: .rounded))
+                        .foregroundColor(colour.opacity(vis)),
+                     at: CGPoint(x: r.minX + 2, y: r.minY - 12), anchor: .leading)
+        }
+        .opacity(shown ? 1 : 0)
+        .animation(.easeOut(duration: 0.6), value: shown)
+    }
+}
 
-            // The ring: centred under the item (or mid-screen until it's found), nearly as wide as the screen.
-            let a = size.width * 0.46
-            let b = a * max(0.28, min(0.85, sin(session.elevation)))
-            let centre = box.map { CGPoint(x: $0.midX, y: $0.maxY - min($0.height * 0.35, b * 0.6)) }
-                ?? CGPoint(x: size.width / 2, y: size.height * 0.56)
-            let n = CaptureSession.tickCount
-            let sweep: Double? = session.lapCompletedAt.map { t - $0.timeIntervalSinceReferenceDate }.flatMap { $0 < 1.2 ? $0 / 1.2 : nil }
+/// The scan button inside the coverage ring: 72 ticks, one per 5° of turn, filling clockwise from the top
+/// as the paper turns clockwise (a tick lights mint once the side it stands for has been seen head-on).
+/// While recording, a bright spot marks how far the paper has turned. At a full lap the ring stays full and
+/// stops changing, whatever the touch-ups do. Tap: start / stop.
+private struct CoverageRing: View {
+    @ObservedObject var session: CaptureSession
+    let time: Date
 
-            // Back half first (behind the item), then the front half.
-            for front in [false, true] {
+    var body: some View {
+        ZStack {
+            Canvas { ctx, size in
+                let c = CGPoint(x: size.width / 2, y: size.height / 2)
+                let r = min(size.width, size.height) / 2 - 16
+                let t = time.timeIntervalSinceReferenceDate
+                let recording = session.isRecording
+                let live = recording || session.phase.isFinished
+                let done = session.lapCompletedAt != nil
+                let mint = Color.brandMint
+                let n = CaptureSession.tickCount
+                let spotDeg = (session.ringTurn * 180 / .pi).truncatingRemainder(dividingBy: 360)
+                let sweep: Double? = session.lapCompletedAt.map { t - $0.timeIntervalSinceReferenceDate }.flatMap { $0 < 1.1 ? $0 / 1.1 * 360 : nil }
+
                 var dim = Path(), lit = Path(), hot = Path()
-                var partial: [(Path, Double, Double)] = []
-                for i in 0..<n {
-                    // Where side i is now, round the item: 0 = facing the camera (front), clockwise from above.
-                    let alpha = Double(i) / Double(n) * 2 * .pi + session.ringTurn
-                    let depth = (cos(alpha) + 1) / 2          // 1 = front, 0 = back
-                    guard (depth >= 0.5) == front else { continue }
-                    var level = live ? session.ticks[i] : 0
-                    if session.phase == .ready {
-                        // Idle: a slow wave runs round the ring, waiting for the start.
-                        level = 0.22 * max(0, sin(t * 2.0 + alpha * 3))
+                for j in 0..<n {
+                    let deg = Double(j) * 360 / Double(n)
+                    let a = (deg - 90) * .pi / 180
+                    // Tick j: the side that faces the camera once the paper has turned j × 5° clockwise.
+                    var level = live ? session.ticks[(n - j) % n] : 0
+                    if session.phase == .ready { level = 0.22 * max(0, sin(t * 2.2 - Double(j) * 0.17)) }
+                    var boost = 0.0
+                    if recording && !done && session.paperSeen {
+                        let behind = ((spotDeg - deg).truncatingRemainder(dividingBy: 360) + 360).truncatingRemainder(dividingBy: 360)
+                        if behind < 30 { boost = 1 - behind / 30 } else if behind > 355 { boost = (behind - 355) / 5 }
                     }
-                    // The camera's view: brightest at the front of the ring.
-                    let frontness = recording && session.paperSeen ? max(0, 1 - abs(atan2(sin(alpha), cos(alpha))) / 0.45) : 0
-                    var boost = frontness
                     if let sweep {
-                        let d = abs(atan2(sin(alpha - sweep * 2 * .pi), cos(alpha - sweep * 2 * .pi)))
-                        boost = max(boost, max(0, 1 - d / 0.4))
+                        let d = abs((deg - sweep).truncatingRemainder(dividingBy: 360))
+                        boost = max(boost, max(0, 1 - min(d, 360 - d) / 24))
                     }
-                    let scale = 0.55 + 0.45 * depth           // nearer ticks are bigger
-                    let len = (10 + 16 * level + 12 * boost) * scale
-                    // On the ellipse: front = bottom, clockwise from above = to the left along the front.
-                    let ux = -sin(alpha), uy = cos(alpha)
-                    let p0 = CGPoint(x: centre.x + ux * a, y: centre.y + uy * b)
-                    let p1 = CGPoint(x: centre.x + ux * (a + len), y: centre.y + uy * (b + len * b / a))
+                    let len = 8 + 6 * level + 6 * boost
+                    let p0 = CGPoint(x: c.x + cos(a) * (r - len / 2), y: c.y + sin(a) * (r - len / 2))
+                    let p1 = CGPoint(x: c.x + cos(a) * (r + len / 2), y: c.y + sin(a) * (r + len / 2))
                     var seg = Path()
                     seg.move(to: p0)
                     seg.addLine(to: p1)
                     if boost > 0.4 { hot.addPath(seg) } else if level > 0.85 { lit.addPath(seg) } else if level > 0.03 {
-                        partial.append((seg, level, scale))
+                        ctx.stroke(seg, with: .color(mint.opacity(0.3 + 0.6 * level)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
                     } else { dim.addPath(seg) }
                 }
-                let fade = front ? 1.0 : 0.45
-                ctx.stroke(dim, with: .color(.white.opacity(0.3 * fade)), style: StrokeStyle(lineWidth: front ? 3 : 2, lineCap: .round))
-                for (seg, level, scale) in partial {
-                    ctx.stroke(seg, with: .color(mint.opacity((0.3 + 0.6 * level) * fade)), style: StrokeStyle(lineWidth: 3.2 * scale, lineCap: .round))
-                }
+                ctx.stroke(dim, with: .color(.white.opacity(0.25)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
                 ctx.drawLayer { l in
-                    l.addFilter(.blur(radius: front ? 6 : 4))
-                    l.stroke(lit, with: .color(mint.opacity(0.85 * fade)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                    l.stroke(hot, with: .color(.white.opacity(0.8 * fade)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
+                    l.addFilter(.blur(radius: 5))
+                    l.stroke(lit, with: .color(mint.opacity(0.85)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    l.stroke(hot, with: .color(.white.opacity(0.8)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
                 }
-                ctx.stroke(lit, with: .color(mint.opacity(fade)), style: StrokeStyle(lineWidth: front ? 3.6 : 2.4, lineCap: .round))
-                ctx.stroke(hot, with: .color(.white.opacity(fade)), style: StrokeStyle(lineWidth: 3.8, lineCap: .round))
+                ctx.stroke(lit, with: .color(mint), style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
+                ctx.stroke(hot, with: .color(.white), style: StrokeStyle(lineWidth: 3.4, lineCap: .round))
             }
-
-            // Brackets: the item, found. They fade when it's out of sight.
-            if let box {
-                let vis = session.itemVisible ? 1.0 : 0.25
-                let r = box.insetBy(dx: -16, dy: -16)
-                let len = min(30, r.width / 3.5, r.height / 3.5)
-                var brackets = Path()
-                for (c, dx, dy) in [(CGPoint(x: r.minX, y: r.minY), 1.0, 1.0), (CGPoint(x: r.maxX, y: r.minY), -1.0, 1.0),
-                                    (CGPoint(x: r.minX, y: r.maxY), 1.0, -1.0), (CGPoint(x: r.maxX, y: r.maxY), -1.0, -1.0)] {
-                    brackets.move(to: CGPoint(x: c.x + dx * len, y: c.y))
-                    brackets.addLine(to: c)
-                    brackets.addLine(to: CGPoint(x: c.x, y: c.y + dy * len))
-                }
-                let colour = recording || live ? mint : Color.white
-                let pulse = 0.75 + 0.25 * sin(t * (recording ? 4 : 2))
-                ctx.drawLayer { l in
-                    l.addFilter(.blur(radius: 6))
-                    l.stroke(brackets, with: .color(colour.opacity(0.7 * pulse * vis)), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
-                }
-                ctx.stroke(brackets, with: .color(colour.opacity(vis)), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
-                // A small tag on the top-left bracket.
-                let tag = Text(recording ? "SCANNING" : "ITEM")
-                    .font(.system(size: 11, weight: .heavy, design: .rounded))
-                    .foregroundColor(colour.opacity(vis))
-                ctx.draw(tag, at: CGPoint(x: r.minX + 2, y: r.minY - 12), anchor: .leading)
-            }
+            centre
         }
+        .scaleEffect(session.phase.isFinished ? 1.05 : 1)
+        .animation(.spring(response: 0.4, dampingFraction: 0.55), value: session.phase.isFinished)
     }
-}
 
-/// Start (white disc in a mint ring) → stop (red square) → saving (spinner).
-private struct Shutter: View {
-    let phase: CaptureSession.Phase
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            ZStack {
-                Circle().stroke(phase == .recording ? Color.white : Color.brandMint, lineWidth: 4).frame(width: 86, height: 86)
-                switch phase {
-                case .recording:
-                    RoundedRectangle(cornerRadius: 9, style: .continuous).fill(Color.brandRed).frame(width: 34, height: 34)
-                case .saving:
-                    ProgressView().tint(.white)
-                default:
-                    Circle().fill(.white).frame(width: 70, height: 70)
+    @ViewBuilder private var centre: some View {
+        switch session.phase {
+        case .recording:
+            let done = session.percent >= 100
+            VStack(spacing: 1) {
+                (Text("\(session.percent)").font(.system(size: 48, weight: .heavy, design: .rounded)).monospacedDigit()
+                    + Text("%").font(.system(size: 22, weight: .bold, design: .rounded)))
+                    .foregroundStyle(done ? Color.brandMint : .white)
+                    .shadow(color: done ? .brandMint.opacity(0.6) : .clear, radius: 12)
+                    .contentTransition(.numericText(value: Double(session.percent)))
+                    .animation(.snappy(duration: 0.25), value: session.percent)
+                Text(done ? "FULL LAP" : "OF A LAP")
+                    .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.5)
+                    .foregroundStyle(Color.brandMint)
+                HStack(spacing: 5) {
+                    RoundedRectangle(cornerRadius: 2.5).fill(Color.brandRed).frame(width: 10, height: 10)
+                    Text("TAP TO STOP").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.1)
                 }
+                .foregroundStyle(.white.opacity(0.7))
+                .padding(.top, 6)
             }
-            .frame(width: 92, height: 92)
-            .contentShape(Circle())
+        case .saving, .review:
+            ProgressView().tint(.white).scaleEffect(1.3)
+        default:
+            ZStack {
+                Circle().fill(.white).frame(width: 128, height: 128)
+                VStack(spacing: 0) {
+                    Text("Scan").font(.system(size: 26, weight: .heavy, design: .rounded))
+                    if session.nextPass > 1 {
+                        Text("PASS \(session.nextPass)").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.2)
+                    }
+                }
+                .foregroundStyle(Color.brandStageBg)
+            }
+            .shadow(color: .brandMint.opacity(0.5), radius: 18)
         }
-        .buttonStyle(.plain)
-        .disabled(phase == .saving)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: phase)
-        .accessibilityLabel(phase == .recording ? "Stop this pass" : "Start scanning")
     }
 }
 
@@ -368,7 +367,7 @@ private struct Caption: View {
             let t = session.recordStart.map { now.timeIntervalSince($0) } ?? 0
             let left = Int((CaptureSession.maxPassSeconds - t).rounded(.up))
             if left <= 8 { return ("Wrapping up in \(left) s", "timer") }
-            if session.lapCompletedAt != nil { return ("Full lap · touch up, then stop", "checkmark.seal") }
+            if session.lapCompletedAt != nil { return ("Full lap · touch up, then tap stop", "checkmark.seal") }
             if !session.paperSeen { return ("Keep the paper in view", "viewfinder") }
             return ("Turn the paper clockwise", "arrow.clockwise")
         case .saving: return ("Saving pass \(session.nextPass)…", "seal")

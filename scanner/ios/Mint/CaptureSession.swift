@@ -62,14 +62,12 @@ final class CaptureSession: NSObject, ObservableObject {
     /// ticks[i], 0…1: how well the item's side i × 5° (clockwise from above, from the side that faced the
     /// camera at the start) has been seen head-on.
     @Published private(set) var ticks: [Double] = Array(repeating: 0, count: tickCount)
-    /// How far the paper has turned this pass (radians, clockwise from above), eased for display: the ring
-    /// turns with it, so side i sits at i × 5° + ringTurn round the item, 0 = the side facing the camera.
+    /// How far the paper has turned this pass (radians, clockwise from above), eased for display: the ring's
+    /// bright spot sits at this angle (clockwise from the top), on the side the camera is looking at now.
     @Published private(set) var ringTurn: Double = 0
     /// The item's box on screen (view points, eased), and whether it's in view right now.
     @Published private(set) var itemBox: CGRect?
     @Published private(set) var itemVisible = false
-    /// The camera's elevation above the item (radians, eased): how flat the ring on the table looks.
-    @Published private(set) var elevation: Double = 0.75
     @Published private(set) var lapCompletedAt: Date?
     /// The sheet's edges were read in the last moment (false: no paper, or hands covering it).
     @Published private(set) var paperSeen = false
@@ -364,7 +362,7 @@ final class CaptureSession: NSObject, ObservableObject {
         }
         // The ring follows the paper while recording, then stays where the paper stopped.
         let goal = Double(turn.turned)
-        if phase == .recording, !previewing, abs(goal - ringTurn) > 0.0005 { ringTurn += (goal - ringTurn) * 0.3 }
+        if phase == .recording, lapCompletedAt == nil, !previewing, abs(goal - ringTurn) > 0.0005 { ringTurn += (goal - ringTurn) * 0.3 }
     }
 
     /// A new reading of the frame: a QR code (while waiting), where the item is, and how far the paper has
@@ -372,10 +370,11 @@ final class CaptureSession: NSObject, ObservableObject {
     private func apply(_ sight: PaperReader.Sight) {
         if let code = sight.code { follow(code) }
         if let box = sight.itemBox { track(box) }
-        if let e = sight.elevation { elevation += (Double(e) - elevation) * 0.15 }
         guard let reading = sight.paper, turn.update(reading, time: sight.timestamp) else { return }
         lastPaperAt = Date()
-        guard phase == .recording, let elevation = sight.elevation else { return }
+        // Once the lap is done the measurement stops: hand-held touch-ups (walking round, other heights)
+        // vary run to run, and the ring just stays full.
+        guard phase == .recording, lapCompletedAt == nil, let elevation = sight.elevation else { return }
         coverage.observe(turned: turn.turned, elevation: elevation, dt: lastObservation.map { sight.timestamp - $0 } ?? 0)
         lastObservation = sight.timestamp
         publishCoverage()
@@ -436,7 +435,6 @@ final class CaptureSession: NSObject, ObservableObject {
         lastPaperAt = .distantFuture
         lastItemAt = .distantFuture
         targetBox = CGRect(x: 125, y: 330, width: 150, height: 120)
-        elevation = 0.8
         // Made-up coverage: the paper turned `deg` clockwise, so sides −deg…0 have been seen.
         let fill = { (deg: Double) in
             self.ticks = (0..<Self.tickCount).map { i in
@@ -448,6 +446,7 @@ final class CaptureSession: NSObject, ObservableObject {
         }
         switch screen {
         case "ready": phase = .ready
+        case "early": recordStart = Date().addingTimeInterval(-4); fill(120); phase = .recording
         case "recording", "verify": recordStart = Date().addingTimeInterval(-9); fill(205); phase = .recording
         case "full": recordStart = Date().addingTimeInterval(-17); fill(360); lapCompletedAt = Date(); phase = .recording
         case "review": fill(360); passes = [fake]; phase = .review
