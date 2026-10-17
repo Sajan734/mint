@@ -80,7 +80,7 @@ struct ScanView: View {
         case .aiming:
             if let found = session.found {
                 if found.estimate != nil {
-                    pill(Copy.found(locked: found.locked), symbol: found.locked ? "lock.fill" : "scope",
+                    pill(Copy.found(locked: found.locked, paper: session.paper != nil), symbol: found.locked ? "lock.fill" : "scope",
                          tint: found.locked ? .brandMint : .white)
                 } else {
                     pill(found.planeY == nil ? Copy.findingTable : Copy.needMotion, symbol: "scope")
@@ -89,10 +89,12 @@ struct ScanView: View {
                 pill(Copy.aim, symbol: "scope")
             }
         case .scanning:
-            if let issue = session.issue {
+            if session.paperLost {
+                pill(Copy.paperLost, symbol: "rectangle.dashed", tint: .brandAmber)
+            } else if let issue = session.issue {
                 pill(Copy.issue(issue), symbol: "exclamationmark.triangle.fill", tint: .brandAmber)
             } else if let hint = session.hint {
-                let h = Copy.hint(hint)
+                let h = session.turntableMode ? Copy.turntableHint(hint) : Copy.hint(hint)
                 pill(h.text, symbol: h.symbol)
             }
         case .saving:
@@ -116,6 +118,9 @@ struct ScanView: View {
             .tint(.brandMint)
             .foregroundStyle(Color.brandStageBg)
             .disabled(!session.canStart)
+            if session.canStart && session.paper == nil {
+                Text(Copy.paperTip).font(.footnote).foregroundStyle(.white.opacity(0.85)).multilineTextAlignment(.center)
+            }
             if session.showStartAnyway {
                 Button("Start anyway", action: session.startAnyway)
                     .font(.subheadline.weight(.semibold))

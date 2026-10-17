@@ -43,6 +43,15 @@ The user can: scan a side → pick the item up or turn it → put it down → sc
 - **Tracking:** a visual hull from the most recent views spanning ≥ 60° (masks + exact poses), plus a per-view nudge that centres the item's projected extent on the mask. Wrong masks are refused once tracking.
 - **Result on the cluttered-table recording** (vs an offline ±45-frame reference): ring position error, median **1.6 cm → 0.8 cm**; late in the lap **3.6–4.9 cm → ~1 cm**.
 
+## 2c. Turntable (the main method from now on)
+
+The item sits on a sheet of paper; the phone stays still; the user turns the paper: lap 1 low (outer ring), lap 2 with the phone raised (inner ring), ~20 s. The app follows the **paper**, not the item, so it works whatever the item looks like.
+
+- Each frame the camera image is resampled onto a top-down 50 × 50 cm map of the table (2.5 mm cells). Paper vs table by colour strength (paper ~2, beige table ~43); the sheet's angle from its straight edges (histogram, then a line fit per side, iterated: ≤ 0.3° on synthetic sheets at any angle); continuous across turns; centre from the edges + the known size when a hand covers a side.
+- On the real recording (`mint-33218a6e`, one slow lap): tracked **565/566** frames, **0.5°** median vs Vision's rectangle detector, 1.5 ms/frame (Mac). Replaying the app's chain fills the low ring 12/12 in turning order.
+- Coverage, the AR rings and the recorded `pose` are all in the item's frame. No paper under the item → the old walk-around mode.
+- Feature re-finding (SIFT on the item) was measured first and rejected: fails beyond ~15° of turn.
+
 ## 3. Chunks
 
 | # | Chunk | Done when | Status |
@@ -52,7 +61,8 @@ The user can: scan a side → pick the item up or turn it → put it down → sc
 | 2 | Dome + coverage engine + guidance + haptics | Walk around and it fills to 90% | ✅ tested on device |
 | 3 | Auto-find + auto-size; recording; AirDrop export; `check_scan.py` | Point → bracket → Start → MP4 + poses + keyframes → AirDrop; `check_scan.py` OK with crosshairs on the item | ✅ first device scan `mint-30f063d2`: poses/K/orientation verified (crosshair on the item in every frame) |
 | 3b | Fixes from that scan: 30 fps, one ring, hold-lock, ring on the table | Video ≥ 28 fps; one lap ≤ 20 s; lock doesn't flicker | ✅ `mint-0a705c19`: 30.1 fps, lap in 10.3 s |
-| 3c | Find the item in clutter; keep the ring on it | Locks on a cluttered table; ring stays on the item through the lap | ✅ code + offline proof on `mint-40c3610d`; **needs a device test** |
+| 3c | Find the item in clutter; keep the ring on it | Locks on a cluttered table; ring stays on the item through the lap | ✅ device: "locking was a lot better" |
+| 4 | **Turntable mode** (paper tracking, two-lap coverage, rings turn with the paper, item-frame poses) | Two laps at two heights in ≤ 20 s; ring follows the paper | ✅ code + offline proof on `mint-33218a6e`; **needs a device test** |
 | 4 | Prototype re-finding offline on real "scan → turn → scan" recordings | ≥ 95% of turns re-found; reprojection < 2 px; numbers written down | next |
 | 5 | On-device: OpenCV, map building, hand detection, re-finding, dome follows the item | Turn the item mid-scan and the dome snaps to it; coverage stays right | |
 | 6 | Guidance for turning + demo polish (snap animation, found bracket, seal moment, 20 s timer) | A first-time user finishes in ≤ 20 s | |

@@ -2,10 +2,11 @@ import CoverageKit
 import RealityKit
 import UIKit
 
-/// The AR coverage ring: 12 arcs lying on the table around the item's base, one per segment.
-/// It never covers the item. While aiming it's a live preview that glides to the measured item
-/// and shows the measured surface points; on Start it becomes the scan ring. Arcs are built at unit
-/// radius and scaled, so resizing is cheap.
+/// The AR coverage rings: arcs lying on the table around the item's base, one per segment: the
+/// outer ring for the low lap, the inner ring for the high lap. They never cover the item. While
+/// aiming they preview around the measured item (with the measured points and the sheet's outline);
+/// on Start they become the scan rings, and on a turntable they turn with the paper. Arcs are built
+/// at unit radius and scaled, so resizing is cheap.
 @MainActor
 final class DomeEntity {
     let anchor = AnchorEntity(world: .zero)
@@ -15,8 +16,11 @@ final class DomeEntity {
     private var arcs: [SegmentID: ModelEntity] = [:]
     private var looks: [SegmentID: Look] = [:]
     private var points: [ModelEntity] = []
+    private var paperEdges: [ModelEntity] = []
     private(set) var base: SIMD3<Float> = .zero
     private(set) var radius: Float = 0.15
+    /// Turntable: the item's motion since Start (the rings turn with the paper). Identity otherwise.
+    private var motion = matrix_identity_float4x4
 
     private enum Look { case preview, empty, current, filled }
 
@@ -27,7 +31,10 @@ final class DomeEntity {
         .filled: material(Brand.mint, opacity: 0.95),
     ]
     private static let pointMaterial = material(Brand.mint, opacity: 0.95)
-    private static let ringWidth: Float = 0.22  // relative to the radius
+    private static let ringWidth: Float = 0.2   // relative to the radius
+    /// Inner edge of each ring, relative to the radius: high band inside, low band outside
+    /// (matches the 2D coverage ring on screen).
+    private static func ringInner(_ band: Int) -> Float { band == 0 ? 1.26 : 1.0 }
     private static let lift: Float = 0.003      // just above the table, so it doesn't z-fight
 
     init() {
@@ -54,8 +61,7 @@ final class DomeEntity {
         let first = self.base == .zero
         self.base = base
         self.radius = radius
-        var t = root.transform
-        t.translation = base + SIMD3(0, Self.lift, 0)
+        var t = Transform(matrix: motion * Self.translation(base + SIMD3(0, Self.lift, 0)))
         var s = container.transform
         s.scale = SIMD3(repeating: radius)
         if animated && !first {
@@ -69,6 +75,45 @@ final class DomeEntity {
 
     func setRadius(_ r: Float) {
         place(base: base, radius: r, animated: false)
+    }
+
+    /// Turntable: turn the rings with the paper (called every frame the paper is read).
+    func setMotion(_ m: simd_float4x4) {
+        motion = m
+        root.transform = Transform(matrix: m * Self.translation(base + SIMD3(0, Self.lift, 0)))
+    }
+
+    /// The sheet's outline while aiming (nil hides it).
+    func showPaper(_ pose: PaperPose?, planeY: Float) {
+        if paperEdges.isEmpty {
+            for _ in 0..<4 {
+                let e = ModelEntity(mesh: .generateBox(size: [1, 0.002, 0.004]), materials: [Self.pointMaterial])
+                anchor.addChild(e)
+                paperEdges.append(e)
+            }
+        }
+        guard let pose else {
+            paperEdges.forEach { $0.isEnabled = false }
+            return
+        }
+        let l = SIMD3<Float>(sin(pose.yaw), 0, cos(pose.yaw)), s = SIMD3<Float>(cos(pose.yaw), 0, -sin(pose.yaw))
+        let c = SIMD3(pose.centre.x, planeY + Self.lift, pose.centre.z)
+        let sides: [(mid: SIMD3<Float>, dir: SIMD3<Float>, len: Float)] = [
+            (c + s * pose.short / 2, l, pose.long), (c - s * pose.short / 2, l, pose.long),
+            (c + l * pose.long / 2, s, pose.short), (c - l * pose.long / 2, s, pose.short),
+        ]
+        for (e, side) in zip(paperEdges, sides) {
+            e.isEnabled = true
+            e.position = side.mid
+            e.orientation = simd_quatf(from: [1, 0, 0], to: side.dir)
+            e.scale = [side.len, 1, 1]
+        }
+    }
+
+    private static func translation(_ t: SIMD3<Float>) -> simd_float4x4 {
+        var m = matrix_identity_float4x4
+        m.columns.3 = SIMD4(t, 1)
+        return m
     }
 
     /// Small dots where ARKit measured the item's surface (aiming only).
@@ -87,6 +132,7 @@ final class DomeEntity {
     /// Switch from preview to the scan look.
     func beginScan() {
         showPoints([])
+        paperEdges.forEach { $0.isEnabled = false }
         update(filled: [], current: nil)
     }
 
@@ -119,9 +165,10 @@ final class DomeEntity {
         return m
     }
 
-    /// A flat arc of the unit annulus [1, 1 + ringWidth] for one segment, with gaps between arcs.
+    /// A flat arc of the segment's ring (see `ringInner`) for one segment, with gaps between arcs.
     /// Same azimuth convention as `Dome.position`: az 0 = +Z, az 90 = +X.
     private static func arcMesh(_ seg: SegmentID) throws -> MeshResource {
+        let inner = ringInner(seg.el)
         let gapDeg: Float = 3
         let a0 = Float(seg.az * Dome.azimuthStepDeg) + gapDeg
         let a1 = Float((seg.az + 1) * Dome.azimuthStepDeg) - gapDeg
@@ -131,7 +178,7 @@ final class DomeEntity {
         for i in 0...steps {
             let a = (a0 + (a1 - a0) * Float(i) / Float(steps)) * .pi / 180
             let dir = SIMD3(sin(a), 0, cos(a))
-            positions += [dir, dir * (1 + ringWidth)]
+            positions += [dir * inner, dir * (inner + ringWidth)]
             normals += [[0, 1, 0], [0, 1, 0]]
         }
         var indices: [UInt32] = []

@@ -34,6 +34,12 @@ final class ScanSession: NSObject, ObservableObject {
     @Published private(set) var scanStart: Date?
     /// Aiming has gone on a while without a lock: offer to start with the best guess.
     @Published private(set) var showStartAnyway = false
+    /// The sheet of paper under the item, while aiming (nil = none seen).
+    @Published private(set) var paper: PaperPose?
+    /// Scanning on a turntable (the user turns the paper; the phone stays still).
+    @Published private(set) var turntableMode = false
+    /// Turntable: the paper wasn't read this frame (hand over it, or out of view).
+    @Published private(set) var paperLost = false
 
     var coveragePct: Int { filled.count * 100 / Dome.segmentCount }
     var canStart: Bool { phase == .aiming && found?.locked == true }
@@ -43,6 +49,8 @@ final class ScanSession: NSObject, ObservableObject {
     /// Preview while aiming, the scan dome while scanning.
     private var dome: DomeEntity?
     private var item: (estimate: ObjectEstimate, planeY: Float)?
+    private var scanMode = "walk"
+    private var scanPaper: PaperPose?
     private var locker = LockingEstimator()
     /// Multi-view tracking of the item (from lock until the scan ends): keeps the ring on the item
     /// as ARKit's world drifts. Runs on `trackQueue`; `trackerGeneration` discards stale results.
@@ -51,6 +59,8 @@ final class ScanSession: NSObject, ObservableObject {
     private var trackingBusy = false
     private let trackQueue = DispatchQueue(label: "mint.track", qos: .userInitiated)
     private var aimingSince = Date()
+    private var paperSeenAt: Date?
+    private var paperLostSince: Date?
     /// One JSON line per detection while aiming; saved into the scan folder as aim.jsonl.
     private var aimLog: [Data] = []
     private var issueDebounce = IssueDebounce()
@@ -65,6 +75,7 @@ final class ScanSession: NSObject, ObservableObject {
         arView.session.delegateQueue = processor.queue
         processor.onUpdate = { [weak self] in self?.apply($0) }
         processor.onDetection = { [weak self] in self?.applyDetection($0) }
+        processor.onPaper = { [weak self] in self?.applyPaper($0) }
         processor.onTrackingChange = { [weak self] state in
             guard let self, self.phase == .starting, case .normal = state else { return }
             self.beginAiming()
@@ -139,7 +150,14 @@ final class ScanSession: NSObject, ObservableObject {
             try? aimLog.map { $0 + Data([0x0A]) }.reduce(Data(), +)
                 .write(to: recorder.directory.appendingPathComponent("aim.jsonl"))
         }
-        processor.startScanning(item: est, recorder: recorder)
+        // A sheet under the item seen in the last second: turntable mode.
+        let onPaper = paperSeenAt.map { Date().timeIntervalSince($0) < 1.0 } ?? false
+        turntableMode = onPaper
+        paperLost = false
+        paperLostSince = nil
+        scanMode = onPaper ? "turntable" : "walk"
+        scanPaper = onPaper ? paper : nil
+        processor.startScanning(item: est, recorder: recorder, turntable: onPaper, planeY: planeY)
         showStartAnyway = false
         filled = []
         issueDebounce = IssueDebounce()
@@ -156,13 +174,14 @@ final class ScanSession: NSObject, ObservableObject {
         guard phase == .scanning, let item else { return }
         phase = .saving
         let coverage = coveragePct, segments = filled, locked = cameraLocked
+        let mode = scanMode, paperSize = scanPaper.map { [Double($0.long), Double($0.short)] }
         processor.finish { recorder, sensorSize in
             guard let recorder else {
                 DispatchQueue.main.async { MainActor.assumeIsolated { self.phase = .failed("Nothing was recorded.") } }
                 return
             }
             recorder.finish(item: item.estimate, planeY: item.planeY, coveragePct: coverage, filled: segments,
-                            sensorSize: sensorSize, exposureLocked: locked) { [weak self] result in
+                            sensorSize: sensorSize, exposureLocked: locked, mode: mode, paper: paperSize) { [weak self] result in
                 MainActor.assumeIsolated {
                     guard let self else { return }
                     CameraLock.unlock()
@@ -199,6 +218,11 @@ final class ScanSession: NSObject, ObservableObject {
         locker = LockingEstimator()
         dropTracker()
         showStartAnyway = false
+        paper = nil
+        paperSeenAt = nil
+        turntableMode = false
+        paperLost = false
+        processor.setPaperTarget(near: nil, planeY: nil)
         if phase != .starting { beginAiming() }
     }
 
@@ -293,11 +317,21 @@ final class ScanSession: NSObject, ObservableObject {
         }
 
         let shown = itemTracker?.estimate ?? steady.estimate
+        processor.setPaperTarget(near: SIMD2(shown.footprintCentre.x, shown.footprintCentre.z), planeY: planeY)
         entry["tracked"] = itemTracker.map { ["base": $0.estimate.footprintCentre.map3, "updates": $0.updates] as [String: Any] } ?? NSNull()
         log(entry)
         let dome = self.dome ?? makeDome()
         dome.place(base: shown.footprintCentre, radius: DomeEntity.radius(for: shown), animated: true)
         dome.showPoints(Array(above.prefix(150)))  // ARKit's measured points on the item
+    }
+
+    // MARK: - The sheet of paper (turntable)
+
+    private func applyPaper(_ pose: PaperPose?) {
+        guard phase == .aiming else { return }
+        paper = pose
+        if pose != nil { paperSeenAt = Date() }
+        dome?.showPaper(pose, planeY: found?.planeY ?? 0)
     }
 
     // MARK: - Tracking the item (multi-view)
@@ -408,6 +442,17 @@ final class ScanSession: NSObject, ObservableObject {
 
     private func apply(_ u: FrameProcessor.Update) {
         guard phase == .scanning else { return }
+        if turntableMode {
+            if let m = u.itemMotion { dome?.setMotion(m) }
+            // Say "keep the sheet in view" only if it stays unread for a moment (a hand passing is fine).
+            if u.paperLost {
+                if paperLostSince == nil { paperLostSince = Date() }
+                paperLost = Date().timeIntervalSince(paperLostSince!) > 0.4
+                return
+            }
+            paperLostSince = nil
+            paperLost = false
+        }
         position = u.decision.position
         hint = u.hint
         issue = issueDebounce.feed(u.decision.issue)

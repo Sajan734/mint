@@ -17,24 +17,24 @@ private func obs(_ m: simd_float4x4, t: Double, sharp: Double = 100, luma: Doubl
 final class DomeTests: XCTestCase {
     func testSegmentNames() {
         let cases: [(SegmentID, String)] = [
-            (SegmentID(az: 0, el: 0), "az000_el40"),
-            (SegmentID(az: 3, el: 0), "az090_el40"),
-            (SegmentID(az: 11, el: 0), "az330_el40"),
+            (SegmentID(az: 0, el: 0), "az000_el28"),
+            (SegmentID(az: 3, el: 0), "az090_el28"),
+            (SegmentID(az: 11, el: 1), "az330_el60"),
         ]
         for (seg, name) in cases { XCTAssertEqual(seg.name, name) }
-        XCTAssertEqual(Dome.segmentCount, 12)
-        XCTAssertEqual(Dome.segmentsToComplete, 11)
-        XCTAssertEqual(Set(Dome.allSegments.map(\.name)).count, 12)
+        XCTAssertEqual(Dome.segmentCount, 24)
+        XCTAssertEqual(Dome.segmentsToComplete, 22)
+        XCTAssertEqual(Set(Dome.allSegments.map(\.name)).count, 24)
     }
 
     func testPositionToSegment() {
         let cases: [(SIMD3<Float>, SegmentID?)] = [
             ([0, 0.2, 1], SegmentID(az: 0, el: 0)),       // +Z, ~11°
             ([1, 0.5, 0], SegmentID(az: 3, el: 0)),       // +X = 90°, ~27°
-            ([0, 1.2, -1], SegmentID(az: 6, el: 0)),      // 180°, ~50°
-            ([-1, 3, 0], SegmentID(az: 9, el: 0)),        // 270°, ~72°
+            ([0, 1.2, -1], SegmentID(az: 6, el: 1)),      // 180°, ~50°
+            ([-1, 3, 0], SegmentID(az: 9, el: 1)),        // 270°, ~72°
             ([-0.001, 0.5, 1], SegmentID(az: 11, el: 0)), // just under 360°
-            ([0, 5, 1], nil),                             // ~79°, too high
+            ([0, 8, 1], nil),                             // ~83°, too high
             ([0, 0.1, 1], nil),                           // ~6°, too low
         ]
         let anchor: SIMD3<Float> = [0.2, 0.3, -0.1]
@@ -121,24 +121,24 @@ final class TrackerTests: XCTestCase {
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 0.2)).issue, .tooFast)
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, dist: 3, yawDeg: 90), t: 1.0)).issue, .tooFar)
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, dist: 0.05, yawDeg: 90), t: 1.5)).issue, .tooClose)
-        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 80, yawDeg: 90), t: 2.0)).issue, .tooHigh)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 85, yawDeg: 90), t: 2.0)).issue, .tooHigh)
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 1, yawDeg: 90), t: 2.5)).issue, .tooLow)
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.0, luma: 10)).issue, .tooDark)
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.5, tracking: false)).issue, .trackingLimited)
-        XCTAssertEqual(t.coveragePct, 8)  // 1 of 12
+        XCTAssertEqual(t.coveragePct, 4)  // 1 of 24
     }
 
-    func testCompletesAt11Segments() {
+    func testCompletesAt22Segments() {
         var t = CoverageTracker(anchor: .zero)
         var time = 0.0
-        for seg in Dome.allSegments.prefix(10) {
+        for seg in Dome.allSegments.prefix(21) {
             time += 1
             let az = Float(seg.az * Dome.azimuthStepDeg) + 15
-            _ = t.observe(obs(cameraPose(azDeg: az, elDeg: 30 + Float(seg.az)), t: time))  // any height in the band
+            _ = t.observe(obs(cameraPose(azDeg: az, elDeg: Float(Dome.bands[seg.el].centreDeg)), t: time))
         }
-        XCTAssertEqual(t.filled.count, 10)
+        XCTAssertEqual(t.filled.count, 21)
         XCTAssertFalse(t.isComplete)
-        _ = t.observe(obs(cameraPose(azDeg: 15 + 30 * 10, elDeg: 60), t: time + 1))
+        _ = t.observe(obs(cameraPose(azDeg: 15 + 30 * 9, elDeg: 60), t: time + 1))
         XCTAssertTrue(t.isComplete)
         XCTAssertEqual(t.coveragePct, 91)
     }
@@ -150,17 +150,20 @@ final class GuidanceTests: XCTestCase {
     }
 
     func testHints() {
-        let ring = Set((0..<12).map { SegmentID(az: $0, el: 0) })
-        let missing2And9 = ring.subtracting([SegmentID(az: 2, el: 0), SegmentID(az: 9, el: 0)])
+        let lowRing = Set((0..<12).map { SegmentID(az: $0, el: 0) })
+        let highRing = Set((0..<12).map { SegmentID(az: $0, el: 1) })
+        let lowMissing2And9 = lowRing.subtracting([SegmentID(az: 2, el: 0), SegmentID(az: 9, el: 0)])
         let cases: [(DomePosition, Set<SegmentID>, Hint)] = [
-            (at(15, 30), [], .holdHere),
-            (at(15, 30), [SegmentID(az: 0, el: 0)], .walkRight(segments: 1)),  // tie between bins 11 and 1 → right
-            (at(15, 30), missing2And9, .walkRight(segments: 2)),
-            (at(255, 30), missing2And9, .walkRight(segments: 1)),           // bin 8 → bin 9
-            (at(345, 30), missing2And9, .walkLeft(segments: 2)),            // bin 11: bin 9 is 2 left, bin 2 is 3 right
+            (at(15, 25), [], .holdHere),
+            (at(15, 25), [SegmentID(az: 0, el: 0)], .walkRight(segments: 1)),  // tie between bins 11 and 1 → right
+            (at(15, 25), lowMissing2And9, .walkRight(segments: 2)),
+            (at(255, 25), lowMissing2And9, .walkRight(segments: 1)),           // bin 8 → bin 9
+            (at(345, 25), lowMissing2And9, .walkLeft(segments: 2)),            // bin 11: bin 9 is 2 left, bin 2 is 3 right
+            (at(15, 25), lowRing, .raise),
+            (at(15, 60), highRing, .lower),
             (at(15, 5), [], .raise),
-            (at(15, 80), [], .lower),
-            (at(15, 30), Set(Dome.allSegments.prefix(11)), .done),
+            (at(15, 85), [], .lower),
+            (at(15, 25), Set(Dome.allSegments.prefix(22)), .done),
         ]
         for (i, (p, filled, expected)) in cases.enumerated() {
             XCTAssertEqual(Guidance.hint(position: p, filled: filled), expected, "case \(i)")
@@ -531,5 +534,91 @@ final class TurntableTests: XCTestCase {
         let inItem = Turntable.cameraInItemFrame(camera: cam, itemMotion: m)
         let p = Dome.position(camera: inItem.translation, anchor: .zero)
         XCTAssertEqual(p.azimuthDeg, 270, accuracy: 0.01)  // the item's −X side faces the camera now
+    }
+}
+
+final class PaperTrackerTests: XCTestCase {
+    let long: Float = 0.27, short: Float = 0.20
+
+    /// A table map with a sheet at `yaw` centred at `c`, a dark item on it, optionally a hand over
+    /// one long edge and a strip the camera can't see.
+    func map(yaw: Float, c: SIMD2<Float>, hand: Bool = false, blind: Bool = false) -> TableMap {
+        var m = TableMap(centre: [0, 0], halfSize: 0.25, res: 0.0025)
+        let l = SIMD2<Float>(sin(yaw), cos(yaw)), s = SIMD2<Float>(cos(yaw), -sin(yaw))
+        let handAt = c + s * (short / 2)
+        for r in 0..<m.n {
+            for k in 0..<m.n {
+                let p = m.cell(r, k), d = p - c, i = r * m.n + k
+                m.valid[i] = blind && p.x > 0.2 ? 0 : 1
+                let onPaper = abs(simd_dot(d, l)) <= long / 2 && abs(simd_dot(d, s)) <= short / 2
+                (m.luma[i], m.chroma[i]) = onPaper ? (240, 2) : (210, 25)
+                if simd_length(d) < 0.04 { (m.luma[i], m.chroma[i]) = (40, 3) }                 // the item
+                if hand && simd_length(p - handAt) < 0.05 { (m.luma[i], m.chroma[i]) = (170, 45) } // a hand
+            }
+        }
+        return m
+    }
+
+    func angleErrorDeg(_ a: Float, _ b: Float) -> Float {
+        var d = (a - b).truncatingRemainder(dividingBy: .pi / 2)
+        if d > .pi / 4 { d -= .pi / 2 }
+        if d < -.pi / 4 { d += .pi / 2 }
+        return abs(d) * 180 / .pi
+    }
+
+    func testReadsAngleAndSize() {
+        for deg: Float in [0, 10, 37.3, 45, 80, 95, 133, 170] {
+            let yaw = deg * .pi / 180
+            let r = PaperDetector.read(map(yaw: yaw, c: [0.01, -0.02]), near: [0.01, -0.02])!
+            XCTAssertLessThan(angleErrorDeg(r.angleMod90, yaw), 0.8, "yaw \(deg)°")
+            let sizes = [r.uMax - r.uMin, r.vMax - r.vMin].sorted()
+            XCTAssertEqual(sizes[1], long, accuracy: 0.012, "yaw \(deg)°")
+            XCTAssertEqual(sizes[0], short, accuracy: 0.012, "yaw \(deg)°")
+            XCTAssertGreaterThanOrEqual(r.confidence, 0.3)  // the follower's minimum
+        }
+    }
+
+    func testHandAndBlindSpot() {
+        let yaw: Float = 0.5
+        let r = PaperDetector.read(map(yaw: yaw, c: [0.02, 0], hand: true, blind: true), near: [0.02, 0])!
+        XCTAssertLessThan(angleErrorDeg(r.angleMod90, yaw), 1.5)
+    }
+
+    func testFollowsTwoLapsWithSlide() {
+        var f = PaperFollower()
+        let startYaw: Float = 0.3
+        for step in 0...60 {
+            let truth = startYaw + Float(step) * 12 * .pi / 180          // 12° per reading, 720° total
+            let c = SIMD2<Float>(0.01 * sin(Float(step) / 9), 0.008 * cos(Float(step) / 7))  // a little slide
+            let r = PaperDetector.read(map(yaw: truth, c: c, hand: step % 3 == 0), near: c)!
+            let pose = f.update(r)
+            XCTAssertNotNil(pose, "step \(step)")
+            if let pose {
+                XCTAssertEqual(pose.yaw, truth, accuracy: 1.5 * .pi / 180, "step \(step): yaw must stay continuous")
+                XCTAssertEqual(pose.centre.x, c.x, accuracy: 0.008, "step \(step)")
+                XCTAssertEqual(pose.centre.z, c.y, accuracy: 0.008, "step \(step)")
+            }
+        }
+        XCTAssertEqual(f.turned, 720 * .pi / 180, accuracy: 1.5 * .pi / 180)
+        XCTAssertEqual(f.long, long, accuracy: 0.012)
+        XCTAssertEqual(f.short, short, accuracy: 0.012)
+    }
+}
+
+extension PaperTrackerTests {
+    func testRestartKeepsSheetButResetsStart() {
+        var f = PaperFollower()
+        for step in 0..<5 {
+            let yaw = 0.2 + Float(step) * 0.2
+            f.update(PaperDetector.read(map(yaw: yaw, c: .zero), near: .zero)!)
+        }
+        let knownLong = f.long
+        f.restart()
+        XCTAssertNil(f.start)
+        // Next reading has a hand over the sheet: still accepted (continuity), and it becomes the start.
+        let pose = f.update(PaperDetector.read(map(yaw: 1.2, c: .zero, hand: true), near: .zero)!)
+        XCTAssertNotNil(pose)
+        XCTAssertEqual(f.turned, 0, accuracy: 1e-6)
+        XCTAssertEqual(f.long, knownLong, accuracy: 0.01)
     }
 }

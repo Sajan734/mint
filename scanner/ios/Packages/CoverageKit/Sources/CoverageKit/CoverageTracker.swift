@@ -38,6 +38,14 @@ public struct FrameDecision: Sendable {
     public let filledNewSegment: Bool
     /// This frame is now the best keyframe for its segment (first fill, or clearly sharper).
     public let isBestForSegment: Bool
+
+    public init(position: DomePosition, segment: SegmentID?, issue: CaptureIssue?, filledNewSegment: Bool, isBestForSegment: Bool) {
+        self.position = position
+        self.segment = segment
+        self.issue = issue
+        self.filledNewSegment = filledNewSegment
+        self.isBestForSegment = isBestForSegment
+    }
 }
 
 public struct CoverageConfig: Sendable {

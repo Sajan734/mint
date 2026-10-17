@@ -129,11 +129,16 @@ public struct CaptureInfo: Codable, Equatable, Sendable {
     public var coverage_pct: Int
     public var segments_filled: [String]
     public var exposure_locked: Bool
+    /// "turntable" (item on a sheet the user turned; `pose` = camera in the item's frame) or "walk".
+    public var mode: String?
+    /// Turntable: the sheet's size (long, short), metres.
+    public var paper_m: [Double]?
 
     public init(scan_id: String, device: String, os: String, created_at: String, duration_ms: Int,
                 video: String, video_width: Int, video_height: Int, video_frames: Int,
                 sensor_width: Int, sensor_height: Int, orientation: String, item: Item,
-                coverage_pct: Int, segments_filled: [String], exposure_locked: Bool) {
+                coverage_pct: Int, segments_filled: [String], exposure_locked: Bool,
+                mode: String? = nil, paper_m: [Double]? = nil) {
         self.scan_id = scan_id
         self.device = device
         self.os = os
@@ -150,6 +155,8 @@ public struct CaptureInfo: Codable, Equatable, Sendable {
         self.coverage_pct = coverage_pct
         self.segments_filled = segments_filled
         self.exposure_locked = exposure_locked
+        self.mode = mode
+        self.paper_m = paper_m
     }
 }
 

@@ -9,9 +9,23 @@ enum Copy {
     static let saving = "Saving…"
     static let complete = "Coverage verified. Nothing hidden."
 
+    static let paperTip = "Tip: put it on a sheet of paper, then just turn the paper."
+    static let paperLost = "Keep the whole sheet in view."
+
     /// No centimetres on screen: the capture doesn't need them, and a wrong number costs trust.
-    static func found(locked: Bool) -> String {
-        locked ? "Locked on. Tap Start." : "Measuring… hold steady."
+    static func found(locked: Bool, paper: Bool) -> String {
+        guard locked else { return "Measuring… hold steady." }
+        return paper ? "Locked on, paper found. Tap Start." : "Locked on. Tap Start."
+    }
+
+    /// Turntable: the phone stays still, the paper turns.
+    static func turntableHint(_ hint: Hint) -> (text: String, symbol: String) {
+        switch hint {
+        case .done: return (complete, "checkmark.seal.fill")
+        case .holdHere, .walkLeft, .walkRight: return ("Keep turning the paper.", "arrow.triangle.2.circlepath")
+        case .raise: return ("Now raise the phone and turn it again.", "arrow.up")
+        case .lower: return ("Lower the phone a little.", "arrow.down")
+        }
     }
 
     static func issue(_ issue: CaptureIssue) -> String {

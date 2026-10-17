@@ -22,6 +22,16 @@ What the Mint scanner hands to reconstruction (Role A). One folder per scan, sen
 - **ARKit drift:** over a lap ARKit's world slides by a few cm (measured: ~3.5–4 cm on a fast lap round a mouse). The app tracks the item from its masks, and every `poses.jsonl` line carries `item_centre`: where the item is *in that frame's* ARKit world. To cancel the drift's translation, re-centre each frame on its own `item_centre` instead of one fixed anchor. VGGT refinement still applies.
 - **Metric:** ARKit metres.
 
+## Turntable scans (`capture.json` → `"mode": "turntable"`)
+
+The usual scan now: the item sits on a sheet of paper, the phone stays still, and the user turns the paper (two laps, two heights). The app measures the sheet's position and angle in every frame (top-down view of the table, straight-edge fit; on the first real recording: tracked in 565/566 frames, 0.5° median vs an independent detector).
+
+- `pose` = camera in the **item's frame** = ARKit world at the moment Start was pressed, with the paper's turn and slide undone. Train on `pose`, not `pose_world`.
+- Lines with `"state": "paper_lost"` have no `pose` (hand over the sheet, or it left the view). Skip them.
+- **The background moves relative to the item** (the room is still, the item turns), so masking is mandatory (SAM 2). The sheet turns *with* the item, so it's consistent and can stay in or be masked out.
+- `item_centre` per frame = where the item is in that frame's ARKit world (turns and slides with the paper).
+- `paper_m` in `capture.json` = the sheet's measured size.
+
 ## Extract frames without breaking frame ↔ pose alignment
 
 ```bash
@@ -37,12 +47,12 @@ cd scanner/tools && python3 -m venv .venv && .venv/bin/pip install -r requiremen
 ```
 Checks the schema, frame counts, hashes, and that the item centre projects onto the item in every frame (look at the overlays: the crosshair should sit on the item).
 
-Also in `tools/`: `refind_eval.py` (can the item be re-found after a turn? measured against ARKit) and `hull_check.swift` (re-runs the app's multi-view item tracking on a recording, with Vision on the Mac; build steps at the top of the file).
+Also in `tools/`: `paper_check.swift` (runs the app's paper tracker + coverage on a turntable recording, on the Mac), `turntable_check.swift` (Vision's rectangle detector, for comparison), `refind_eval.py` (can the item be re-found after a turn? measured against ARKit) and `hull_check.swift` (re-runs the app's multi-view item tracking on a recording, with Vision on the Mac; build steps at the top of the file).
 
 ## `poses.jsonl` line
 
 ```json
 {"counted":true,"frame":12,"intrinsics":[[...3×3...]],"pose":[[...4×4...]],"pose_world":[[...4×4...]],
- "item_centre":[0.17,-0.15,0.14],"segment":"az090_el40","sharpness":143.2,"state":"scanning","t_ms":400,"tracking":"normal"}
+ "item_centre":[0.17,-0.15,0.14],"segment":"az090_el28","sharpness":143.2,"state":"scanning","t_ms":400,"tracking":"normal"}
 ```
 `counted` = this frame filled or improved a dome segment (a good keyframe candidate). `tracking` ≠ `normal` means ARKit was unsure, so treat that pose with suspicion.

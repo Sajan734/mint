@@ -37,18 +37,20 @@ public enum Dome {
 
     public static let azimuthCount = 12
     public static let azimuthStepDeg = 360 / azimuthCount
-    /// One ring at any comfortable height. Two rings (20° and 50°) forced two full laps: a real
-    /// scan finished the top ring in 13 s and needed 23 s more crouching for the bottom one.
-    /// Natural up/down motion during one lap still gives the splat varied heights.
+    /// Two laps at two heights. With the turntable the phone stays still and the paper turns, so a
+    /// lap is quick (the first real turntable lap took ~17 s at a slow pace) and changing height is
+    /// just raising the phone. The first turntable recording's natural height was 38°; with the split
+    /// at 40° a slight slide of the paper tipped frames into the high ring, so it's at 45°.
     public static let bands: [Band] = [
-        Band(minDeg: 10, maxDeg: 75, centreDeg: 40),
+        Band(minDeg: 10, maxDeg: 45, centreDeg: 28),
+        Band(minDeg: 45, maxDeg: 80, centreDeg: 60),
     ]
     public static var segmentCount: Int { azimuthCount * bands.count }
     public static var allSegments: [SegmentID] {
         bands.indices.flatMap { el in (0..<azimuthCount).map { SegmentID(az: $0, el: el) } }
     }
 
-    /// ≥ 90% coverage finishes the scan: 11 of 12 segments.
+    /// ≥ 90% coverage finishes the scan: 22 of 24 segments.
     public static let completeFraction: Double = 0.9
     public static var segmentsToComplete: Int { Int((Double(segmentCount) * completeFraction).rounded(.up)) }
 

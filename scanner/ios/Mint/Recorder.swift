@@ -182,7 +182,8 @@ final class Recorder {
 
     /// Closes the video and writes manifest.json + capture.json. `completion` runs on the main queue.
     func finish(item: ObjectEstimate, planeY: Float, coveragePct: Int, filled: Set<SegmentID>,
-                sensorSize: CGSize, exposureLocked: Bool, completion: @escaping (Result<Summary, Error>) -> Void) {
+                sensorSize: CGSize, exposureLocked: Bool, mode: String, paper: [Double]?,
+                completion: @escaping (Result<Summary, Error>) -> Void) {
         input.markAsFinished()
         let frames = frameIndex
         let durationMs = Int(((lastTimestamp - (t0 ?? lastTimestamp)) * 1000).rounded())
@@ -218,7 +219,7 @@ final class Recorder {
                                     size_m: [Double(item.width), Double(item.height), Double(item.depth)],
                                     dome_radius_m: Double(item.domeRadius), plane_y: Double(planeY)),
                         coverage_pct: coveragePct, segments_filled: filled.sorted().map(\.name),
-                        exposure_locked: exposureLocked
+                        exposure_locked: exposureLocked, mode: mode, paper_m: paper
                     )
                     try CaptureJSON.encode(info, pretty: true).write(to: directory.appendingPathComponent("capture.json"))
 
