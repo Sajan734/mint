@@ -44,7 +44,7 @@ const session = await call({ action: "request", title: "Logitech mouse", seller:
 router.push(`/new/${session.scan_id}`);   // the "check your phone" page
 ```
 
-The phone shows `title` on the scanner ("NEW PRODUCT · LOGITECH MOUSE"), so pass it if the seller typed one.
+`title` is kept with the session (the scanner itself shows the tagline "Mint condition, measured." rather than the title), so pass it if the seller typed one.
 
 ### 2. The "check your phone" page
 

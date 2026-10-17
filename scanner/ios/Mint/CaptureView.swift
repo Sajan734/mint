@@ -171,17 +171,19 @@ struct ScannerHUD: View {
         Text("PASS \(n)").font(.system(.caption, design: .rounded).weight(.heavy)).tracking(1.2).foregroundStyle(Color.brandMint)
     }
 
-    // What this scan is for.
+    // Under the mark: the tagline, or what a buyer's verify scan is for.
     @ViewBuilder private var jobChip: some View {
         if let job = session.job {
             HStack(spacing: 6) {
-                Image(systemName: job.isVerify ? "checkmark.shield.fill" : (job.fromDashboard ? "laptopcomputer" : "bolt.fill"))
-                Text(job.isVerify ? "VERIFY · MATCHING THE LISTING"
-                     : job.fromDashboard ? (job.title.map { "NEW PRODUCT · \($0.uppercased())" } ?? "NEW PRODUCT") : "QUICK SCAN")
+                if job.isVerify { Image(systemName: "checkmark.shield.fill") }
+                Text(job.isVerify ? "VERIFY · MATCHING THE LISTING" : "MINT CONDITION, MEASURED.")
                     .lineLimit(1)
             }
-            .font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.1)
-            .foregroundStyle(job.isVerify ? Color.brandMint : .white.opacity(0.8))
+            .font(.system(.caption, design: .rounded).weight(.bold)).tracking(2)
+            .foregroundStyle(Color.brandMint)
+            .shadow(color: .black.opacity(0.45), radius: 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.leading, 4)
         }
     }
 
