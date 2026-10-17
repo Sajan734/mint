@@ -94,6 +94,7 @@ describe("dashboard page", () => {
     const { default: Page } = await import("../app/page");
     render(<Page />);
     expect(screen.getByText("Nothing listed yet. Scan something to sell it.")).toBeInTheDocument();
+    expect(screen.getAllByRole("link", { name: "New listing" })).toHaveLength(1);
   });
   it("shows demo rows, count chips without zeros, and the real scans in demo mode", async () => {
     localStorage.setItem(MOCK_KEY, "1");
@@ -105,6 +106,7 @@ describe("dashboard page", () => {
     expect(screen.getByText("2 Listed")).toBeInTheDocument();
     expect(screen.getByText("2 Sold")).toBeInTheDocument();
     expect(screen.getAllByText("Waiting for the listing agent")).toHaveLength(5);
+    expect(screen.getAllByRole("link", { name: "New listing" })).toHaveLength(1);
   });
 });
 

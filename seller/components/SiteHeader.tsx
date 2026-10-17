@@ -1,11 +1,14 @@
 "use client";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { setMockMode, useMockMode } from "@/lib/mock-mode";
 
 // Seller zone (served under /sell). Inside this zone use next/link: it adds /sell by itself. To leave the zone
 // (the shared landing page at "/") use a plain <a>: next/link cannot cross zones.
 export default function SiteHeader() {
   const mock = useMockMode();
+  // "Your listings" (/sell) has its own New listing button in the page, so the header leaves it out there.
+  const onDashboard = usePathname() === "/";
   return (
     <header className="sticky top-0 z-20 border-b border-line bg-bg">
       <div className="mx-auto flex min-h-14 w-full max-w-[1200px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1 md:min-h-16 md:px-6 lg:px-8">
@@ -31,9 +34,11 @@ export default function SiteHeader() {
           <a href="/" className="inline-flex min-h-11 items-center px-2 text-sm font-medium text-ink-2 hover:text-ink">
             Back to Mint
           </a>
-          <Link href="/scan/new" className="btn-primary text-sm">
-            New listing
-          </Link>
+          {!onDashboard && (
+            <Link href="/scan/new" className="btn-primary text-sm">
+              New listing
+            </Link>
+          )}
         </div>
       </div>
     </header>

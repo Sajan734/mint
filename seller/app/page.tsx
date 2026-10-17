@@ -29,9 +29,11 @@ export default function Dashboard() {
           <h1 className="text-[length:var(--t-2xl)] font-bold">Your listings</h1>
           <p className="text-ink-2">{SELLER_LINE}</p>
         </div>
-        <Link href="/scan/new" className="btn-primary">
-          New listing
-        </Link>
+        {rows.length > 0 && (
+          <Link href="/scan/new" className="btn-primary">
+            New listing
+          </Link>
+        )}
       </header>
 
       {rows.length === 0 ? (

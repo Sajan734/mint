@@ -18,3 +18,11 @@ clean except the old warning in `buyer/components/FilterBar.tsx`.
 - Sample splats (`SAMPLE_SPLATS`) are now only used for the generated catalog items, which have no scan.
 - Seen at 1280: editor, "Just listed" card hover and the buyer listing page all show the real ThinkPad splat.
 - Tests: buyer 187 (1 skipped), seller 88.
+
+## B. Small bugs
+
+- `seller/app/scan/new/route.ts` keeps the query string on its redirect (`/sell/scan/new?mock=1` ->
+  `/sell/scan/{uuid}?mock=1`).
+- `/sell` shows one **New listing**: the page header's, or the empty state's when there is nothing listed. The site
+  header hides its own on `/sell` only (`usePathname() === "/"` inside the `/sell` zone; checked live).
+- Seen at 1280 and 390 with demo data on and off. Tests: seller 91 (+3: query string, header, button count).
