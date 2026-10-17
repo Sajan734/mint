@@ -15,6 +15,7 @@ is the product looked up, since it is more specific than the Identity.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import math
 import re
@@ -26,6 +27,7 @@ from typing import Any
 import httpx
 from pydantic import ValidationError
 
+import timing
 from contracts import Identity, PriceResultCheck, PriceSource, ReferencePrice, RunContext
 from gemini import contract_schema, generate_json
 from stages._fixture import has_stub, load_stub
@@ -52,6 +54,10 @@ SERPER_PRICE = {
     "min_listings": 2,  # fewer matching listings (or sellers) -> fall back to the estimate
     "min_sellers": 2,
     "max_sellers_in_note": 3,
+    # A slow search or check can't hold up the listing: the whole listings attempt gets budget_s (usually ~5 s), the
+    # check timeout_s per Gemini attempt (seen: 2.1-2.4 s); then the estimate is used, as on any other failure.
+    "budget_s": 12.0,
+    "timeout_s": 15.0,
     "max_sources": 10,  # listings recorded in ReferencePrice.sources (the median uses all of them)
 }
 
@@ -61,6 +67,7 @@ PRICE_LOOKUP = {
     "min_ratio_to_default": 0.1,  # when the category matched, the amount must sit within these ratios of its default
     "max_ratio_to_default": 15.0,
     "max_sources_in_note": 2,
+    "estimate_timeout_s": 15.0,  # per Gemini attempt for the estimate fallbacks
 }
 
 # (keywords, label, approximate new price in CAD). Keywords match the start of a word in Identity.category;
@@ -409,7 +416,8 @@ async def ask(source: Source, identity: Identity, query: str, seller_typed: bool
         tools = [types.Tool(google_search=types.GoogleSearch())]
     try:
         reply = await generate_json(
-            price_prompt(identity, query, seller_typed, source.grounded), SYSTEM_PROMPT, response_schema(), tools=tools
+            price_prompt(identity, query, seller_typed, source.grounded), SYSTEM_PROMPT, response_schema(), tools=tools,
+            timeout_s=PRICE_LOOKUP["estimate_timeout_s"],
         )
     except Exception as e:  # noqa: BLE001  this stage never fails: any error moves on to the next source
         attempt["error"] = f"{type(e).__name__}: {e}"
@@ -449,8 +457,9 @@ async def from_listings(identity: Identity, query: str,
         attempt["rejected"] = "nothing names the product (no seller name, nothing read off the item)"
         return None, attempt
     try:
-        results = parse_results(await search_shopping(search_for, _require_key("SERPER_API_KEY")),
-                                identity.category)
+        with timing.span("serper"):
+            payload = await search_shopping(search_for, _require_key("SERPER_API_KEY"))
+        results = parse_results(payload, identity.category)
     except Exception as e:  # noqa: BLE001  this stage never fails: any error moves on to the next source
         attempt["error"] = f"{type(e).__name__}: {e}"
         return None, attempt
@@ -460,7 +469,7 @@ async def from_listings(identity: Identity, query: str,
         return None, attempt
     try:
         reply = await generate_json(pick_prompt(identity, query, seller_typed, results), PICK_SYSTEM_PROMPT,
-                                    pick_schema())
+                                    pick_schema(), timeout_s=SERPER_PRICE["timeout_s"])
     except Exception as e:  # noqa: BLE001  see above
         attempt["error"] = f"{type(e).__name__}: {e}"
         return None, attempt
@@ -487,7 +496,11 @@ async def look_up(identity: Identity, seller_name: str | None) -> tuple[Referenc
     query = baseline_query(identity, seller_name)
     seller_typed = bool(seller_name and seller_name.strip())
     log: dict[str, Any] = {"query": query, "seller_typed": seller_typed, "attempts": []}
-    price, attempt = await from_listings(identity, query, seller_typed)
+    try:
+        price, attempt = await asyncio.wait_for(from_listings(identity, query, seller_typed), SERPER_PRICE["budget_s"])
+    except asyncio.TimeoutError:
+        price, attempt = None, {"source": LISTINGS_SOURCE, "error": f"no listings price within "
+                                                                    f"{SERPER_PRICE['budget_s']:.0f} s"}
     log["attempts"].append(log_ready(attempt))
     if price is not None:
         log["source"] = LISTINGS_SOURCE

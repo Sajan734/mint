@@ -23,6 +23,7 @@ from typing import Any
 from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient, Image, RetryPolicy, TypeSafeError
 
+import timing
 from contracts import Baseline, Condition, Defect, Identity, RunContext, View, Views
 from images import ImageProblem, fit_for_jev
 from jev_questions import (
@@ -180,7 +181,9 @@ async def ask_views(views: Views, baseline_path: str | None, identity: Identity 
     async with AsyncTypeSafeClient(
         model=MODEL, timeout=JEV["timeout_s"], retry=RetryPolicy(max_retries=JEV["max_retries"])
     ) as jev:
-        answers = await asyncio.gather(*(ask_view(jev, v, context, questions, baseline_image) for v in views.views))
+        with timing.span("jev"):
+            answers = await asyncio.gather(*(ask_view(jev, v, context, questions, baseline_image)
+                                             for v in views.views))
     return list(answers)
 
 

@@ -22,6 +22,7 @@ import httpx
 from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient, Image, RetryPolicy, TypeSafeError
 
+import timing
 from contracts import Baseline, Identity, RunContext
 from images import FittedImage, ImageProblem, fit_for_jev
 from jev_questions import BASELINE_CONTEXT, BASELINE_QUESTIONS, IMAGE_HEADERS, MODEL
@@ -91,24 +92,33 @@ class Candidate:
 NO_PRODUCT_NOTE = "not searched: no text read off the item and no product name typed by the seller"
 
 
-def baseline_query(identity: Identity, seller_name: str | None) -> str:
-    if seller_name and seller_name.strip():
+def seller_typed(seller_name: str | None) -> bool:
+    return bool(seller_name and seller_name.strip())
+
+
+def baseline_query(identity: Identity | None, seller_name: str | None) -> str:
+    """The seller's name for the product, else the identified query. identity may be None only with a seller name."""
+    if seller_typed(seller_name):
         return seller_name.strip()
+    if identity is None:
+        raise ValueError("no seller name and no identity: nothing to search for")
     return identity.search_query
 
 
-def has_claim(identity: Identity, seller_name: str | None) -> bool:
+def has_claim(identity: Identity | None, seller_name: str | None) -> bool:
     """Someone named this exact product: the seller typed its name, or its model is printed on it. Only then can a
     reference photo that looks like a different product mean the scan is the wrong item (see match_gate)."""
-    return bool(seller_name and seller_name.strip()) or identity.model is not None
+    return seller_typed(seller_name) or (identity is not None and identity.model is not None)
 
 
-def names_a_product(identity: Identity, seller_name: str | None) -> bool:
+def names_a_product(identity: Identity | None, seller_name: str | None) -> bool:
     """Worth searching: a product name, or text read off the item in the query (a brand or product line such as
     "ThinkPad"). A query of colour and category alone ("white stuffed animal") finds some other product."""
-    if has_claim(identity, seller_name) or identity.brand is not None:
+    if has_claim(identity, seller_name):
         return True
-    return bool(text_in_query(identity.visible_text, identity.search_query))
+    if identity is None:
+        return False
+    return identity.brand is not None or bool(text_in_query(identity.visible_text, identity.search_query))
 
 
 # --- decisions (pure) -------------------------------------------------------------------------
@@ -232,16 +242,19 @@ def _relative(path: Path) -> str:
 async def search_attempt(query_sent: str, query: str, serper_key: str, jev: AsyncTypeSafeClient) -> tuple[Candidate | None, dict]:
     attempt: dict[str, Any] = {"query_sent": query_sent}
     try:
-        results = await search_images(query_sent, serper_key)
+        with timing.span("serper"):
+            results = await search_images(query_sent, serper_key)
     except (httpx.HTTPError, ValueError) as e:
         attempt["error"] = f"search failed: {type(e).__name__}: {e}"
         return None, attempt
     kept, dropped = prefilter(results)
     headers = {"User-Agent": SEARCH["user_agent"]}
     async with httpx.AsyncClient(timeout=SEARCH["download_timeout_s"], follow_redirects=True, headers=headers) as client:
-        await asyncio.gather(*(fetch_and_fit(client, c) for c in kept))
+        with timing.span("download"):
+            await asyncio.gather(*(fetch_and_fit(client, c) for c in kept))
     ready = [c for c in kept if c.image is not None]
-    await asyncio.gather(*(check_photo(jev, query, c) for c in ready))
+    with timing.span("jev"):
+        await asyncio.gather(*(check_photo(jev, query, c) for c in ready))
     chosen = choose_candidate(ready)
     attempt["results"] = len(results)
     attempt["candidates"] = [c.log() for c in kept + dropped]
@@ -313,7 +326,9 @@ def load_manual(ctx: RunContext, query: str) -> Baseline:
     )
 
 
-async def baseline_lookup(ctx: RunContext, identity: Identity, seller_name: str | None) -> Baseline:
+async def baseline_lookup(ctx: RunContext, identity: Identity | None, seller_name: str | None) -> Baseline:
+    """identity may be None when the seller typed the product's name: the search needs nothing else, so the pipeline
+    starts it before the scan is even rendered."""
     query = baseline_query(identity, seller_name)
     if ctx.manual_baseline:
         return load_manual(ctx, query)

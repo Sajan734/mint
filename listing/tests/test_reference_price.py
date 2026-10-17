@@ -423,3 +423,15 @@ def test_listings_raw_log_is_json(tmp_path, monkeypatch):
     price = asyncio.run(rp.reference_price(ctx, THINKPAD, None))
     log = json.loads((tmp_path / "runs" / "reference_price_raw.json").read_text(encoding="utf-8"))
     assert log["attempts"][0]["results"][0]["price_cad"] == 26.99 and len(price.sources) == 2
+
+
+def test_a_slow_listings_search_falls_back_within_the_budget(monkeypatch):
+    async def slow(query, api_key):
+        await asyncio.sleep(1)
+        return SHOPPING
+
+    monkeypatch.setattr(rp, "search_shopping", slow)
+    monkeypatch.setitem(rp.SERPER_PRICE, "budget_s", 0.05)
+    fake_gemini(monkeypatch, [({"amount_cad": 79.99, "note": "x"}, SOURCES)])
+    price, log = look_up(THINKPAD)
+    assert log["source"] == "search_grounded" and "within" in log["attempts"][0]["error"]

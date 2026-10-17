@@ -23,6 +23,7 @@ from typing import Any, Awaitable, Callable, TypeVar
 from pydantic import BaseModel
 
 import cache
+import timing
 from contracts import (
     Baseline,
     Condition,
@@ -42,7 +43,7 @@ from stages.condition import condition
 from stages.deal_rating import asking_price, deal_rating
 from stages.finalize import finalize
 from stages.highlight import PENDING, failed, highlight
-from stages.identify import identify
+from stages.identify import identify, warm_gemini
 from stages.listing_text import listing_text
 from stages.match_gate import match_gate
 from stages.reference_price import reference_price
@@ -90,10 +91,21 @@ async def run_stage(
     *args: Any,
     pure: bool = False,
     files: Callable[[M], list[str | None]] | None = None,
+    after: tuple[str, ...] = (),
 ) -> M:
     """Runs one stage and writes its JSON. In demo mode every stage reads the cache first, keyed by a hash of its
     inputs and the run settings, so a new asking price or seller name is a miss, never a stale hit; misses are
-    cached, with the files `files` names. Offline, a miss raises DemoCacheMiss unless the stage is pure code."""
+    cached, with the files `files` names. Offline, a miss raises DemoCacheMiss unless the stage is pure code.
+    after: the stages it waited for, so timings.json can trace the critical path."""
+    with timing.stage(name, after) as timed:
+        result, hit = await _run_stage(ctx, name, model, fn, *args, pure=pure, files=files)
+        if timed is not None:
+            timed.cache_hit = hit
+    return result
+
+
+async def _run_stage(ctx: RunContext, name: str, model: type[M], fn: Callable[..., Awaitable[M]], *args: Any,
+                     pure: bool, files: Callable[[M], list[str | None]] | None) -> tuple[M, bool]:
     start = time.perf_counter()
     key = cache.key(name, ctx.up_axis, ctx.manual_baseline, *args) if ctx.demo_mode else ""
     result = cache.get(ctx.cache_dir, ctx.item_id, name, key, model) if ctx.demo_mode else None
@@ -110,7 +122,21 @@ async def run_stage(
     write_json(ctx.run_dir / f"{name}.json", result)
     ms = (time.perf_counter() - start) * 1000
     print(f"[{name}] {ms:.0f} ms{' (cache)' if hit else ''}", file=sys.stderr)
-    return result
+    return result, hit
+
+
+def write_timings(ctx: RunContext, ends: dict[str, str]) -> None:
+    """runs/<item>/timings.json: every stage's wall, external and own time, the milestones, and the critical path to
+    each milestone (ends: milestone -> the stage that completed it)."""
+    run = timing.current_run()
+    if run is not None:
+        timing.write(run, ctx.run_dir / "timings.json", ends, {"item_id": ctx.item_id, "demo_mode": ctx.demo_mode})
+
+
+def write_result(ctx: RunContext, result: Listing | Rejection, milestone: str, ends: dict[str, str]) -> None:
+    write_json(ctx.run_dir / "result.json", result)
+    timing.milestone(milestone)
+    write_timings(ctx, ends)
 
 
 def listing_path(path: str) -> Path:
@@ -124,7 +150,7 @@ async def run_highlight(ctx: RunContext, splat: Path, views: Views, baseline: Ba
     Errors aren't cached, so the next run tries again. The splat file and debug sheet are cached with the JSON."""
     try:
         result = await run_stage(ctx, "highlight", Highlight, highlight, splat, views, baseline, identity, cond,
-                                 files=lambda h: [h.splat_path, h.debug_sheet])
+                                 files=lambda h: [h.splat_path, h.debug_sheet], after=("condition",))
     except DemoCacheMiss:
         raise
     except Exception as e:  # noqa: BLE001  see docstring
@@ -181,54 +207,80 @@ async def run_pipeline(
         up_axis=up_axis or inputs.get("up_axis", "+y"),
     )
 
-    views = await run_stage(ctx, "render", Views, render, splat)
-    identity = await run_stage(ctx, "identify", Identity, identify, views)
-    baseline = await run_stage(ctx, "baseline_lookup", Baseline, baseline_lookup, identity, seller_name)
-    match = await run_stage(ctx, "match_gate", MatchCheck, match_gate, views, baseline, identity, seller_name)
+    timing.start_run()
+    pending: list[asyncio.Task] = []
 
-    if match.verdict == "mismatch":
-        rejection = Rejection(item_id=item_id, match_check=match)
-        write_json(ctx.run_dir / "result.json", rejection)
-        await notify(on_listing, rejection)
-        return rejection
+    def start(coro: Awaitable[M]) -> asyncio.Task[M]:
+        task = asyncio.ensure_future(coro)
+        pending.append(task)
+        return task
 
-    highlight_task: asyncio.Task[Highlight] | None = None
-
-    async def condition_then_start_highlight() -> Condition:
-        nonlocal highlight_task
-        cond = await run_stage(ctx, "condition", Condition, condition, views, baseline, identity)
-        highlight_task = asyncio.create_task(run_highlight(ctx, splat, views, baseline, identity, cond))
-        return cond
-
+    # Everything starts as soon as its inputs exist. Gemini's client is set up during the render (it takes ~1 s).
+    # With a seller-typed name the reference photo search needs nothing from the scan, so it starts right away.
+    start(warm_gemini())
+    seller_named = bool(seller_name and seller_name.strip())
+    baseline_task = start(run_stage(ctx, "baseline_lookup", Baseline, baseline_lookup, None, seller_name)) \
+        if seller_named else None
     try:
-        draft, reference, cond = await asyncio.gather(
-            run_stage(ctx, "listing_text", ListingDraft, listing_text, identity),
-            run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity, seller_name),
-            condition_then_start_highlight(),
-        )
+        views = await run_stage(ctx, "render", Views, render, splat)
+        identity = await run_stage(ctx, "identify", Identity, identify, views, after=("render",))
+        # These only need the identity: they run alongside the match check and are dropped if it rejects the scan.
+        text_task = start(run_stage(ctx, "listing_text", ListingDraft, listing_text, identity, after=("identify",)))
+        price_task = start(run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity, seller_name,
+                                     after=("identify",)))
+        if baseline_task is None:
+            baseline_task = start(run_stage(ctx, "baseline_lookup", Baseline, baseline_lookup, identity, seller_name,
+                                            after=("identify",)))
+        baseline = await baseline_task
+        match_task = start(run_stage(ctx, "match_gate", MatchCheck, match_gate, views, baseline, identity,
+                                     seller_name, after=("baseline_lookup", "identify")))
+        # condition compares the same views with the same photo; it runs beside the match check (12 Jev requests
+        # that are wasted only when the scan is rejected).
+        cond_task = start(run_stage(ctx, "condition", Condition, condition, views, baseline, identity,
+                                    after=("baseline_lookup", "identify")))
+        match = await match_task
+
+        if match.verdict == "mismatch":
+            rejection = Rejection(item_id=item_id, match_check=match)
+            write_result(ctx, rejection, "result_json", {"result_json": "match_gate"})
+            await notify(on_listing, rejection)
+            return rejection
+
+        cond = await cond_task
+        highlight_task = start(run_highlight(ctx, splat, views, baseline, identity, cond))
+        draft, reference = await asyncio.gather(text_task, price_task)
         deal = await run_stage(
-            ctx, "deal_rating", DealRating, deal_rating, reference, cond, match, baseline, asking, pure=True
+            ctx, "deal_rating", DealRating, deal_rating, reference, cond, match, baseline, asking, pure=True,
+            after=("reference_price", "condition", "match_gate"),
         )
         await asyncio.wait([highlight_task], timeout=0)  # a cached highlight is ready after one turn
         marked = highlight_task.result() if highlight_task.done() else PENDING
+        ready = marked.status != "pending"
         result = await run_stage(
-            ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond, deal, marked, pure=True
+            ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond, deal, marked, pure=True,
+            after=("deal_rating", "listing_text", *(("highlight",) if ready else ())),
         )
-        write_json(ctx.run_dir / "result.json", result)
-        if marked.status == "pending":
+        write_result(ctx, result, "result_json", {"result_json": "finalize"})
+        if ready:
+            timing.milestone("highlight_ready")
+            write_timings(ctx, {"result_json": "finalize", "highlight_ready": "finalize"})
+        else:
             print("[result] written; the highlight is still running, result.json is rewritten when it's done",
                   file=sys.stderr)
         await notify(on_listing, result)
-        if marked.status == "pending":
+        if not ready:
             marked = await highlight_task
             result = await run_stage(
                 ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond, deal, marked,
-                pure=True,
+                pure=True, after=("finalize", "highlight"),
             )
-            write_json(ctx.run_dir / "result.json", result)
+            write_result(ctx, result, "highlight_ready", {"result_json": "finalize", "highlight_ready": "finalize#2"})
     finally:
-        if highlight_task is not None and not highlight_task.done():
-            highlight_task.cancel()
+        # A rejection, an error or an offline cache miss leaves work running: stop it, and let it finish unwinding.
+        for task in pending:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
     return result
 
 

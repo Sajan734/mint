@@ -31,7 +31,7 @@ def test_item01_gives_listing(tmp_path):
     written = {p.stem for p in (tmp_path / "runs" / "item01").glob("*.json")}
     assert written == {
         "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
-        "highlight", "deal_rating", "finalize", "result",
+        "highlight", "deal_rating", "finalize", "result", "timings",
     }
     saved = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text(encoding="utf-8"))
     assert saved["deal_rating"]["rating"] == "fair" and saved["highlight"]["status"] == "skipped"
@@ -385,3 +385,69 @@ def test_demo_mode_fills_cache_on_miss(tmp_path):
         "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
         "highlight", "deal_rating", "finalize",
     }
+
+
+# --- run order: stages start as soon as their inputs exist ------------------------------------------
+
+
+def slow_render(monkeypatch, seconds=0.15):
+    import pipeline
+
+    original = pipeline.render
+
+    async def render(ctx, splat):
+        await asyncio.sleep(seconds)
+        return await original(ctx, splat)
+
+    monkeypatch.setattr(pipeline, "render", render)
+
+
+def stage_times(tmp_path, item):
+    stages = json.loads((tmp_path / "runs" / item / "timings.json").read_text(encoding="utf-8"))["stages"]
+    return {k: (s["start_ms"], s["end_ms"]) for k, s in stages.items()}
+
+
+def test_with_a_seller_name_the_photo_search_starts_before_the_render_ends(tmp_path, monkeypatch):
+    import pipeline
+
+    slow_render(monkeypatch)
+    original_gate = pipeline.match_gate
+
+    async def slow_gate(*args):
+        await asyncio.sleep(0.05)
+        return await original_gate(*args)
+
+    monkeypatch.setattr(pipeline, "match_gate", slow_gate)
+    item_dir = tmp_path / "item_named"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "input.json").write_text(json.dumps({"seller_name": "Sony WH-1000XM4"}))
+    assert isinstance(run(item_dir, tmp_path), Listing)
+    t = stage_times(tmp_path, "item_named")
+    assert t["baseline_lookup"][0] < t["render"][1]
+    assert t["listing_text"][0] >= t["identify"][1] and t["reference_price"][0] >= t["identify"][1]
+    assert t["condition"][0] < t["match_gate"][1]  # beside the match check, not after it
+
+
+def test_without_a_seller_name_the_photo_search_waits_for_identify(tmp_path, monkeypatch):
+    slow_render(monkeypatch)
+    run(FIXTURES / "item01", tmp_path)
+    t = stage_times(tmp_path, "item01")
+    assert t["baseline_lookup"][0] >= t["identify"][1]
+    assert t["listing_text"][0] < t["match_gate"][1]  # text and price no longer wait for the match check
+
+
+def test_a_rejection_stops_the_work_started_beside_the_match_check(tmp_path, monkeypatch):
+    import pipeline
+
+    finished = []
+
+    async def slow_text(ctx, identity):
+        await asyncio.sleep(2)
+        finished.append("listing_text")
+
+    monkeypatch.setattr(pipeline, "listing_text", slow_text)
+    result = run(FIXTURES / "item02", tmp_path)
+    assert type(result).__name__ == "Rejection" and finished == []
+    assert not (tmp_path / "runs" / "item02" / "listing_text.json").exists()
+    saved = json.loads((tmp_path / "runs" / "item02" / "result.json").read_text(encoding="utf-8"))
+    assert saved["match_check"]["verdict"] == "mismatch"

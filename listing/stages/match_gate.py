@@ -22,6 +22,7 @@ from typing import Any
 from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient, Image, RetryPolicy, TypeSafeError
 
+import timing
 from contracts import Baseline, Contract, Identity, MatchCheck, Prob, RunContext, Verdict, View, Views
 from images import ImageProblem, fit_for_jev
 from jev_questions import GATE_CONTEXT, GATE_QUESTIONS, IMAGE_HEADERS, MODEL, build_state
@@ -190,7 +191,8 @@ async def ask_jev(views: Views, baseline: Baseline) -> GateRaw:
     async with AsyncTypeSafeClient(
         model=MODEL, timeout=JEV["timeout_s"], retry=RetryPolicy(max_retries=JEV["max_retries"])
     ) as jev:
-        answers = await asyncio.gather(*(ask_view(jev, v, baseline_image) for v in views.views))
+        with timing.span("jev"):
+            answers = await asyncio.gather(*(ask_view(jev, v, baseline_image) for v in views.views))
     failed = sum(a.error is not None for a in answers)
     if failed:
         print(f"[match_gate] {failed} of {len(answers)} views failed", file=sys.stderr)

@@ -9,6 +9,7 @@ unreachable, a plain draft is built from the Identity in code. A missing GEMINI_
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
 from typing import Any
@@ -22,6 +23,10 @@ TEXT = {
     "title_limit_chars": 80,  # titles must be shorter than this
     "max_tags": 8,
     "max_attempts": 2,  # first answer + one retry with the problems listed
+    # A slow Gemini can't hold up the listing: each call gets timeout_s (seen: 1.0-2.3 s), the whole draft budget_s,
+    # then the template is used, as on any other Gemini failure.
+    "timeout_s": 15.0,
+    "budget_s": 25.0,
     "min_mask_chars": 2,  # Identity values shorter than this (e.g. "L", "+") are not masked out
 }
 
@@ -187,7 +192,7 @@ async def write_draft(identity: Identity) -> tuple[ListingDraft, dict[str, Any]]
     contents = identity_prompt(identity)
     for _ in range(TEXT["max_attempts"]):
         try:
-            reply = await generate_json(contents, SYSTEM_PROMPT, response_schema())
+            reply = await generate_json(contents, SYSTEM_PROMPT, response_schema(), timeout_s=TEXT["timeout_s"])
         except MissingKeyError:
             raise
         except Exception as e:  # noqa: BLE001  API errors, timeouts, bad JSON: fall back to the template
@@ -209,7 +214,11 @@ async def write_draft(identity: Identity) -> tuple[ListingDraft, dict[str, Any]]
 async def listing_text(ctx: RunContext, identity: Identity) -> ListingDraft:
     if has_stub(ctx, "listing_text"):
         return load_stub(ctx, "listing_text", ListingDraft)
-    draft, log = await write_draft(identity)
+    try:
+        draft, log = await asyncio.wait_for(write_draft(identity), TEXT["budget_s"])
+    except asyncio.TimeoutError:
+        draft, log = template_draft(identity), {"error": f"no draft within {TEXT['budget_s']:.0f} s",
+                                                "source": "template"}
     ctx.run_dir.mkdir(parents=True, exist_ok=True)
     (ctx.run_dir / "listing_text_raw.json").write_text(json.dumps(log, indent=2, ensure_ascii=False), encoding="utf-8")
     return draft

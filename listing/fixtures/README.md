@@ -21,7 +21,7 @@ itemNN/
 | item01 | Used black Sony WH-1000XM4 with light wear, no seller name, no asking price | `Listing`, deal rated `fair` (Mint's suggested price), no highlighted splat |
 | item02 | Seller typed "Sony WH-1000XM4", but the scan is a Bose QuietComfort 45 | `Rejection` (mismatch) |
 
-item02 has stubs only for the stages before `match_gate`, because the pipeline stops there.
+item02 also has placeholder stubs for `listing_text`, `reference_price` and `condition`: the pipeline starts those beside the match check (to save time) and drops them when the scan is rejected, and the stubs keep that from calling Gemini, Serper or Jev. They never reach any output.
 
 item01's `highlight.json` stub has status `skipped` (no highlighted splat), because the fixture has no splat file. The real stage (Gemini boxes, then lifting on the render backend) runs on items with a splat, e.g. `samples/<scan_id>`; `scripts/try_highlight.py` runs it alone on a finished run.
 
