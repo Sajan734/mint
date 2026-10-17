@@ -347,16 +347,35 @@ final class ScanSession: NSObject, ObservableObject {
             guard let p = a as? ARPlaneAnchor, p.alignment == .horizontal else { return nil }
             return p.transform.translation.y
         }
+        // ARKit's instant surface estimate where the item meets the table. Needs no detected plane:
+        // on a big plain table, plane detection took 8 s and nothing could be measured until then.
+        let estimated = estimatedTableY(result.contactRays)
         if points.count >= 5 {
             let mid = SIMD3(points.map(\.x).sorted()[points.count / 2], points.map(\.y).max()!, points.map(\.z).sorted()[points.count / 2])
             let q = ARRaycastQuery(origin: mid, direction: [0, -1, 0], allowing: .existingPlaneInfinite, alignment: .horizontal)
             candidates += arView.session.raycast(q).map { $0.worldTransform.translation.y }
-            return (ObjectSizing.tablePlane(candidates: candidates, surfaceHits: points), candidates)
+            if let y = ObjectSizing.tablePlane(candidates: candidates, surfaceHits: points) { return (y, candidates) }
+            if let e = estimated {
+                return (ObjectSizing.tablePlane(candidates: [e], surfaceHits: points), candidates + [e])
+            }
+            return (nil, candidates)
         }
         guard !result.contactRays.isEmpty else { return (nil, candidates) }
         let c = result.contactRays[result.contactRays.count / 2]
         let q = ARRaycastQuery(origin: c.origin, direction: c.direction, allowing: .existingPlaneGeometry, alignment: .horizontal)
-        return (arView.session.raycast(q).first?.worldTransform.translation.y, candidates)
+        return (arView.session.raycast(q).first?.worldTransform.translation.y ?? estimated, candidates)
+    }
+
+    /// Median height where a few of the item's bottom-edge rays hit ARKit's estimated horizontal surface.
+    private func estimatedTableY(_ contactRays: [Ray]) -> Float? {
+        guard contactRays.count >= 3 else { return nil }
+        let picks = stride(from: contactRays.count / 5, to: contactRays.count, by: max(1, contactRays.count / 5)).prefix(5)
+        let ys = picks.compactMap { i -> Float? in
+            let r = contactRays[i]
+            let q = ARRaycastQuery(origin: r.origin, direction: r.direction, allowing: .estimatedPlane, alignment: .horizontal)
+            return arView.session.raycast(q).first?.worldTransform.translation.y
+        }.sorted()
+        return ys.count >= 2 ? ys[ys.count / 2] : nil
     }
 
     private func log(_ entry: [String: Any]) {
