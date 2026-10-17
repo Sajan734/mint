@@ -163,3 +163,15 @@ def test_asking_price_must_be_a_positive_number(value):
 
 def test_asking_price_accepts_ints_and_none():
     assert asking_price(120) == 120.0 and asking_price(None) is None
+
+
+def test_a_price_from_real_listings_is_normal_confidence():
+    from contracts import PriceSource
+
+    listed = ReferencePrice(amount_cad=31.86, basis="new_retail", note="Median new price of 2 current listings.",
+                            sources=[PriceSource(title="ThinkPad Essential Wireless Mouse", seller="Lenovo",
+                                                 price_cad=26.99),
+                                     PriceSource(title="ThinkPad Essential Wireless Mouse", seller="Walmart",
+                                                 price_cad=36.73)])
+    deal = rate_deal(listed, make_condition("light_wear"), MATCH, BASELINE, None)
+    assert deal.confidence == "high" and deal.confidence_notes == []

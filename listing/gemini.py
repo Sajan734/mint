@@ -13,7 +13,8 @@ import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from stages.identify import GEMINI, _api_key, _strip_defaults, gemini_model
+import timing
+from stages.identify import GEMINI, _api_key, _strip_defaults, gemini_client, gemini_model
 
 
 @dataclass(frozen=True)
@@ -52,8 +53,10 @@ async def generate_json(
     *,
     tools: list[Any] | None = None,
     temperature: float | None = None,
+    timeout_s: float | None = None,
 ) -> GeminiReply:
-    from google import genai
+    """timeout_s: per attempt (default GEMINI["timeout_s"]); a stage with a fallback passes less, so one slow call
+    can't stall the listing."""
     from google.genai import errors, types
 
     key = _api_key()
@@ -65,24 +68,26 @@ async def generate_json(
         response_json_schema=schema,
         tools=tools,
     )
-    client = genai.Client(api_key=key)
+    client = gemini_client(key)
     last_error: Exception | None = None
     start = time.perf_counter()
-    for _attempt in range(GEMINI["max_retries"] + 1):
-        try:
-            resp = await asyncio.wait_for(
-                client.aio.models.generate_content(model=model, contents=contents, config=config),
-                timeout=GEMINI["timeout_s"],
-            )
-            break
-        except errors.ClientError as e:
-            if e.code not in GEMINI["retry_client_codes"]:
-                raise
-            last_error = e
-        except (errors.APIError, asyncio.TimeoutError) as e:
-            last_error = e
-    else:
-        raise RuntimeError(f"Gemini failed after {GEMINI['max_retries'] + 1} attempts: {last_error!r}") from last_error
+    with timing.span("gemini"):
+        for _attempt in range(GEMINI["max_retries"] + 1):
+            try:
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(model=model, contents=contents, config=config),
+                    timeout=GEMINI["timeout_s"] if timeout_s is None else timeout_s,
+                )
+                break
+            except errors.ClientError as e:
+                if e.code not in GEMINI["retry_client_codes"]:
+                    raise
+                last_error = e
+            except (errors.APIError, asyncio.TimeoutError) as e:
+                last_error = e
+        else:
+            raise RuntimeError(
+                f"Gemini failed after {GEMINI['max_retries'] + 1} attempts: {last_error!r}") from last_error
     latency_ms = (time.perf_counter() - start) * 1000
 
     if not resp.text:

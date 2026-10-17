@@ -31,7 +31,7 @@ def test_item01_gives_listing(tmp_path):
     written = {p.stem for p in (tmp_path / "runs" / "item01").glob("*.json")}
     assert written == {
         "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
-        "highlight", "deal_rating", "finalize", "result",
+        "highlight", "deal_rating", "finalize", "result", "timings",
     }
     saved = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text(encoding="utf-8"))
     assert saved["deal_rating"]["rating"] == "fair" and saved["highlight"]["status"] == "skipped"
@@ -261,7 +261,8 @@ def test_no_baseline_found_continues_as_uncertain(tmp_path, monkeypatch):
 
 
 def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
-    """No model and no seller name: no search, uncertain match, condition on views alone, a priced Listing."""
+    """Nothing read off the item and no seller name: no search, uncertain match, condition on views alone, a priced
+    Listing."""
     import stages.baseline_lookup as bl
     import stages.condition as cond
 
@@ -297,7 +298,7 @@ def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
     for stage in ("baseline_lookup", "condition"):
         (item_dir / "stubs" / f"{stage}.json").unlink()
     identity = json.loads((item_dir / "stubs" / "identify.json").read_text())
-    identity.update(model=None, visible_text=["SONY"])
+    identity.update(brand=None, model=None, visible_text=[], search_query="black over-ear headphones")
     (item_dir / "stubs" / "identify.json").write_text(json.dumps(identity))
 
     result = run(item_dir, tmp_path)
@@ -334,6 +335,36 @@ def test_seller_name_reaches_reference_price(tmp_path, monkeypatch):
     assert "new price at about $450.00" in result.price_justification[0]
 
 
+def test_price_sources_reach_result_json(tmp_path, monkeypatch):
+    """A price from real listings: the listings are in the Listing (result.json), so the site can show them."""
+    import stages.reference_price as rp
+    from gemini import GeminiReply
+
+    async def search(query, api_key):
+        return {"shopping": [{"title": "Sony WH-1000XM4", "source": "Best Buy Canada", "price": "$449.99",
+                              "link": "https://example.test/bb"},
+                             {"title": "Sony WH-1000XM4 Wireless", "source": "Amazon CA", "price": "$399.99",
+                              "link": "https://example.test/az"}]}
+
+    async def fake(contents, system_prompt, schema, **kwargs):
+        return GeminiReply(raw={"results": [{"index": i, "same_product": 0.95, "new_single_unit": True}
+                                            for i in range(2)]}, model="fake", latency_ms=1.0)
+
+    monkeypatch.setattr(rp, "search_shopping", search)
+    monkeypatch.setattr(rp, "_require_key", lambda name: "test-key")
+    monkeypatch.setattr(rp, "generate_json", fake)
+    item_dir = tmp_path / "item_listed_price"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "stubs" / "reference_price.json").unlink()
+
+    result = run(item_dir, tmp_path)
+    assert isinstance(result, Listing)
+    assert result.price_cad == 275  # median $424.99 x 0.65 light_wear = 276.24, rounded to the nearest $5
+    saved = json.loads((tmp_path / "runs" / "item_listed_price" / "result.json").read_text(encoding="utf-8"))
+    assert [(s["seller"], s["price_cad"]) for s in saved["price_sources"]] == [("Best Buy Canada", 449.99),
+                                                                                ("Amazon CA", 399.99)]
+    assert result.deal_rating.confidence_notes == []
+
 def test_demo_mode_reads_cache_first(tmp_path):
     ctx = RunContext(item_id="item01", item_dir=FIXTURES / "item01", run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache", demo_mode=True)
     cached = Views.model_validate_json((FIXTURES / "item01" / "stubs" / "render.json").read_text(encoding="utf-8"))
@@ -354,3 +385,69 @@ def test_demo_mode_fills_cache_on_miss(tmp_path):
         "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
         "highlight", "deal_rating", "finalize",
     }
+
+
+# --- run order: stages start as soon as their inputs exist ------------------------------------------
+
+
+def slow_render(monkeypatch, seconds=0.15):
+    import pipeline
+
+    original = pipeline.render
+
+    async def render(ctx, splat):
+        await asyncio.sleep(seconds)
+        return await original(ctx, splat)
+
+    monkeypatch.setattr(pipeline, "render", render)
+
+
+def stage_times(tmp_path, item):
+    stages = json.loads((tmp_path / "runs" / item / "timings.json").read_text(encoding="utf-8"))["stages"]
+    return {k: (s["start_ms"], s["end_ms"]) for k, s in stages.items()}
+
+
+def test_with_a_seller_name_the_photo_search_starts_before_the_render_ends(tmp_path, monkeypatch):
+    import pipeline
+
+    slow_render(monkeypatch)
+    original_gate = pipeline.match_gate
+
+    async def slow_gate(*args):
+        await asyncio.sleep(0.05)
+        return await original_gate(*args)
+
+    monkeypatch.setattr(pipeline, "match_gate", slow_gate)
+    item_dir = tmp_path / "item_named"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "input.json").write_text(json.dumps({"seller_name": "Sony WH-1000XM4"}))
+    assert isinstance(run(item_dir, tmp_path), Listing)
+    t = stage_times(tmp_path, "item_named")
+    assert t["baseline_lookup"][0] < t["render"][1]
+    assert t["listing_text"][0] >= t["identify"][1] and t["reference_price"][0] >= t["identify"][1]
+    assert t["condition"][0] < t["match_gate"][1]  # beside the match check, not after it
+
+
+def test_without_a_seller_name_the_photo_search_waits_for_identify(tmp_path, monkeypatch):
+    slow_render(monkeypatch)
+    run(FIXTURES / "item01", tmp_path)
+    t = stage_times(tmp_path, "item01")
+    assert t["baseline_lookup"][0] >= t["identify"][1]
+    assert t["listing_text"][0] < t["match_gate"][1]  # text and price no longer wait for the match check
+
+
+def test_a_rejection_stops_the_work_started_beside_the_match_check(tmp_path, monkeypatch):
+    import pipeline
+
+    finished = []
+
+    async def slow_text(ctx, identity):
+        await asyncio.sleep(2)
+        finished.append("listing_text")
+
+    monkeypatch.setattr(pipeline, "listing_text", slow_text)
+    result = run(FIXTURES / "item02", tmp_path)
+    assert type(result).__name__ == "Rejection" and finished == []
+    assert not (tmp_path / "runs" / "item02" / "listing_text.json").exists()
+    saved = json.loads((tmp_path / "runs" / "item02" / "result.json").read_text(encoding="utf-8"))
+    assert saved["match_check"]["verdict"] == "mismatch"

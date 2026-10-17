@@ -14,6 +14,7 @@ import json
 import os
 import sys
 import time
+import weakref
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,7 @@ from typing import Any
 from dotenv import load_dotenv
 from PIL import Image as PILImage, ImageOps
 
+import timing
 from contracts import Identity, RunContext, Views, backed_by_text
 from stages._fixture import has_stub, load_stub
 
@@ -158,9 +160,21 @@ def _clean(value: Any) -> str | None:
     return value or None
 
 
-def build_search_query(brand: str | None, model: str | None, attributes: dict[str, str], category: str) -> str:
+def build_search_query(brand: str | None, model: str | None, attributes: dict[str, str], category: str,
+                       read: list[str] = ()) -> str:
+    """read: other text read off the item to search by (e.g. a product line like "ThinkPad"), placed first."""
     colour = attributes.get("colour") or attributes.get("color")
-    return " ".join(part for part in (brand, model, colour, category) if part)
+    named = [t for t in read if not any(backed_by_text(t, [p]) for p in (brand, model) if p)]
+    return " ".join(part for part in (*named, brand, model, colour, category) if part)
+
+
+MIN_QUERY_TEXT_CHARS = 3  # shorter visible text (a lone letter or digit) is found inside any query by chance
+
+
+def text_in_query(visible: list[str], query: str | None) -> list[str]:
+    """The visible text Gemini put in its own search query: what it read and judged to name the product."""
+    return [t for t in visible
+            if query and sum(ch.isalnum() for ch in t) >= MIN_QUERY_TEXT_CHARS and backed_by_text(t, [query])]
 
 
 def enforce_evidence(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -184,10 +198,12 @@ def enforce_evidence(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
         model = None
 
     # Gemini's query can carry a brand or model guess even when it nulls those fields itself,
-    # so it is kept only when both are backed.
+    # so it is kept only when both are backed. A rebuilt query keeps the visible text Gemini's query used:
+    # with "ThinkPad" printed on a mouse it may answer brand "Lenovo" (dropped, not on the item), and the
+    # query must still say ThinkPad, or the reference photo search has nothing specific to look for.
     query = _clean(raw.get("search_query"))
     if not (brand and model and query):
-        rebuilt = build_search_query(brand, model, attributes, category)
+        rebuilt = build_search_query(brand, model, attributes, category, text_in_query(visible, query))
         if rebuilt != query:
             notes.append(f"search_query rebuilt as {rebuilt!r} (was {query!r})")
         query = rebuilt
@@ -225,9 +241,40 @@ def gemini_model() -> str:
     return GEMINI["model"]
 
 
+# One google-genai client per event loop and key. Making one costs ~0.5 s (TLS setup), and every Gemini call made a
+# new one; its async HTTP client belongs to the loop that first uses it, so clients aren't shared across loops.
+_CLIENTS: weakref.WeakKeyDictionary[asyncio.AbstractEventLoop, dict[str, Any]] = weakref.WeakKeyDictionary()
+
+
+def _new_client(key: str) -> Any:
+    from google import genai
+
+    return genai.Client(api_key=key)
+
+
+def gemini_client(key: str) -> Any:
+    """This event loop's client for `key`, made on first use."""
+    clients = _CLIENTS.setdefault(asyncio.get_running_loop(), {})
+    if key not in clients:
+        clients[key] = _new_client(key)
+    return clients[key]
+
+
+async def warm_gemini() -> None:
+    """Imports google-genai and makes this loop's client in a thread, so the first Gemini call doesn't pay ~1 s for
+    it (the pipeline runs this during the render). Never raises: without a key, the call that needs it will say so."""
+    try:
+        key = _api_key()
+    except MissingKeyError:
+        return
+    clients = _CLIENTS.setdefault(asyncio.get_running_loop(), {})
+    if key not in clients:
+        client = await asyncio.to_thread(_new_client, key)
+        clients.setdefault(key, client)
+
+
 async def call_gemini(views: Views, model: str | None = None) -> GeminiResult:
     """`model` is for experiments (scripts/try_identify.py --model); the pipeline always uses gemini_model()."""
-    from google import genai
     from google.genai import errors, types
 
     key = _api_key()
@@ -239,24 +286,26 @@ async def call_gemini(views: Views, model: str | None = None) -> GeminiResult:
         response_mime_type="application/json",
         response_json_schema=response_schema(),
     )
-    client = genai.Client(api_key=key)
+    client = gemini_client(key)
     last_error: Exception | None = None
     start = time.perf_counter()
-    for _attempt in range(GEMINI["max_retries"] + 1):
-        try:
-            resp = await asyncio.wait_for(
-                client.aio.models.generate_content(model=model, contents=contents, config=config),
-                timeout=GEMINI["timeout_s"],
-            )
-            break
-        except errors.ClientError as e:
-            if e.code not in GEMINI["retry_client_codes"]:
-                raise
-            last_error = e
-        except (errors.APIError, asyncio.TimeoutError) as e:
-            last_error = e
-    else:
-        raise RuntimeError(f"Gemini failed after {GEMINI['max_retries'] + 1} attempts: {last_error!r}") from last_error
+    with timing.span("gemini"):
+        for _attempt in range(GEMINI["max_retries"] + 1):
+            try:
+                resp = await asyncio.wait_for(
+                    client.aio.models.generate_content(model=model, contents=contents, config=config),
+                    timeout=GEMINI["timeout_s"],
+                )
+                break
+            except errors.ClientError as e:
+                if e.code not in GEMINI["retry_client_codes"]:
+                    raise
+                last_error = e
+            except (errors.APIError, asyncio.TimeoutError) as e:
+                last_error = e
+        else:
+            raise RuntimeError(
+                f"Gemini failed after {GEMINI['max_retries'] + 1} attempts: {last_error!r}") from last_error
     latency_ms = (time.perf_counter() - start) * 1000
 
     if not resp.text:

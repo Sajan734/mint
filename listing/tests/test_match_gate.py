@@ -132,6 +132,46 @@ def test_fixture_stubs(item, verdict):
     assert build_match_check(raw, "q").verdict == verdict
 
 
+# --- claims: only a named product can be rejected ----------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "a, expected",
+    [
+        (agg(0.95, 0.10), ("uncertain", "unclaimed_different")),  # our search found some other model
+        (agg(0.10, 0.10), ("uncertain", "unclaimed_different")),  # ... or some other kind of thing
+        (agg(0.95, 0.89), ("match", "match")),  # a match is a match either way
+        (agg(0.95, 0.45), ("uncertain", "uncertain")),
+        (agg(0.95, 0.10, usable=3), ("uncertain", "too_few_views")),
+    ],
+)
+def test_unclaimed_search_never_rejects(a, expected):
+    assert decide(a, claimed=False) == expected
+
+
+def item_stage(item, tmp_path):
+    item_dir = ROOT / "fixtures" / item
+    ctx = RunContext(item_id=item, item_dir=item_dir, run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache")
+    identity = mg.Identity.model_validate_json((item_dir / "stubs" / "identify.json").read_text())
+    baseline = Baseline.model_validate_json((item_dir / "stubs" / "baseline_lookup.json").read_text())
+    return ctx, identity, baseline
+
+
+def test_item02_is_still_rejected_with_its_claim(tmp_path):
+    ctx, identity, baseline = item_stage("item02", tmp_path)
+    check = asyncio.run(mg.match_gate(ctx, None, baseline, identity, "Sony WH-1000XM4"))
+    assert check.verdict == "mismatch"
+    model_only = asyncio.run(mg.match_gate(ctx, None, baseline, identity, None))  # QC45 is printed on it
+    assert model_only.verdict == "mismatch"
+
+
+def test_same_scores_without_a_claim_are_uncertain(tmp_path):
+    ctx, identity, baseline = item_stage("item02", tmp_path)
+    unnamed = identity.model_copy(update={"model": None})
+    check = asyncio.run(mg.match_gate(ctx, None, baseline, unnamed, None))
+    assert check.verdict == "uncertain" and check.reason.startswith("The closest reference photo we found")
+
+
 def test_load_raw_ignores_saved_extras():
     raw = load_raw({"views": [answer(0).model_dump()], "query": "q", "aggregate": {}, "verdict": "x",
                     "thresholds": {}, "model": "jev-latest"})

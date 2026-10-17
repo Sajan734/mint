@@ -50,6 +50,28 @@ def test_query_guess_removed_when_gemini_nulls_brand_itself():
     assert any("search_query rebuilt" in n for n in notes)
 
 
+def test_rebuilt_query_keeps_the_text_read_off_the_item():
+    # Gemini's real answer for Supabase scan 3368fe55 (a ThinkPad mouse). "Lenovo" isn't printed on it, so the
+    # brand is dropped; the query used to be rebuilt as "black wireless mouse", too generic to search.
+    identity, notes = to_identity({
+        "category": "wireless mouse",
+        "visible_text": ["ThinkPad"],
+        "brand": "Lenovo",
+        "model": "ThinkPad Bluetooth Silent Mouse",
+        "attributes": {"colour": "black", "connectivity": "wireless", "scroller": "red"},
+        "search_query": "Lenovo ThinkPad wireless mouse black with red scroll wheel",
+        "confidence": 0.85,
+    })
+    assert identity.brand is None and identity.model is None
+    assert identity.search_query == "ThinkPad black wireless mouse"
+    assert any("dropped brand 'Lenovo'" in n for n in notes)
+
+
+def test_read_text_already_in_the_brand_is_not_repeated():
+    identity, _ = to_identity(raw(model="WH-1000XM5", search_query="Sony WH-1000XM5 black"))
+    assert identity.search_query == "Sony black over-ear wireless headphones"
+
+
 def test_model_recognised_from_design_only_becomes_null():
     # Seen live: SONY legible, no model text, Gemini named the wrong model (WI-C200) at 0.95.
     identity, notes = to_identity(raw(model="WI-C200", visible_text=["SONY", "L", "R"]))

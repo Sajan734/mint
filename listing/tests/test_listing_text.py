@@ -171,3 +171,22 @@ def test_fixture_stub_used_without_calling_gemini(tmp_path, monkeypatch):
     ctx = RunContext(item_id="item01", item_dir=item_dir, run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache")
     result = asyncio.run(lt.listing_text(ctx, SONY))
     assert result == ListingDraft.model_validate_json((item_dir / "stubs" / "listing_text.json").read_text())
+
+
+def test_a_slow_gemini_gives_the_template_within_the_budget(tmp_path, monkeypatch):
+    from contracts import Identity
+
+    async def slow(*args, **kwargs):
+        await asyncio.sleep(1)
+
+    monkeypatch.setattr(lt, "generate_json", slow)
+    monkeypatch.setitem(TEXT, "budget_s", 0.05)
+    identity = Identity(category="wireless mouse", brand="ThinkPad", visible_text=["ThinkPad"],
+                        search_query="ThinkPad wireless mouse", confidence=0.9)
+    item_dir = tmp_path / "item"
+    item_dir.mkdir()
+    ctx = RunContext(item_id="item", item_dir=item_dir, run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache")
+    draft = asyncio.run(lt.listing_text(ctx, identity))
+    assert draft == template_draft(identity)
+    log = json.loads((tmp_path / "runs" / "listing_text_raw.json").read_text(encoding="utf-8"))
+    assert log["source"] == "template" and "within" in log["error"]
