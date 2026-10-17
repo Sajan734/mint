@@ -1,0 +1,5 @@
+pydantic>=2.7,<3
+python-dotenv>=1.0
+pytest>=8
+typesafe-sdk==0.7.5
+google-genai>=1.0

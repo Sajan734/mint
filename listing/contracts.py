@@ -1,0 +1,125 @@
+"""Contracts for the listing pipeline. Source of truth for every stage's inputs and outputs."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Annotated, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+Prob = Annotated[float, Field(ge=0.0, le=1.0)]
+
+Grade = Literal["like_new", "light_wear", "moderate_wear", "heavy_wear"]
+Verdict = Literal["match", "mismatch", "uncertain"]
+PriceBasis = Literal["new_retail", "used_comps", "llm_estimate"]
+DefectKind = Literal[
+    "scratch", "scuff", "dent", "crack", "stain", "discoloration", "wear", "missing_part", "other"
+]
+
+
+class Contract(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class RunContext(Contract):
+    """Per-run settings passed explicitly to every stage (no global state)."""
+
+    item_id: str
+    item_dir: Path
+    run_dir: Path
+    cache_dir: Path
+    demo_mode: bool = False
+
+
+class View(Contract):
+    view_id: str
+    label: str
+    azimuth_deg: float
+    elevation_deg: float
+    image_path: str  # relative to listing/
+
+
+class Views(Contract):
+    item_id: str
+    views: list[View] = Field(min_length=1)
+
+
+class Identity(Contract):
+    category: str
+    brand: str | None = None
+    model: str | None = None
+    visible_text: list[str] = Field(default_factory=list)
+    attributes: dict[str, str] = Field(default_factory=dict)
+    search_query: str
+    confidence: Prob
+
+    @model_validator(mode="after")
+    def _brand_backed_by_visible_text(self) -> Identity:
+        if self.brand is not None:
+            brand = self.brand.casefold()
+            if not any(brand in text.casefold() for text in self.visible_text):
+                raise ValueError(f"brand {self.brand!r} is not backed by visible_text")
+        return self
+
+
+class Baseline(Contract):
+    query: str
+    image_path: str
+    source_url: str | None = None
+    source: Literal["image_search", "manual"]
+
+
+class MatchCheck(Contract):
+    same_category: Prob
+    same_product: Prob
+    verdict: Verdict
+    reason: str  # shown to the seller
+
+
+class Rejection(Contract):
+    item_id: str
+    match_check: MatchCheck
+
+
+class ReferencePrice(Contract):
+    amount_cad: float = Field(gt=0)
+    basis: PriceBasis
+    note: str
+
+
+class Defect(Contract):
+    kind: DefectKind
+    score: Prob
+    view_ids: list[str] = Field(default_factory=list)
+
+
+class Condition(Contract):
+    grade: Grade
+    grade_score: Prob
+    grade_confidence: Prob
+    defects: list[Defect] = Field(default_factory=list)
+    usable_view_count: int = Field(ge=0)
+    needs_seller_check: bool
+
+
+class ListingDraft(Contract):
+    title: str
+    description: str
+    attributes: dict[str, str] = Field(default_factory=dict)
+    tags: list[str] = Field(default_factory=list)
+
+
+class Listing(Contract):
+    item_id: str
+    title: str
+    description: str
+    attributes: dict[str, str]
+    tags: list[str]
+    condition_grade: Grade
+    condition_notes: list[str]
+    price_cad: int = Field(gt=0)
+    price_justification: list[str]
+    preview_images: list[str]
+    viewer_url: str | None = None  # 3D viewer, later
+    needs_seller_check: bool
+    seller_check_reasons: list[str] = Field(default_factory=list)

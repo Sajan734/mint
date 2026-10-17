@@ -1,0 +1,13 @@
+{
+  "category": "over-ear headphones",
+  "brand": "Bose",
+  "model": "QuietComfort 45",
+  "visible_text": ["BOSE", "QC45"],
+  "attributes": {
+    "colour": "white smoke",
+    "form_factor": "over-ear, foldable",
+    "connectivity": "wireless"
+  },
+  "search_query": "Bose QuietComfort 45 white smoke",
+  "confidence": 0.84
+}

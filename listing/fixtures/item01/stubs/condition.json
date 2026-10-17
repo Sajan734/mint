@@ -1,0 +1,11 @@
+{
+  "grade": "light_wear",
+  "grade_score": 0.78,
+  "grade_confidence": 0.82,
+  "defects": [
+    {"kind": "scuff", "score": 0.71, "view_ids": ["v02", "v03"]},
+    {"kind": "wear", "score": 0.64, "view_ids": ["v04", "v05", "v06"]}
+  ],
+  "usable_view_count": 11,
+  "needs_seller_check": false
+}

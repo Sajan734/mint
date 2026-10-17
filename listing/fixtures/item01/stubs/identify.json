@@ -1,0 +1,13 @@
+{
+  "category": "over-ear headphones",
+  "brand": "Sony",
+  "model": "WH-1000XM4",
+  "visible_text": ["SONY", "WH-1000XM4"],
+  "attributes": {
+    "colour": "black",
+    "form_factor": "over-ear, foldable",
+    "connectivity": "wireless"
+  },
+  "search_query": "Sony WH-1000XM4 black",
+  "confidence": 0.88
+}
