@@ -8,6 +8,9 @@ MarketListing (buyer/lib/types.ts) to the public bucket.
                                        where to look when a listing comes out wrong or fails
   assets/listings/index.json          every scan, newest first, documents inline (one fetch for the website)
 
+A listed scan starts unpublished: the seller reviews the draft and publishes it (set_published, called by the
+website through gsplat/app.py `api`), which applies their title, description and price. Buyers see published ones.
+
 listing/ runs unchanged, in-process: the item folder is built the way listing/ingest.py builds it, and the
 render stage uses this container's GPU (RENDER_BACKEND=local), so there is no second cold start.
 """
@@ -143,16 +146,43 @@ def upload_run(sb, scan_id: str, run_dir: Path) -> list[str]:
 def put_doc(sb, scan_id: str, doc: dict) -> dict:
     sb.upload(ASSETS, f"listings/{scan_id}.json", json.dumps(doc, indent=1).encode(), "application/json",
               cache_control="no-cache")
-    refresh_listing_index(sb)
+    refresh_listing_index(sb, fresh={scan_id: doc})
     return doc
 
 
-def refresh_listing_index(sb) -> dict:
+def set_published(sb, scan_id: str, published: bool, title: str, description: str, price_cad: int) -> dict:
+    """The seller's Publish (or Save draft): their title, description and price go into the listing; `published`
+    decides whether buyers see it. The pipeline's own price stays as suggested_price_cad and reference_price_cad
+    (the fair value the buyer's price badge compares against)."""
+    doc = json.loads(sb.download(ASSETS, f"listings/{scan_id}.json"))
+    ml = doc.get("market_listing")
+    if doc.get("status") != "listed" or not ml:
+        raise ValueError(f"scan {scan_id} has no listing to publish (status {doc.get('status')!r})")
+    listing = ml["listing"]
+    doc.setdefault("suggested_price_cad", listing["price_cad"])
+    listing.update(title=title, description=description, price_cad=price_cad)
+    if published and not doc.get("published"):
+        doc["published_at"] = now_iso()
+        ml["listed_at"] = doc["published_at"]  # buyers sort by this: newly published goes first
+    doc["published"] = published
+    doc["updated_at"] = now_iso()
+    return put_doc(sb, scan_id, doc)
+
+
+def refresh_listing_index(sb, fresh: dict[str, dict] | None = None) -> dict:
     """Rebuild listings/index.json from the folder (not read-modify-write, so scans finishing together can't drop
-    each other), documents inline so the website needs one request. no-cache, so it is never served stale."""
+    each other), documents inline so the website needs one request. no-cache, so it is never served stale.
+    `fresh` = documents just written ({scan_id: doc}): used as they are, because reading an object straight after
+    overwriting it can still return the old copy (seen: a just-published listing indexed as unpublished)."""
+    fresh = fresh or {}
     objs = [o for o in sb.list_objects(ASSETS, "listings") if o["name"].endswith(".json") and o["name"] != "index.json"]
+
+    def doc_for(o: dict) -> dict:
+        sid = o["name"].removesuffix(".json")
+        return fresh[sid] if sid in fresh else json.loads(sb.download(ASSETS, f"listings/{o['name']}"))
+
     with ThreadPoolExecutor(8) as ex:
-        docs = list(ex.map(lambda o: json.loads(sb.download(ASSETS, f"listings/{o['name']}")), objs))
+        docs = list(ex.map(doc_for, objs))
     index = {"v": 3, "updated_at": now_iso(), "scans": docs}  # objs are newest first
     sb.upload(ASSETS, "listings/index.json", json.dumps(index).encode(), "application/json", cache_control="no-cache")
     return index
@@ -164,7 +194,8 @@ def list_scan(sb, scan_id: str, manifest: dict, spz: bytes, cfg: dict | None = N
     cfg = cfg or {}
     t0 = time.perf_counter()
     doc = {"v": 3, "scan_id": scan_id, "batch_id": manifest.get("batch_id"), "splat_url": manifest.get("splat_url"),
-           "spin_urls": manifest.get("spin_urls", []), "seller_name": cfg.get("seller_name"), "created_at": now_iso()}
+           "spin_urls": manifest.get("spin_urls", []), "seller_name": cfg.get("seller_name"), "created_at": now_iso(),
+           "published": False}
     run_dir = LISTING_DIR / "runs" / scan_id  # listing/pipeline.py RUNS_ROOT / item id
     try:
         item = prepare_item(scan_id, spz, cfg.get("seller_name"))

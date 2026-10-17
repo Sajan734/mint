@@ -31,6 +31,8 @@ APP, CLS = "mint-gsplat", "Splatter"
 SUPABASE_URL = "https://jpanyhsifoxxiizkgjno.supabase.co"  # public project URL, not a secret
 PUBLIC = f"{SUPABASE_URL}/storage/v1/object/public/assets"
 UPLOAD_FN = f"{SUPABASE_URL}/functions/v1/scan-upload"  # the iOS app's signer (scanner/supabase), needs no key
+CONTENT_TYPES = {".mp4": "video/mp4", ".mov": "video/quicktime", ".json": "application/json",
+                 ".jsonl": "application/x-ndjson", ".jpg": "image/jpeg"}
 
 
 def save(res: dict, out_dir: Path, wall: float) -> None:
@@ -48,7 +50,7 @@ def put(url: str, path: Path) -> float:
     """Upload one file to a signed URL (what the phone does). Returns seconds."""
     t0 = time.perf_counter()
     req = urllib.request.Request(url, data=path.read_bytes(), method="PUT",
-                                 headers={"Content-Type": "video/mp4" if path.suffix == ".mp4" else "video/quicktime",
+                                 headers={"Content-Type": CONTENT_TYPES.get(path.suffix.lower(), "video/quicktime"),
                                           "x-upsert": "true"})
     with urllib.request.urlopen(req, timeout=300) as r:
         r.read()

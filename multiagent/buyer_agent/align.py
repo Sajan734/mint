@@ -84,6 +84,15 @@ def _cube_rotations() -> list[np.ndarray]:
     return rots
 
 
+def _yaw_rotations(steps: int = 8) -> list[np.ndarray]:
+    """Rotations about +Y only, every 360/steps degrees."""
+    out = []
+    for k in range(steps):
+        c, s = np.cos(2 * np.pi * k / steps), np.sin(2 * np.pi * k / steps)
+        out.append(np.array([[c, 0.0, s], [0.0, 1.0, 0.0], [-s, 0.0, c]]))
+    return out
+
+
 def _umeyama(src: np.ndarray, dst: np.ndarray, with_scale: bool) -> tuple[np.ndarray, np.ndarray]:
     """Best (sR, t) with dst ≈ src @ (sR).T + t; s = 1 unless with_scale (Kabsch vs Umeyama)."""
     sc, dc = src.mean(axis=0), dst.mean(axis=0)
@@ -161,8 +170,12 @@ def _subsample(points: np.ndarray, n: int, rng: np.random.Generator) -> np.ndarr
     return points if len(points) <= n else points[rng.choice(len(points), n, replace=False)]
 
 
-def align(a: Cloud, b: Cloud, max_points: int = 3000, seed: int = 0) -> dict:
-    """Find the 4x4 similarity matrix taking B's file coordinates into A's, plus fit metrics."""
+def align(a: Cloud, b: Cloud, max_points: int = 3000, seed: int = 0, upright: bool = False) -> dict:
+    """Find the 4x4 similarity matrix taking B's file coordinates into A's, plus fit metrics.
+
+    upright=True: both clouds are already +Y up in the same kind of frame (e.g. both from Mint's splat pipeline), so
+    the coarse search only turns B about +Y instead of mapping PCA axes onto each other. A partial scan (a top-only
+    rescan of an item the listing scanned top and bottom) then can't be fitted upside down."""
     rng = np.random.default_rng(seed)
     a_obj, a_center, a_radius = isolate(denoise(a))
     b_obj, _, b_radius = isolate(denoise(b))
@@ -174,8 +187,11 @@ def align(a: Cloud, b: Cloud, max_points: int = 3000, seed: int = 0) -> dict:
     a_tree = cKDTree(an)
 
     # Coarse: every axis-to-axis mapping between the two PCA frames, a few ICP steps each.
-    va, vb = _pca_axes(an), _pca_axes(bn)
-    starts = [(va @ q @ vb.T, np.zeros(3)) for q in _cube_rotations()]
+    if upright:
+        starts = [(q, np.zeros(3)) for q in _yaw_rotations()]
+    else:
+        va, vb = _pca_axes(an), _pca_axes(bn)
+        starts = [(va @ q @ vb.T, np.zeros(3)) for q in _cube_rotations()]
     coarse = sorted((_icp(a_tree, an, bn, r, t, iters=8) for r, t in starts), key=lambda x: x[2])
     # Fine: polish the 3 best candidates and keep the winner.
     r, t, err = min(

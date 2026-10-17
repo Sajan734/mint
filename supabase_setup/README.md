@@ -85,7 +85,7 @@ Two one-time dashboard steps connect the phone to the pipeline (see gsplat/READM
    `scans/{uuid}/video.mp4` etc., no key in the app), Deploy, then turn **off** "Enforce JWT verification".
    The app's `MINT_UPLOAD_URL` is `https://jpanyhsifoxxiizkgjno.supabase.co/functions/v1/scan-upload`.
 2. **SQL Editor**: run [`webhook.sql`](webhook.sql). Each new `scans/*/video.mp4` then POSTs to the Modal
-   endpoint `on_upload`, which starts the splat and listing steps once per scan.
+   endpoint `on_upload`, which starts the splat and listing steps once per scan (`rescan.mp4`: the buyer's check).
 
 ## Expected latency (phone → splat → downstream)
 

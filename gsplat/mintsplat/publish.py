@@ -22,7 +22,10 @@ TOP_NAMES, BOTTOM_NAMES = ("top", "video"), ("bottom",)  # video.mp4 is what the
 CONTENT_TYPES = {".json": "application/json", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg"}
 
 
-def fetch_inputs(sb, scan_id: str) -> tuple[list[str], list[bytes], dict]:
+VERIFY_TOP_NAMES, VERIFY_BOTTOM_NAMES = ("rescan",), ("rescan2",)  # a buyer's verify rescan (scanner/HANDOFF.md)
+
+
+def fetch_inputs(sb, scan_id: str, verify: bool = False) -> tuple[list[str], list[bytes], dict]:
     """scans/{scan_id}/top.* or video.* (required) and bottom.* (optional) -> (names, video bytes, io timings).
     io["rotate_cw"] turns each video's frames upright, from the app's poses.jsonl / bottom.poses.jsonl when
     present (its frames are stored sideways); 0 for videos without one. io["session"] is the scan's session.json
@@ -35,9 +38,10 @@ def fetch_inputs(sb, scan_id: str) -> tuple[list[str], list[bytes], dict]:
     names = sb.list(SCANS, scan_id)
     videos = sorted(n for n in names if n.lower().endswith(VIDEO_EXTS))
     pick = lambda roles: next((n for n in videos if n.rsplit(".", 1)[0] in roles), None)  # noqa: E731
-    keys = [k for k in (pick(TOP_NAMES), pick(BOTTOM_NAMES)) if k]
-    if not keys or keys[0].rsplit(".", 1)[0] not in TOP_NAMES:
-        raise FileNotFoundError(f"no scans/{scan_id}/video.mp4 or top.* uploaded (found {names})")
+    top, bottom = (VERIFY_TOP_NAMES, VERIFY_BOTTOM_NAMES) if verify else (TOP_NAMES, BOTTOM_NAMES)
+    keys = [k for k in (pick(top), pick(bottom)) if k]
+    if not keys or keys[0].rsplit(".", 1)[0] not in top:
+        raise FileNotFoundError(f"no scans/{scan_id}/{top[0]}.mp4 uploaded (found {names})")
     poses = [("poses.jsonl" if k.startswith("video.") else f"{k.rsplit('.', 1)[0]}.poses.jsonl") for k in keys]
     poses = [p if p in names else None for p in poses]
     with ThreadPoolExecutor(4) as ex:
@@ -55,7 +59,7 @@ def fetch_inputs(sb, scan_id: str) -> tuple[list[str], list[bytes], dict]:
     return keys, videos, io
 
 
-def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dict) -> dict:
+def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dict, index: bool = True) -> dict:
     """Upload the pipeline result `res` (with res["files"]) to the public bucket; return the manifest."""
     files = dict(res["files"])
     t0 = time.perf_counter()
@@ -85,7 +89,8 @@ def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dic
         "register": res.get("register"), "io": io,
     }
     sb.upload(ASSETS, f"splats/{scan_id}.json", json.dumps(manifest, indent=1).encode(), "application/json")
-    refresh_index(sb)
+    if index:  # a buyer's rescan is not a scan to list, so listing/ingest.py must not see it
+        refresh_index(sb)
     return manifest
 
 

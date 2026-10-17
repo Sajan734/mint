@@ -66,6 +66,17 @@ python client.py relist <scan_id> [--title "Lenovo ThinkPad wireless mouse"]   #
   `Splatter.prewarm` on an H100: models load and one tiny real job warms CUDA while the seller is still recording.
 - **Debugging a listing:** each stage's JSON is published to `assets/listings/{id}/run/` (`run_url` in the document),
   also when it fails.
+- **Publish:** a listing starts unpublished. The seller's editor calls the `api` endpoint
+  (`POST /listings/{id}/publish {state, title, description, price_cad}`, CORS open, the service key stays on Modal),
+  which applies their edits and sets `published`; the buyer site shows only published listings.
+- **Buyer's rescan check** (`mint://verify?id=<cid>&listing=<scan_id>`): the phone uploads `rescan.capture.json`
+  (`listing_scan_id`) and `rescan.mp4` last (+ `rescan2.mp4` flipped). The webhook starts `Splatter.run_verify`: it
+  splats the rescan (published as `splats/{cid}`, not indexed), compares like with like (a rescan without an underside
+  is compared with the listing's top lap only, cached as `splats/{listing}.top.spz`), and runs the buyer agent
+  (`multiagent/buyer_agent`, Jev + Groq, in its own container `compare_scans`, upright alignment) on the two splats.
+  Result: `assets/comparisons/{cid}.json` (CompareResponse) + view pairs `assets/comparisons/{cid[:8]}/a_NN.png`.
+  Tested: the same mouse -> `same`; another object -> `alignment_failed` ("we could not tell"), by the agent's design.
+- **A broken GPU context** (CUDA assert) makes the container exit; Modal retries the scan on a fresh one.
 
 Measured on 2026-10-17, `orbit.mp4` + `orbit_reverse.mp4` (43 MB), H100:
 

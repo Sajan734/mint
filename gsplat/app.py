@@ -39,10 +39,13 @@ def _has_secret(name: str, env: str, what: str) -> bool:
 
 HAS_SUPABASE = _has_secret("mint-supabase", "MINT_SUPABASE", "storage mode (run_scan, on_upload)")
 HAS_LISTING = _has_secret("mint-listing", "MINT_LISTING", "the listing step after the splat (Jev + Gemini)")
+HAS_BUYER = _has_secret("mint-buyer", "MINT_BUYER", "the buyer's rescan check (multiagent/buyer_agent)")
+MULTIAGENT_DIR = Path(__file__).resolve().parent.parent / "multiagent"
 LISTING_DIR = Path(__file__).resolve().parent.parent / "listing"
 LIVE_GPU = "H100"  # scans started by the upload webhook
 PREWARM_ON = {"session.json", "bottom.mp4"}  # a scan has started: get a GPU container ready before video.mp4
-FLAGS = {"MINT_SUPABASE": "1" if HAS_SUPABASE else "0", "MINT_LISTING": "1" if HAS_LISTING else "0"}
+FLAGS = {"MINT_SUPABASE": "1" if HAS_SUPABASE else "0", "MINT_LISTING": "1" if HAS_LISTING else "0",
+         "MINT_BUYER": "1" if HAS_BUYER else "0"}
 
 # The first layers match the legacy image exactly so Modal reuses the cached build
 # (the gsplat CUDA compile takes minutes). Add new layers at the end.
@@ -86,11 +89,94 @@ SECRETS = ([modal.Secret.from_name("mint-supabase", required_keys=["SUPABASE_URL
 LISTING_SECRETS = ([modal.Secret.from_name("mint-listing", required_keys=["TYPESAFE_API_KEY", "GEMINI_API_KEY",
                                                                            "SERPER_API_KEY"])]
                    if HAS_LISTING else [])
+BUYER_SECRETS = ([modal.Secret.from_name("mint-buyer", required_keys=["TYPESAFE_API_KEY", "GROQ_API_KEY",
+                                                                       "BUYER_AGENT_TOKEN"])]
+                 if HAS_BUYER else [])
 jobs = modal.Dict.from_name("mint-scan-jobs", create_if_missing=True)  # scan_id -> claimed at, so each runs once
+
+# The buyer agent (multiagent/buyer_agent, Abhinav) has its own stack (numpy 2), so it runs in its own container.
+compare_image = (
+    modal.Image.debian_slim(python_version="3.12")
+    .pip_install_from_requirements(str(MULTIAGENT_DIR / "requirements.txt"))
+    .env({**FLAGS, "DATA_ROOT": "/tmp/mint-compare", "BUYER_AGENT_LIVE": "1"})
+    .add_local_dir(MULTIAGENT_DIR / "buyer_agent", "/root/buyer_agent", ignore=["**/__pycache__"])
+)
+
+
+@app.function(image=compare_image, secrets=BUYER_SECRETS, cpu=4.0, memory=8192, timeout=600)
+def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: bytes, listing: dict,
+                  match_check: dict | None) -> dict:
+    """The buyer agent on two splats, unchanged: it aligns them, renders matching views, asks Jev (and Groq for the
+    listing's claims) and returns its CompareResponse. -> {"response": CompareResponse JSON, "pairs": {name: png}}."""
+    import asyncio
+    import os
+
+    from buyer_agent import align as align_mod, quality, sources
+    from buyer_agent.api import _default_clients
+    from buyer_agent.config import load_settings
+    from buyer_agent.listing_adapter import claims_from_listing
+    from buyer_agent.models import AlignmentMetrics, CompareRequest, ListingMatchCheck, SplatRef
+    from buyer_agent.pipeline import Deps, compare
+    from buyer_agent.render import CpuPointRenderer
+    from buyer_agent.runlog import RunLog
+
+    def upright_resolve(req, settings, renderer):
+        """sources.resolve, except that both splats come from our pipeline in the same +Y-up scan frame, so the
+        aligner only turns the rescan about +Y (align upright=True): a top-only rescan of an item listed top and
+        bottom was otherwise fitted upside down and judged "different"."""
+        a, b = sources._load(settings.data_root, req.listing_splat), sources._load(settings.data_root, req.buyer_splat)
+        issues = quality.precheck(a, b)
+        if issues:
+            return sources.Resolved([], None, "icp", tuple(issues))
+        result = align_mod.align(a, b, upright=True)
+        fit = {k: v for k, v in result["metrics"].items() if k in AlignmentMetrics.model_fields}
+        metrics = AlignmentMetrics(**fit | {"scale": result["scale"]})
+        return sources.Resolved(renderer.render(a, b, result["matrix"], result["crop"]), metrics, "icp")
+
+    folder = Path(os.environ["DATA_ROOT"]) / cid
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "listing.ply").write_bytes(listing_ply)
+    (folder / "buyer.ply").write_bytes(buyer_ply)
+    settings = load_settings()
+    jev, groq = _default_clients(settings)
+    deps = Deps(settings=settings, jev=jev, groq=groq, renderer=CpuPointRenderer(settings.render_max_points),
+                runlog_factory=lambda rid: RunLog(settings.runs_root, rid), resolver=upright_resolve)
+    req = CompareRequest(
+        comparison_id=cid, listing_id=listing_id,
+        listing_splat=SplatRef(path=f"{cid}/listing.ply", format="ply", up_axis="+y", scan_id=listing_id),
+        buyer_splat=SplatRef(path=f"{cid}/buyer.ply", format="ply", up_axis="+y", scan_id=cid),
+        claims=claims_from_listing(listing),
+        listing_match_check=ListingMatchCheck(verdict=match_check["verdict"], reason=match_check["reason"][:300])
+        if match_check and match_check.get("verdict") else None)
+    resp = asyncio.run(compare(req, deps))
+    run_dir = settings.runs_root / cid
+    pairs = {p.name: p.read_bytes() for p in sorted(run_dir.glob("[ab]_*.png"))} if run_dir.is_dir() else {}
+    return {"response": json.loads(resp.model_dump_json()), "pairs": pairs}
+
+
+def _gpu_dead(e: BaseException | None = None) -> bool:
+    """A CUDA error (e.g. a device-side assert) poisons the GPU context for the rest of the process: every later
+    call on this container fails. True if `e` is one, or (no `e`) if the context is already broken."""
+    if e is not None:
+        return "CUDA error" in str(e) or "device-side assert" in str(e)
+    import torch
+
+    try:
+        torch.cuda.synchronize()
+        return False
+    except RuntimeError:
+        return True
+
+
+def _replace_container(why: str) -> None:
+    """Exit so Modal starts a fresh container and retries the input there (see `retries` below)."""
+    print(f"GPU context is broken ({why}); exiting so the input is retried on a fresh container", flush=True)
+    os._exit(1)
 
 
 @app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol},
-         secrets=SECRETS + LISTING_SECRETS, timeout=900, scaledown_window=300)
+         secrets=SECRETS + LISTING_SECRETS, timeout=900, scaledown_window=300,
+         retries=modal.Retries(max_retries=1, initial_delay=1.0))  # only crashes reach it: see run_scan
 class Splatter:
     @modal.enter()
     def load(self):
@@ -131,6 +217,8 @@ class Splatter:
 
         if not HAS_SUPABASE:
             raise RuntimeError("storage mode needs the Modal secret `mint-supabase`; create it, then redeploy")
+        if _gpu_dead():
+            _replace_container("found broken before the scan")
         sb = Supabase()
         batch_id = batch_id or scan_id
         ev = Events(sb, batch_id)
@@ -152,36 +240,116 @@ class Splatter:
                 manifest = {**manifest, "listing": doc}
             return manifest
         except Exception as e:
+            if _gpu_dead(e):  # not the scan's fault: retry it on a fresh GPU, and don't tell the page it failed
+                _replace_container(str(e)[:120])
+            # anything else would fail the same way again: report it and return (no retry)
             ev.send("error", {"stage": "splat", "message": str(e)[:300], "scan_id": scan_id})
-            raise
+            return {"scan_id": scan_id, "error": f"{type(e).__name__}: {e}"[:500]}
         finally:
             ev.close()
 
     @modal.method()
-    def prewarm(self) -> str:
-        """on_upload calls this as soon as a scan starts (session.json, bottom.mp4), so the cold start happens while
-        the seller is still recording. Loading the models is not all of it: the first real job on a container also
-        pays ~8 s for CUDA loading kernels lazily (measured: SAM 2, VGGT, registration and training each slower the
-        first time). So, once per container, run one tiny real job on the newest published scan (12 frames per
-        video, 60 steps, nothing published)."""
-        if getattr(self, "_warm", False) or not HAS_SUPABASE:
-            return "warm"
-        self._warm = True
-        try:
-            from mintsplat.pipeline import run
-            from mintsplat.publish import fetch_inputs
-            from supabase_setup.storage import ASSETS, Supabase
+    def run_verify(self, cid: str) -> dict:
+        """A buyer's verify rescan (mint://verify?id=<cid>&listing=<scan_id>): scans/{cid}/rescan.mp4 (+ rescan2.mp4)
+        -> the buyer's splat (published as splats/{cid}, kept out of the listing index; the check page shows it)
+        -> the buyer agent against the listing's splat -> assets/comparisons/{cid}.json (CompareResponse) and the view
+        pairs as assets/comparisons/{cid[:8]}/a_NN.png / b_NN.png, which the check page polls for."""
+        import torch
 
-            sb = Supabase()
-            scans = json.loads(sb.download(ASSETS, "splats/index.json")).get("scans", [])
-            if scans:
-                t0 = time.time()
-                _, videos, io = fetch_inputs(sb, scans[0]["scan_id"])
-                run(self, videos if len(videos) > 1 else videos[0], {"n_frames": 12, "debug": False, "views": False,
-                                                                    "rotate_cw": io["rotate_cw"], "train": {"iters": 60}})
-                print(f"[time] warm_up: {time.time() - t0:.1f}s", flush=True)
-        except Exception as e:  # a warm-up must never break anything
-            print(f"warm-up skipped: {e}", flush=True)
+        from mintsplat import export as export_mod
+        from mintsplat.pipeline import run
+        from mintsplat.publish import fetch_inputs, publish
+        from supabase_setup.storage import ASSETS, SCANS, Events, Supabase
+
+        if _gpu_dead():
+            _replace_container("found broken before the check")
+        sb = Supabase()
+        ev = Events(sb, cid)
+        t0 = time.time()
+
+        def put_result(resp: dict, pairs: dict) -> dict:
+            folder = f"comparisons/{cid[:8]}"
+            for name, png in pairs.items():
+                sb.upload(ASSETS, f"{folder}/{name}", png, "image/png")
+            sb.upload(ASSETS, f"comparisons/{cid}.json", json.dumps(resp, indent=1).encode(), "application/json",
+                      cache_control="no-cache")
+            return resp
+
+        def failed(code: str, message: str) -> dict:  # the CompareResponse shape the check page reads
+            return {"v": 1, "comparison_id": cid, "status": "failed", "verdict": None, "claims_available": False,
+                    "claims_findings": [], "next_step": None, "explanation": None,
+                    "error": {"code": code, "message": message[:300]}, "model_ids": {},
+                    "timings_ms": {"total": int((time.time() - t0) * 1000)}, "run_id": cid}
+
+        try:
+            names = sb.list(SCANS, cid)
+            meta = {}
+            for name in ("rescan.capture.json", "session.json"):
+                if name in names:
+                    meta = {**json.loads(sb.download(SCANS, f"{cid}/{name}")), **meta}
+            listing_id = meta.get("listing_scan_id")
+            if not listing_id:
+                return put_result(failed("INPUT_INVALID", "The rescan does not say which listing it checks."), {})
+            if not HAS_BUYER:
+                return put_result(failed("INTERNAL", "The comparison service has no keys (Modal secret mint-buyer)."), {})
+            # Like for like: a pass one side has and the other doesn't (the underside) would read as a difference.
+            listing_inputs = json.loads(sb.download(ASSETS, f"splats/{listing_id}.json")).get("inputs", [])
+            listing_two_pass = any(p.rsplit("/", 1)[-1].startswith("bottom.") for p in listing_inputs)
+            keys, videos, io = fetch_inputs(sb, cid, verify=True)
+            if len(videos) > 1 and not listing_two_pass:  # the listing never saw the underside: drop the rescan's
+                keys, videos, io["rotate_cw"] = keys[:1], videos[:1], io["rotate_cw"][:1]
+            res = run(self, videos if len(videos) > 1 else videos[0],
+                      {"ply": True, "debug": False, "views": True, "rotate_cw": io["rotate_cw"]},
+                      on_event=ev.stage_hook(cid))
+            publish(sb, cid, cid, keys, res, io, index=False)
+            ev.send("stage", {"scan_id": cid, "stage": "7_listing", "status": "started", "ms": 0})
+            if listing_two_pass and len(videos) == 1:  # the rescan has no underside: compare the listing's top lap
+                spz = self._listing_top_spz(sb, listing_id)
+            else:
+                spz = sb.download(ASSETS, f"splats/{listing_id}.spz")
+            params = export_mod.from_spz(spz)
+            listing_ply = export_mod.to_ply(params, torch.ones(len(params["means"]), dtype=torch.bool, device="cuda"))
+            listing = json.loads(sb.download(ASSETS, f"listings/{listing_id}.json"))["market_listing"]["listing"]
+            try:
+                match = json.loads(sb.download(ASSETS, f"listings/{listing_id}/run/match_gate.json"))
+            except RuntimeError:
+                match = None
+            out = compare_scans.remote(cid, listing_id, listing_ply, res["files"]["splat.ply"], listing, match)
+            resp = put_result(out["response"], out["pairs"])
+            ev.send("stage", {"scan_id": cid, "stage": "7_listing", "status": resp["status"],
+                              "ms": int((time.time() - t0) * 1000)})
+            return resp
+        except Exception as e:
+            if _gpu_dead(e):
+                _replace_container(str(e)[:120])
+            return put_result(failed("INTERNAL", f"{type(e).__name__}: {e}"), {})
+        finally:
+            ev.close()
+
+    def _listing_top_spz(self, sb, listing_id: str) -> bytes:
+        """The listing splatted from its top lap only (video.mp4), for a rescan that has no underside. Made once per
+        listing and cached as assets/splats/{listing_id}.top.spz (not a .json, so no index lists it)."""
+        from mintsplat.pipeline import run
+        from mintsplat.publish import fetch_inputs
+        from supabase_setup.storage import ASSETS
+
+        path = f"splats/{listing_id}.top.spz"
+        try:
+            return sb.download(ASSETS, path)
+        except RuntimeError:
+            pass
+        _, videos, io = fetch_inputs(sb, listing_id)
+        spz = run(self, videos[0], {"ply": False, "debug": False, "views": False,
+                                    "rotate_cw": io["rotate_cw"][:1]})["files"]["splat.spz"]
+        sb.upload(ASSETS, path, spz, "application/octet-stream")
+        return spz
+
+    @modal.method()
+    def prewarm(self) -> str:
+        """No-op: on_upload calls it as soon as a scan starts (session.json, bottom.mp4), so this container is up with
+        its models loaded (@modal.enter) by the time video.mp4 lands; the cold start happens while the seller is still
+        recording. (A tiny real warm-up job here saved ~5 s more but once tripped a CUDA assert that poisoned the
+        container for the real scan, so it is gone.)"""
         return "warm"
 
     @modal.method()
@@ -199,7 +367,53 @@ class Splatter:
 
 
 hook_image = (modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]").env(FLAGS)
-              .add_local_python_source("supabase_setup"))
+              .add_local_python_source("supabase_setup", "mintsplat"))
+UUID_RE = r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"
+
+
+@app.function(image=hook_image, secrets=SECRETS, timeout=60)
+@modal.asgi_app()
+def api():
+    """The website's write path (no key in the browser; the service key stays here). CORS is open: the scan id, a
+    UUID the seller's browser made, is what names a listing.
+      POST /listings/{scan_id}/publish  {state: published | draft, title, description, price_cad}
+        -> the listing document (gsplat/mintsplat/market.py set_published)"""
+    import re
+    from typing import Literal
+
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel, Field
+
+    from mintsplat.market import set_published
+    from supabase_setup.storage import Supabase
+
+    web = FastAPI(title="Mint listings API")
+    web.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["POST", "OPTIONS"],
+                       allow_headers=["Content-Type"])
+
+    class PublishBody(BaseModel):
+        state: Literal["published", "draft"]
+        title: str = Field(min_length=1, max_length=120)
+        description: str = Field(min_length=1, max_length=4000)
+        price_cad: int = Field(ge=1, le=100_000)
+
+    @web.post("/listings/{scan_id}/publish")
+    def publish_listing(scan_id: str, body: PublishBody) -> dict:
+        if not re.fullmatch(UUID_RE, scan_id):
+            raise HTTPException(404, "unknown scan")
+        if not HAS_SUPABASE:
+            raise HTTPException(503, "Modal secret mint-supabase missing")
+        try:
+            doc = set_published(Supabase(), scan_id, body.state == "published", body.title.strip(),
+                                body.description.strip(), body.price_cad)
+        except RuntimeError as e:  # Supabase: no such listing document
+            raise HTTPException(404, f"no listing for scan {scan_id}") from e
+        except ValueError as e:
+            raise HTTPException(409, str(e)) from e
+        return {"scan_id": scan_id, "published": doc["published"], "price_cad": body.price_cad}
+
+    return web
 
 
 @app.function(image=hook_image, secrets=SECRETS, timeout=60)
@@ -221,6 +435,10 @@ def on_upload(body: dict) -> dict:
     if bucket != SCANS or not re.fullmatch(uuid, scan_id):
         return {"ok": True, "ignored": f"{bucket}/{name}"}
     splatter = modal.Cls.from_name("mint-gsplat", "Splatter").with_options(gpu=LIVE_GPU)
+    if file == "rescan.mp4":  # a buyer's verify rescan (uploaded last): compare it with its listing
+        if not jobs.put(f"verify:{scan_id}", time.time(), skip_if_exists=True):
+            return {"ok": True, "duplicate": scan_id}
+        return {"ok": True, "verify": scan_id, "call_id": splatter().run_verify.spawn(scan_id).object_id}
     if file != "video.mp4":
         if file in PREWARM_ON and jobs.put(f"prewarm:{scan_id}", time.time(), skip_if_exists=True):
             splatter().prewarm.spawn()

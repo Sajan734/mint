@@ -71,6 +71,10 @@ describe("view mapping (file a_NN / b_NN, NN 0-based = label view_{NN+1})", () =
   it("builds image paths and display names", () => {
     expect(pairSrc("435e1251", 0, "a")).toBe("/local/compare/435e1251/a_00.webp");
     expect(pairSrc("435e1251", 10, "b")).toBe("/local/compare/435e1251/b_10.webp");
+    // a live check: the pairs gsplat/app.py run_verify published for it
+    expect(pairSrc("8f2c41aa", 3, "b")).toBe(
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/comparisons/8f2c41aa/b_03.png",
+    );
     expect(viewName("view_03")).toBe("View 3");
   });
   it("lists the flagged categories per view index", () => {
