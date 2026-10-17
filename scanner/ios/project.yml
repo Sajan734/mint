@@ -1,0 +1,48 @@
+# Generate the Xcode project with:  cd scanner/ios && xcodegen
+# (Mint.xcodeproj is generated, not committed. Re-run xcodegen after adding or removing files.)
+name: Mint
+options:
+  bundleIdPrefix: ca.htv11.mint
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  CoverageKit:
+    path: Packages/CoverageKit
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Mint:
+    type: application
+    platform: iOS
+    sources:
+      - path: Mint
+    dependencies:
+      - package: CoverageKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.htv11.mint.scanner
+        CODE_SIGN_STYLE: Automatic
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Mint/Info.plist
+      properties:
+        CFBundleDisplayName: Mint
+        NSCameraUsageDescription: Mint uses the camera to scan your item in 3D.
+        UIRequiredDeviceCapabilities: [arkit]
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+schemes:
+  Mint:
+    build:
+      targets:
+        Mint: all
+    test:
+      targets:
+        - package: CoverageKit/CoverageKitTests
