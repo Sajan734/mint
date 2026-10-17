@@ -1,0 +1,54 @@
+// @vitest-environment node
+// docs/design/DESIGN.md §2: the palette's text pairs pass WCAG AA (4.5:1) in light and dark, read from the real CSS.
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+
+const css = readFileSync(new URL("../app/globals.css", import.meta.url), "utf8");
+
+function block(selector: string): Record<string, string> {
+  const start = css.indexOf(selector);
+  const body = css.slice(css.indexOf("{", start) + 1, css.indexOf("}", start));
+  return Object.fromEntries([...body.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1], m[2].toLowerCase()]));
+}
+const light = block(":root {");
+const dark = { ...light, ...block(':root[data-theme="dark"]') };
+
+function luminance(hex: string): number {
+  const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+  const [r, g, b] = c.map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+const contrast = (a: string, b: string) => {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+// [foreground, background] token pairs that carry text.
+const PAIRS: [string, string][] = [
+  ["ink", "bg"],
+  ["ink-2", "bg"],
+  ["ink", "surface"],
+  ["ink-2", "surface"],
+  ["leaf", "bg"],
+  ["leaf", "wash"],
+  ["btn-fg", "leaf"],
+  ["amber", "amber-wash"],
+  ["coral", "coral-wash"],
+];
+
+describe("design tokens", () => {
+  it.each(PAIRS)("light: %s on %s is at least 4.5:1", (fg, bg) => {
+    expect(contrast(light[fg], light[bg])).toBeGreaterThanOrEqual(4.5);
+  });
+  it.each(PAIRS)("dark: %s on %s is at least 4.5:1", (fg, bg) => {
+    expect(contrast(dark[fg], dark[bg])).toBeGreaterThanOrEqual(4.5);
+  });
+  it("oat type and spark on the pine field pass", () => {
+    expect(contrast(light["on-pine"], light.pine)).toBeGreaterThanOrEqual(7);
+    expect(contrast(light["on-pine-2"], light.pine)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(light.spark, light.pine)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("the seller app uses the same tokens", () => {
+    expect(readFileSync(new URL("../../seller/app/globals.css", import.meta.url), "utf8")).toBe(css);
+  });
+});

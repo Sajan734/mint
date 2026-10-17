@@ -79,3 +79,26 @@ clean except the old warning in `buyer/components/FilterBar.tsx`.
   listing -> ready -> editor filled from the listing. Writes nothing to Supabase. Passes at 1280 and 390.
 - Still needed: one real scan from the iPhone app against `http://localhost:3000/sell` with demo data off.
 - Tests: buyer 187 (1 skipped), seller 91, e2e demo 4 (2 specs x desktop/phone).
+
+## Redesign (branch `sajan/web-design`, from `sajan/web`)
+
+The team found the UI "vibe coded". New design system in `docs/design/DESIGN.md`, built with the taste-skill rules
+(`design-taste-frontend`, `redesign-existing-projects`, installed in `~/.claude/skills`) and the Starbucks and Shopify
+systems from awesome-design-md.
+
+- Look: a neighbourhood shop. Oat canvas, pine ink, mint-leaf actions, a pine field for deep bands and the footer,
+  a mint wash, brand mint ("spark") only on pine. Fraunces (soft) for signs, Figtree for everything else. Full pill
+  buttons that press in. No outlined boxes, hairlines, gradients, glows, mono labels, eyebrows or numbered badges.
+- Taste audit of the old UI: 57 lint failures, 8 browser failures (mono labels, radial-gradient pads, outlines,
+  hairlines, 3 typefaces, text under 13px, no first-screen focal point).
+- Landing: split hero led by the real ThinkPad scan you can turn; product grids instead of side-scrolling rails;
+  a pine "How Mint works" band with real spin frames; garage sales as a noticeboard; pine footer with the name large.
+- Every other screen moved to the system: header, cards and badges, listing page, contact dialog, reserve sheet,
+  check flow on a pine phone panel, result page, seller dashboard, editor, sale and About pages. Dark mode follows.
+- iOS (`scanner/ios/Mint`): Brand.swift has the same palette and font helpers (New York for big lines, SF Pro for
+  text, SF Rounded only for big percentages); sentence-case labels; no glass, glows or gradients; capsule buttons;
+  the same seal mark. Builds for the simulator; the waiting screen was checked there (no camera in the simulator
+  for the others).
+- CSS lesson: base and component rules must sit in `@layer base` / `@layer components`, or Tailwind v4 utilities
+  lose to them. Turbopack dev sometimes serves stale CSS after `globals.css` edits: restart `pnpm dev`.
+- Tests: buyer 207 (1 skipped; +20 contrast checks in `tests/design-tokens.test.ts`), seller 91, e2e demo 4.

@@ -14,6 +14,8 @@ test("demo walk-through: list an item, find it, contact the seller, check it", a
   await header.getByRole("link", { name: "Sell an item" }).click();
   await expect(page).toHaveURL(/\/sell$/);
   await expect(page.getByRole("heading", { name: "Your listings" })).toBeVisible();
+  // The dev server can reload a page once just after it arrives; a click in between is lost. Let it settle.
+  await page.waitForLoadState("networkidle");
 
   await page.getByRole("link", { name: "New listing" }).click();
   await expect(page).toHaveURL(/\/sell\/scan\/[0-9a-f-]{36}$/);
