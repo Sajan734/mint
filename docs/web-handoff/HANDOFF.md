@@ -56,9 +56,11 @@ cd buyer  && pnpm install && pnpm dev          # port 3000, open http://localhos
 - Demo mode: add `?mock=1` to any URL. It stays on (stored in localStorage `mint.mock`). A "Demo data" pill with
   **Turn off** shows in both headers. `?mock=0` turns it off.
 - Checks: `pnpm check` in each app (typecheck, lint, unit tests).
-- Demo images: `multiagent/.venv/Scripts/python.exe -I buyer/scripts/make_demo_assets.py` rebuilds
-  `buyer/public/demo/` (tracked) and `buyer/public/local/` (git-ignored, PASLCD licence not verified). Run it once
-  on a new machine, or the before/after images on the match page are missing.
+- Demo images: `buyer/public/demo/` (real gsplat scans) is tracked. `buyer/public/local/` (PASLCD photos and the
+  match page's before/after images) is git-ignored, because the PASLCD licence is not verified. On this branch it
+  is TEMPORARILY tracked (commit `77cd7d2`) so a teammate's machine has it. Remove it before any merge to `main`:
+  `git rm -r --cached buyer/public/local`. To rebuild the images, run
+  `multiagent/.venv/Scripts/python.exe -I buyer/scripts/make_demo_assets.py` (it needs local-only data).
 
 ## 3. Where things stand
 
