@@ -6,7 +6,7 @@
 
 For the demo use the deployed app instead (no cold start): see client.py.
 
-Outputs land in out/<name>/: splat.spz (~3 MB; add --ply for the ~39 MB .ply) plus debug media and run.json.
+Outputs land in out/<name>/: splat.spz (~3 MB) plus debug media and run.json (--ply adds a ~39 MB .ply, for local inspection only).
 --gpu H100 roughly halves the pose stage; --scale sets the training resolution (default: auto from a pixel budget; 1.0 = full video resolution).
 """
 import json
@@ -71,10 +71,9 @@ image = (
 
 app = modal.App("mint-gsplat", image=image)
 models_vol = modal.Volume.from_name("mint-models", create_if_missing=True)
-work_vol = modal.Volume.from_name("mint-work", create_if_missing=True)  # GPU-side hand-off to B (.ply etc.)
 SECRETS = ([modal.Secret.from_name("mint-supabase", required_keys=["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])]
            if HAS_SUPABASE else [])
-@app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol, "/work": work_vol},
+@app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol},
          secrets=SECRETS, timeout=900, scaledown_window=300)
 class Splatter:
     @modal.enter()
@@ -105,9 +104,8 @@ class Splatter:
     def run_scan(self, scan_id: str, batch_id: str | None = None, cfg: dict | None = None) -> dict:
         """Storage mode. Reads scans/{scan_id}/top.* (+ bottom.* if present) from Supabase, writes
         assets/splats/{scan_id}.spz + .json (manifest), assets/views/{scan_id}/ (8 reference views + views.json),
-        refreshes assets/splats/index.json (newest first; what listing/ingest.py polls without a key),
-        writes /work/{scan_id}/splat.ply (Volume mint-work, for B), and broadcasts `stage` / `passport_ready`
-        on Realtime channel batch:{batch_id}. mint-api calls this with .spawn() after upload."""
+        refreshes assets/splats/index.json (newest first; what listing/ingest.py polls without a key), and
+        broadcasts `stage` / `passport_ready`        on Realtime channel batch:{batch_id}. mint-api calls this with .spawn() after upload."""
         from mintsplat.pipeline import run
         from mintsplat.publish import fetch_inputs, publish
         from supabase_setup.storage import Events, Supabase
@@ -120,9 +118,8 @@ class Splatter:
         try:
             keys, videos, io = fetch_inputs(sb, scan_id)
             res = run(self, videos if len(videos) > 1 else videos[0],
-                      {**(cfg or {}), "ply": True, "debug": False, "views": True}, on_event=ev.stage_hook(scan_id))
-            manifest = publish(sb, scan_id, batch_id, keys, res, Path(f"/work/{scan_id}"), io)
-            work_vol.commit()
+                      {**(cfg or {}), "ply": False, "debug": False, "views": True}, on_event=ev.stage_hook(scan_id))
+            manifest = publish(sb, scan_id, batch_id, keys, res, io)
             ev.send("passport_ready", manifest)
             return manifest
         except Exception as e:

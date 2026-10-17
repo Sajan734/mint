@@ -44,8 +44,7 @@ Create the Modal secret once (Modal dashboard → Secrets → Custom, or in your
 modal secret create mint-supabase SUPABASE_URL=https://jpanyhsifoxxiizkgjno.supabase.co SUPABASE_SERVICE_ROLE_KEY=<secret key>
 ```
 
-Teammates' Modal apps can only use it if they're in the same Modal workspace (it also shares the
-`mint-work` volume, where A writes `.ply` files for B).
+Teammates' Modal apps can only use it if they're in the same Modal workspace.
 
 ## Use it from a backend
 

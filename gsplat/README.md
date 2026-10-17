@@ -4,7 +4,7 @@ One or two phone orbit videos in, an object-only Gaussian splat plus 8 reference
 
 | Input | Output |
 |---|---|
-| `top.*` (upright orbit), optional `bottom.*` (same object flipped over), any phone video incl. 60/120 fps | `splat.spz` (~2.5 MB, Spark-ready), 8 reference views + `views.json`, optional `splat.ply` (~35 MB, full precision) |
+| `top.*` (upright orbit), optional `bottom.*` (same object flipped over), any phone video incl. 60/120 fps | `splat.spz` (~2.5 MB; Spark and `listing/` read it directly), 8 reference views + `views.json` |
 
 The splat is in the **scan frame**: +Y up, +X along the object's long axis, origin on the ground under the object
 (its lowest points at y = 0), right-handed (SPZ's native RUB, so viewers need no flip). Scale is **not metric** yet
@@ -22,7 +22,8 @@ Results land in `out/<name>/` (gitignored): `splat.spz`, `views/` (reference vie
 and debug media (`masks_*.jpg`, `poses_*.jpg`, `register.jpg`, `heldout.jpg`, `turntable.mp4`). Open `viewer.html`
 and pick the `.spz`.
 
-Useful flags: `--gpu H100` (faster), `--scale 1.0` (training resolution; default auto from a pixel budget), `--ply`,
+Useful flags: `--gpu H100` (faster), `--scale 1.0` (training resolution; default auto from a pixel budget), `--ply`
+(also write a ~35 MB `.ply`, only for inspecting in desktop tools; nothing downstream uses it),
 `--no-debug`, `--no-box-refine`, `--stop-after masks|poses|register`, `--train-json '{"iters": 1500}'`.
 
 ### Storage mode (the real flow)
@@ -36,7 +37,6 @@ The iOS app uploads `scans/{scan_id}/top.mp4` (+ `bottom.mp4`) with signed URLs,
 | `assets/splats/{scan_id}.json` | manifest: inputs, URLs, layout of the views, Gaussian count, per-stage timings |
 | `assets/views/{scan_id}/` | 8 reference views (transparent PNG + grey PNG each) + `views.json` (cameras) |
 | `assets/splats/index.json` | every published scan, newest first (`listing/ingest.py` polls it, no key needed) |
-| Volume `mint-work/{scan_id}/` | `splat.ply` (full precision) + `views.json`, for the comparison engine |
 | Realtime `batch:{id}` | `stage` events (started/done per step), then `passport_ready` with the manifest |
 
 Needs the Modal secret `mint-supabase` (see `supabase_setup/README.md`); create it, then `modal deploy app.py`.
@@ -74,7 +74,7 @@ every camera (OpenCV camera-to-world in the scan frame, intrinsics), so anyone c
 | poses | `poses.py` | VGGT on unmasked frames; support plane constrained to be roughly horizontal w.r.t. the cameras' up (walls and box sides rejected), camera up as fallback; yaw along the object's long axis |
 | register | `merge.py` | bottom capture → top frame: similarity fit so each video's points stay inside the other's silhouettes |
 | train | `train.py` | gsplat MCMC (200k cap), L1 + SSIM, random backgrounds, alpha loss, per-view pose refinement, needle regulariser; training resolution from a 0.5 MP crop budget |
-| export | `export.py` | mask-vote cleanup, drop Gaussians invisible in every training view, SPZ v3 (6/5-bit SH), optional PLY |
+| export | `export.py` | mask-vote cleanup, drop Gaussians invisible in every training view, SPZ v3 (6/5-bit SH) |
 | views | `views.py` | the 8 reference views above |
 | publish | `publish.py` | storage mode: Supabase in/out, `mint-work`, index |
 

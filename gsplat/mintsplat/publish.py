@@ -8,13 +8,12 @@ Published layout (public `assets` bucket, readable without a key):
   splats/{scan_id}.json     manifest
   views/{scan_id}/          8 reference views (transparent + grey PNG each) + views.json (cameras)
   splats/index.json         every published scan, newest first (listing/ingest.py polls this)
-Private: /work/{scan_id}/splat.ply + views.json on the mint-work Volume (full precision, for B).
+The .spz is the only splat format that leaves the GPU: ~10x smaller than a PLY, and listing/ renders it directly.
 """
 import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
-from pathlib import Path
 
 SCANS, ASSETS = "scans", "assets"
 
@@ -33,15 +32,9 @@ def fetch_inputs(sb, scan_id: str) -> tuple[list[str], list[bytes], dict]:
     return keys, videos, io
 
 
-def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, work_dir: Path, io: dict) -> dict:
-    """Write the pipeline result `res` (with res["files"]) to the Volume and the public bucket; return the manifest."""
+def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dict) -> dict:
+    """Upload the pipeline result `res` (with res["files"]) to the public bucket; return the manifest."""
     files = dict(res["files"])
-    t0 = time.perf_counter()
-    work_dir.mkdir(parents=True, exist_ok=True)
-    (work_dir / "splat.ply").write_bytes(files.pop("splat.ply"))
-    (work_dir / "views.json").write_bytes(files["views/views.json"])
-    io["ply_to_volume_s"] = round(time.perf_counter() - t0, 2)
-
     t0 = time.perf_counter()
     folder = f"views/{scan_id}"
     targets = [(f"splats/{scan_id}.spz", files.pop("splat.spz"), "application/octet-stream")]
@@ -56,7 +49,6 @@ def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, work_di
     manifest = {
         "v": 3, "scan_id": scan_id, "batch_id": batch_id, "inputs": [f"{SCANS}/{scan_id}/{k}" for k in keys],
         "splat_path": f"{ASSETS}/splats/{scan_id}.spz", "splat_url": urls[f"splats/{scan_id}.spz"],
-        "splat_ply_path": f"mint-work/{scan_id}/splat.ply",
         "views_json_url": urls[f"{folder}/views.json"],
         "views": {"layout": meta["layout"], "includes_bottom": meta["includes_bottom"], "items": [
             {"name": v["name"], "azimuth_deg": v["azimuth_deg"], "elevation_deg": v["elevation_deg"],
