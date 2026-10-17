@@ -26,25 +26,36 @@ Useful flags: `--gpu H100` (faster), `--scale 1.0` (training resolution; default
 (also write a ~35 MB `.ply`, only for inspecting in desktop tools; nothing downstream uses it),
 `--no-debug`, `--no-box-refine`, `--stop-after masks|poses|register`, `--train-json '{"iters": 1500}'`.
 
-### Storage mode (the real flow)
+### Live pipeline: phone video -> website
 
-The iOS app uploads `scans/{scan_id}/top.mp4` (+ `bottom.mp4`) with signed URLs, then `mint-api` calls
-`Splatter.run_scan.spawn(scan_id)`. That reads the videos from Supabase and publishes (see `mintsplat/publish.py`):
+```
+iPhone app --scan-upload Edge Function--> scans/{id}/video.mp4
+  --Supabase webhook (supabase_setup/webhook.sql)--> on_upload (Modal endpoint, starts each scan once)
+  --> Splatter.run_scan on an H100: splat + 8 views + 24 spin frames  (mintsplat/publish.py)
+  --> listing/ pipeline in the same container: render, identify, Jev match + condition, price  (mintsplat/market.py)
+  --> assets/listings/index.json  --> the website (buyer/lib/data/live.ts) lists it at /listing/{id}
+```
 
-| Where | What |
+| Where (Supabase, public `assets` bucket unless noted) | What |
 |---|---|
-| `assets/splats/{scan_id}.spz` | the splat |
-| `assets/splats/{scan_id}.json` | manifest: inputs, URLs, layout of the views, Gaussian count, per-stage timings |
-| `assets/views/{scan_id}/` | 8 reference views (transparent PNG + grey PNG each) + `views.json` (cameras) |
-| `assets/splats/index.json` | every published scan, newest first (`listing/ingest.py` polls it, no key needed) |
-| Realtime `batch:{id}` | `stage` events (started/done per step), then `passport_ready` with the manifest |
+| `scans/{id}/video.mp4` (private) | the phone's video (`top.*` / `bottom.*` also accepted; bottom = flipped-over orbit) |
+| `splats/{id}.spz`, `splats/{id}.json` | the splat; manifest (inputs, URLs, views, spin frames, Gaussians, stage timings) |
+| `views/{id}/` | 8 reference views (transparent + grey PNG) + `views.json` (cameras) + `spin/f00..f23.webp` |
+| `splats/index.json` | every splat, newest first (`listing/ingest.py` reads it) |
+| `listings/{id}.json` | `status` listed / rejected / failed, with the website's `MarketListing`, the `Rejection` or the error |
+| `listings/{id}/vNN.png`, `listings/index.json` | the listing's preview renders; every listing document inline, newest first |
+| Realtime `batch:{id}` | `stage` events (started/done per step, incl. `7_listing`), `passport_ready`, `listing_ready` |
 
-Needs the Modal secret `mint-supabase` (see `supabase_setup/README.md`); create it, then `modal deploy app.py`.
-Without it everything else still works and `run_scan` says what's missing.
+Needs two Modal secrets: `mint-supabase` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) and `mint-listing`
+(`TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY`, the keys in `listing/.env`). Fill in the repo-root
+`.env` (copy of `../.env.example`, gitignored), run `python push_secrets.py` (checks the Supabase key, writes both secrets, prints only
+names), then `modal deploy app.py`. Without `mint-listing` the splat still publishes and the listing step is skipped. Live scans go
+on the website under the seller and garage sale in `market.LIVE`; the category comes from the identified product.
 
 ```bash
-modal deploy ../supabase_setup/modal_app.py && modal deploy app.py
-python client.py scan orbit.mp4 orbit_reverse.mp4 --gpu H100   # like the phone: signed upload -> run_scan
+modal deploy app.py                          # prints the on_upload URL that webhook.sql calls
+python client.py scan orbit.mp4              # exactly the phone's path; prints the time of each hop
+python client.py scan orbit.mp4 orbit_reverse.mp4 --gpu H100   # top + bottom: run_scan started directly
 ```
 
 ### Demo (no cold start)

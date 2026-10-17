@@ -63,7 +63,7 @@ def check_spz(data: bytes) -> int:
 def supabase_url() -> str:
     from dotenv import load_dotenv
 
-    load_dotenv(ROOT / ".env")
+    load_dotenv(ROOT.parent / ".env")  # the repo-wide .env
     return (os.environ.get("SUPABASE_URL") or DEFAULT_SUPABASE_URL).rstrip("/")
 
 

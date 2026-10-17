@@ -10,6 +10,8 @@ object's long axis):
 Each view is written twice: RGBA PNG (transparent background, for the web) and an opaque PNG on the
 listing pipeline's mid-grey (for Jev, which takes PNG/JPEG). Cameras go into views.json in the
 pipeline's OpenCV convention, so anyone can re-render or compare from exactly the same viewpoint.
+
+spin_frames() adds a 24-frame turntable (transparent WebP) for the website's drag-to-spin viewer.
 """
 import math
 
@@ -25,6 +27,13 @@ VIEWS = {
     "fill": 0.85,  # the object's projected extent fills this share of the frame
     "extent_quantile": 0.99,  # ignore the outermost 1% of Gaussians when framing (stray specks)
     "grey_rgb": (128, 128, 128),  # listing/stages/render.py background
+}
+
+SPIN = {
+    "frames": 24,  # every 15 deg, what the website's spin viewer uses
+    "elevation_deg": 25.0,  # high enough that a top-only scan's unseen underside stays out of view
+    "size_px": 512,
+    "webp_quality": 85,
 }
 
 CORNER_EL = math.degrees(math.asin(1 / math.sqrt(3)))  # 35.26 deg
@@ -55,17 +64,30 @@ def fit_distance(pts: torch.Tensor, center: torch.Tensor, d: torch.Tensor, tan_h
     return float(need.quantile(VIEWS["extent_quantile"]))
 
 
-@torch.no_grad()
-def reference_views(params, sh_degree: int, include_bottom: bool):
-    """Returns ([(file_name, png_bytes)], meta)."""
-    size = VIEWS["size_px"]
+def _framing(params, size: int):
+    """Intrinsics for a size x size view, the solid Gaussians (a sample) and their centre."""
     half = math.radians(VIEWS["fov_deg"]) / 2
     f = size / 2 / math.tan(half)
     K = torch.tensor([[f, 0, size / 2], [0, f, size / 2], [0, 0, 1.0]], device="cuda")
     solid = params["means"][torch.sigmoid(params["opacities"]) > 0.3]
     solid = solid[torch.randperm(len(solid), device="cuda")[:50_000]]
-    center = solid.median(0).values
-    zero_bg = torch.zeros(1, 3, device="cuda")
+    return K, half, solid, solid.median(0).values
+
+
+def _rgba(params, c2w, K, size: int, sh_degree: int):
+    """(straight RGB, alpha, premultiplied RGB) on a transparent background."""
+    rgb, alpha, _ = render(params, torch.linalg.inv(c2w)[None], K[None], size, size, sh_degree,
+                           torch.zeros(1, 3, device="cuda"))
+    a = alpha[0].clamp(0, 1)[..., None]
+    premul = rgb[0].clamp(0, 1)
+    return (premul / a.clamp_min(1e-6)).clamp(0, 1), a, premul
+
+
+@torch.no_grad()
+def reference_views(params, sh_degree: int, include_bottom: bool):
+    """Returns ([(file_name, png_bytes)], meta)."""
+    size = VIEWS["size_px"]
+    K, half, solid, center = _framing(params, size)
     grey = np.array(VIEWS["grey_rgb"], np.float32) / 255
 
     files, views = [], []
@@ -73,10 +95,7 @@ def reference_views(params, sh_degree: int, include_bottom: bool):
         d = direction(az, el)
         dist = fit_distance(solid, center, d, math.tan(half))
         c2w = look_at(center + dist * d, center)
-        rgb, alpha, _ = render(params, torch.linalg.inv(c2w)[None], K[None], size, size, sh_degree, zero_bg)
-        a = alpha[0].clamp(0, 1)[..., None]
-        premul = rgb[0].clamp(0, 1)
-        straight = (premul / a.clamp_min(1e-6)).clamp(0, 1)
+        straight, a, premul = _rgba(params, c2w, K, size, sh_degree)
         rgba = torch.cat([straight, a], -1).cpu().numpy()
         flat = (premul + (1 - a) * torch.from_numpy(grey).cuda()).cpu().numpy()
         name = f"{i:02d}_az{az:03.0f}_el{el:+03.0f}"
@@ -93,6 +112,24 @@ def reference_views(params, sh_degree: int, include_bottom: bool):
             "center": center.cpu().numpy().round(6).tolist(), "background_grey_rgb": list(VIEWS["grey_rgb"]),
             "views": views}
     return files, meta
+
+
+@torch.no_grad()
+def spin_frames(params, sh_degree: int) -> list[tuple[str, bytes]]:
+    """[("f00.webp", bytes), ...]: a turntable at one elevation, azimuth 0, 15, ... 345 deg, all from one distance
+    (the farthest any frame needs), so the object keeps its size while it spins."""
+    size, el = SPIN["size_px"], SPIN["elevation_deg"]
+    K, half, solid, center = _framing(params, size)
+    azimuths = [i * 360 / SPIN["frames"] for i in range(SPIN["frames"])]
+    dist = max(fit_distance(solid, center, direction(az, el), math.tan(half)) for az in azimuths)
+    frames = []
+    for i, az in enumerate(azimuths):
+        straight, a, _ = _rgba(params, look_at(center + dist * direction(az, el), center), K, size, sh_degree)
+        bgra = cv2.cvtColor((torch.cat([straight, a], -1).cpu().numpy() * 255 + 0.5).astype(np.uint8),
+                            cv2.COLOR_RGBA2BGRA)
+        frames.append((f"f{i:02d}.webp", cv2.imencode(".webp", bgra, [cv2.IMWRITE_WEBP_QUALITY,
+                                                                       SPIN["webp_quality"]])[1].tobytes()))
+    return frames
 
 
 def _png(img: np.ndarray, conversion: int) -> bytes:

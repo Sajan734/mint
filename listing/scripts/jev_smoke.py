@@ -204,9 +204,9 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    load_dotenv(ROOT / ".env")
+    load_dotenv(ROOT.parent / ".env")  # the repo-wide .env
     if not os.environ.get("TYPESAFE_API_KEY", "").strip():
-        print("TYPESAFE_API_KEY is missing: add it to listing/.env", file=sys.stderr)
+        print("TYPESAFE_API_KEY is missing: add it to the repo-root .env", file=sys.stderr)
         return 2
     return asyncio.run(run(args))
 

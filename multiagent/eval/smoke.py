@@ -1,6 +1,6 @@
 """Smoke test: run one comparison through the real API code with live Jev and Groq.
 
-Usage (from multiagent/, needs the keys in .env):
+Usage (from multiagent/, needs the keys in the repo-root .env):
     python -m eval.smoke --list
     python -m eval.smoke                                   # changed pair + missing-accessory claims
     python -m eval.smoke --case pots1_same --listing pots_truthful

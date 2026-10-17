@@ -75,6 +75,17 @@ modal run supabase_setup/modal_app.py      # buckets reachable, upload/download,
 modal deploy supabase_setup/modal_app.py   # exposes sign_uploads(scan_id, names) as app "mint-supabase"
 ```
 
+## Live pipeline: upload signer and webhook
+
+Two one-time dashboard steps connect the phone to the pipeline (see gsplat/README.md for the whole flow):
+
+1. **Edge Functions → Deploy a new function → Via editor**, name `scan-upload`, paste
+   `scanner/supabase/functions/scan-upload/index.ts` (C's signer: one-time upload URLs for
+   `scans/{uuid}/video.mp4` etc., no key in the app), Deploy, then turn **off** "Enforce JWT verification".
+   The app's `MINT_UPLOAD_URL` is `https://jpanyhsifoxxiizkgjno.supabase.co/functions/v1/scan-upload`.
+2. **SQL Editor**: run [`webhook.sql`](webhook.sql). Each new `scans/*/video.mp4` then POSTs to the Modal
+   endpoint `on_upload`, which starts the splat and listing steps once per scan.
+
 ## Expected latency (phone → splat → downstream)
 
 | Step | Expected | Driver |
