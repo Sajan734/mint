@@ -1,12 +1,13 @@
 import ARKit
 import CoverageKit
 
-/// The ARSession delegate, on its own serial queue: keeps the item's outline fresh for the overlay
-/// (~8 Hz) and, while recording, hands every frame (30 fps) to the recorder. Never holds an ARFrame.
+/// The ARSession delegate, on its own serial queue: keeps the item's outline and the paper's angle
+/// fresh for the overlay (~8 Hz) and, while recording, hands every frame (30 fps) to the recorder.
+/// Never holds an ARFrame.
 final class CaptureLoop: NSObject, ARSessionDelegate {
     let queue = DispatchQueue(label: "mint.capture", qos: .userInteractive)
     /// Set once before the session runs; called on the main actor.
-    var onOutline: (@MainActor (SubjectOutliner.Outline?) -> Void)?
+    var onSight: (@MainActor (SubjectOutliner.Sight) -> Void)?
 
     // Touched only on `queue`.
     private var recorder: VideoRecorder?
@@ -45,8 +46,15 @@ final class CaptureLoop: NSObject, ARSessionDelegate {
         sensorSize = frame.camera.imageResolution
         if frame.timestamp - lastOutline >= Self.outlineInterval {
             lastOutline = frame.timestamp
-            outliner.process(frame.capturedImage) { outline in
-                MainActor.assumeIsolated { self.onOutline?(outline) }
+            let t = frame.camera.transform
+            let camera = SubjectOutliner.Camera(
+                rotation: simd_float3x3(SIMD3(t.columns.0.x, t.columns.0.y, t.columns.0.z),
+                                        SIMD3(t.columns.1.x, t.columns.1.y, t.columns.1.z),
+                                        SIMD3(t.columns.2.x, t.columns.2.y, t.columns.2.z)),
+                intrinsics: frame.camera.intrinsics,
+                timestamp: frame.timestamp)
+            outliner.process(frame.capturedImage, camera: camera) { sight in
+                MainActor.assumeIsolated { self.onSight?(sight) }
                 self.queue.async { self.outliner.markIdle() }
             }
         }

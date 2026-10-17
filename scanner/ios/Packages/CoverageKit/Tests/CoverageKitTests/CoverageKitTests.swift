@@ -666,3 +666,96 @@ final class ItemOnPaperTests: XCTestCase {
         XCTAssertNil(ItemOnPaper.segment(g))
     }
 }
+
+final class PaperTurnTests: XCTestCase {
+    private func reading(_ deg: Float, confidence: Float = 0.6) -> SheetAngle.Reading {
+        var a = (deg * .pi / 180).truncatingRemainder(dividingBy: .pi / 2)
+        if a < 0 { a += .pi / 2 }
+        return SheetAngle.Reading(angleMod90: a, confidence: confidence, samples: 500)
+    }
+
+    func testUnwrapsTwoLapsBothWays() {
+        for dir: Float in [1, -1] {
+            var turn = PaperTurn()
+            // Two laps in 20 s read at 7.5 Hz: 4.8° per read, across every 90° wrap.
+            for i in 0...150 { turn.update(reading(10 + dir * Float(i) * 4.8), time: Double(i) / 7.5) }
+            XCTAssertEqual(turn.turned * 180 / .pi, dir * 720, accuracy: 0.01)
+        }
+    }
+
+    func testIgnoresUnsureAndImpossibleReadings() {
+        var turn = PaperTurn()
+        turn.update(reading(20), time: 0)
+        XCTAssertFalse(turn.update(reading(60, confidence: 0.1), time: 0.13))   // unsure
+        XCTAssertFalse(turn.update(reading(55), time: 0.13))                    // 35° in 0.13 s: a hand, not the paper
+        XCTAssertTrue(turn.update(reading(24), time: 0.26))
+        XCTAssertEqual(turn.turned * 180 / .pi, 4, accuracy: 0.01)
+    }
+
+    func testRestartMakesNowTheStart() {
+        var turn = PaperTurn()
+        for i in 0...10 { turn.update(reading(Float(i) * 3), time: Double(i) / 7.5) }
+        turn.restart()
+        XCTAssertEqual(turn.turned, 0)
+        turn.update(reading(33), time: 11 / 7.5)
+        XCTAssertEqual(turn.turned * 180 / .pi, 3, accuracy: 0.01)
+    }
+}
+
+final class TurnCoverageTests: XCTestCase {
+    /// Turns the item `degrees` over `seconds` at a fixed elevation, observed at 7.5 Hz.
+    private func turn(_ c: inout TurnCoverage, from start: Float, by degrees: Float, seconds: Double, elevationDeg: Float) {
+        let n = Int(seconds * 7.5)
+        for i in 1...n {
+            c.observe(turned: (start + degrees * Float(i) / Float(n)) * .pi / 180, elevation: elevationDeg * .pi / 180, dt: 1 / 7.5)
+        }
+    }
+
+    func testOneLapAtOneHeightIsHalf() {
+        var c = TurnCoverage()
+        c.observe(turned: 0, elevation: 0.9, dt: 0)
+        turn(&c, from: 0, by: 370, seconds: 10, elevationDeg: 0.9 * 180 / .pi)
+        XCTAssertEqual(c.percent, 50)
+        XCTAssertTrue(c.arcs(band: 0, count: 12).allSatisfy { $0 >= 0.999 })
+        XCTAssertTrue(c.arcs(band: 1, count: 12).allSatisfy { $0 == 0 })
+    }
+
+    func testTwoLapsAtTwoHeightsIsFull() {
+        for dir: Float in [1, -1] {
+            var c = TurnCoverage()
+            turn(&c, from: 0, by: dir * 370, seconds: 10, elevationDeg: 55)
+            turn(&c, from: dir * 370, by: dir * 370, seconds: 10, elevationDeg: 30)   // lower, as the demo does
+            XCTAssertEqual(c.percent, 100)
+        }
+    }
+
+    func testStandingStillOnlyCoversTheFront() {
+        var c = TurnCoverage()
+        for _ in 0..<150 { c.observe(turned: 0, elevation: 0.9, dt: 1 / 7.5) }
+        XCTAssertEqual(c.level(side: 0), 1, accuracy: 0.001 + 0.5)   // both heights averaged: half
+        XCTAssertEqual(c.level(side: .pi), 0)                          // the back was never seen
+        XCTAssertLessThan(c.percent, 25)
+    }
+
+    func testPercentNeverDropsAndOnlyCountsMeasuredTime() {
+        var c = TurnCoverage()
+        var last = 0
+        for i in 0..<300 {
+            c.observe(turned: Float(i) * 0.02, elevation: 0.9, dt: 1 / 7.5)
+            XCTAssertGreaterThanOrEqual(c.percent, last)
+            last = c.percent
+        }
+        // A long gap (paper lost) counts at most 0.25 s.
+        var gap = TurnCoverage()
+        gap.observe(turned: 0, elevation: 0.9, dt: 30)
+        XCTAssertEqual(gap.level(side: 0), 0.125, accuracy: 0.01)
+    }
+
+    func testSidesSeenAcrossTheSilhouette() {
+        var c = TurnCoverage()
+        c.observe(turned: 0.5, elevation: 0.9, dt: 0)
+        XCTAssertEqual(c.side(atOffset: 0), -0.5, accuracy: 1e-6)          // the middle faces the camera
+        XCTAssertEqual(c.side(atOffset: 1), -0.5 - .pi / 2, accuracy: 1e-6) // the right edge: a quarter turn anticlockwise
+        XCTAssertEqual(c.side(atOffset: -1), -0.5 + .pi / 2, accuracy: 1e-6)
+    }
+}

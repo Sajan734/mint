@@ -19,6 +19,7 @@ struct CaptureView: View {
 
             TimelineView(.animation) { ctx in
                 ScanOverlay(outline: session.outline, sparkles: session.sparkles, recording: session.isRecording,
+                            tint: session.tint, tintAxis: session.tintAxis, percent: session.percent,
                             time: ctx.date.timeIntervalSinceReferenceDate)
             }
             .ignoresSafeArea()
@@ -160,10 +161,12 @@ private struct Caption: View {
         case .ready: return ("Put it on a sheet of paper. Tap Scan.", "viewfinder")
         case .countdown: return ("Get ready to turn the paper", "arrow.triangle.2.circlepath")
         case .recording:
-            let t = session.recordStart.map { now.timeIntervalSince($0) } ?? 0
-            return t < CaptureSession.duration / 2
-                ? ("Lap 1 · turn the paper slowly", "arrow.triangle.2.circlepath")
-                : ("Lap 2 · raise the phone, keep turning", "arrow.up.circle")
+            // Follows the measurement: first height's ring, then the other height's.
+            if session.percent >= 100 { return ("Every side covered", "checkmark.seal") }
+            if !session.paperSeen { return ("Keep the sheet in view", "viewfinder") }
+            return session.rings[0].allSatisfy({ $0 >= 0.9 })
+                ? ("Now lower the phone · keep turning", "arrow.down.circle")
+                : ("Turn the paper slowly", "arrow.triangle.2.circlepath")
         case .saving: return ("Sealing the capture…", "seal")
         case .done: return ("", "")
         case .failed(let message): return (message, "exclamationmark.triangle")
@@ -177,6 +180,10 @@ struct ScanOverlay: View {
     let outline: [CGPoint]
     let sparkles: [CGPoint]
     let recording: Bool
+    /// How well each side has been seen, across the silhouette along `tintAxis` (empty: not scanning).
+    let tint: [Double]
+    let tintAxis: CGVector
+    let percent: Int
     let time: Double
 
     var body: some View {
@@ -186,10 +193,27 @@ struct ScanOverlay: View {
             let box = shape.boundingRect
             let mint = Color.brandMint
 
-            // Inside the silhouette: a faint fill, a fine grid, and (recording) a bright band sweeping over it.
+            // Inside the silhouette: the coverage tint (mintier where that side has been seen), a fine
+            // grid, and (recording) a bright band sweeping over it.
             ctx.drawLayer { layer in
                 layer.clip(to: shape)
-                layer.fill(shape, with: .color(mint.opacity(recording ? 0.16 : 0.08)))
+                if tint.count > 1 {
+                    // The silhouette's extent along the axis the item's sides run across.
+                    let d = outline.map { $0.x * tintAxis.dx + $0.y * tintAxis.dy }
+                    let lo = d.min()!, hi = d.max()!
+                    let c = CGPoint(x: box.midX, y: box.midY)
+                    let off = (lo + hi) / 2 - (c.x * tintAxis.dx + c.y * tintAxis.dy)
+                    let mid = CGPoint(x: c.x + tintAxis.dx * off, y: c.y + tintAxis.dy * off)
+                    let half = max(1, (hi - lo) / 2)
+                    let stops = tint.enumerated().map { i, l in
+                        Gradient.Stop(color: Self.coverageColor(l), location: CGFloat(i) / CGFloat(tint.count - 1))
+                    }
+                    layer.fill(shape, with: .linearGradient(Gradient(stops: stops),
+                        startPoint: CGPoint(x: mid.x - tintAxis.dx * half, y: mid.y - tintAxis.dy * half),
+                        endPoint: CGPoint(x: mid.x + tintAxis.dx * half, y: mid.y + tintAxis.dy * half)))
+                } else {
+                    layer.fill(shape, with: .color(mint.opacity(recording ? 0.16 : 0.08)))
+                }
                 var grid = Path()
                 let step: CGFloat = 11
                 var x = box.minX - box.height
@@ -215,7 +239,8 @@ struct ScanOverlay: View {
                 layer.addFilter(.blur(radius: recording ? 10 : 7))
                 layer.stroke(shape, with: .color(mint.opacity(0.85 * pulse)), lineWidth: recording ? 9 : 6)
             }
-            ctx.stroke(shape, with: .color(recording ? mint : .white.opacity(0.92)), style: StrokeStyle(lineWidth: 2.4, lineJoin: .round))
+            ctx.stroke(shape, with: .color(recording || !tint.isEmpty ? Self.coverageColor(0.3 + 0.7 * Double(percent) / 100, alpha: 1) : .white.opacity(0.92)),
+                       style: StrokeStyle(lineWidth: 2.4, lineJoin: .round))
 
             // Corner brackets.
             let r = box.insetBy(dx: -18, dy: -18)
@@ -238,6 +263,16 @@ struct ScanOverlay: View {
     }
 }
 
+extension ScanOverlay {
+    /// Not seen yet: a faint white veil. Fully seen: solid mint glass.
+    static func coverageColor(_ level: Double, alpha: Double? = nil) -> Color {
+        let l = max(0, min(1, level))
+        let w = 1 - l
+        return Color(.sRGB, red: w + l * 0x3D / 255, green: w + l * 0xDC / 255, blue: w + l * 0x97 / 255,
+                     opacity: alpha ?? (0.07 + 0.58 * l))
+    }
+}
+
 extension Path {
     /// A closed Catmull-Rom curve through the points.
     static func smoothClosed(_ p: [CGPoint]) -> Path {
@@ -256,72 +291,70 @@ extension Path {
     }
 }
 
-// MARK: - The ring: two laps, segment by segment, with the percentage
+// MARK: - The ring: the item's sides at the two heights, with the percentage
 
 private struct CaptureRing: View {
     @ObservedObject var session: CaptureSession
     let now: Date
 
-    private var progress: Double {
-        switch session.phase {
-        case .recording: return Double(session.shownPercent) / 100
-        case .saving, .done: return 1
-        default: return 0
-        }
-    }
-
     var body: some View {
-        let p = progress
         ZStack {
             Canvas { ctx, size in
                 let c = CGPoint(x: size.width / 2, y: size.height / 2)
                 let mint = Color.brandMint
                 let n = CaptureSession.segments
-                for lap in 0..<2 {
-                    let radius = (lap == 0 ? 0.47 : 0.38) * min(size.width, size.height)
-                    let lapP = max(0, min(1, p * 2 - Double(lap)))   // this ring's own 0…1
+                // Outer ring: the first height. Inner ring: the other height. Each arc is a slice of the
+                // item's sides, lit as brightly as that slice has been seen.
+                for band in 0..<2 {
+                    let radius = (band == 0 ? 0.47 : 0.38) * min(size.width, size.height)
                     for k in 0..<n {
                         let a0 = -90 + Double(k) * 360 / Double(n) + 2.2
                         let a1 = -90 + Double(k + 1) * 360 / Double(n) - 2.2
-                        let fill = max(0, min(1, lapP * Double(n) - Double(k)))   // 0…1 of this segment
-                        var base = Path()
-                        base.addArc(center: c, radius: radius, startAngle: .degrees(a0), endAngle: .degrees(a1), clockwise: false)
-                        ctx.stroke(base, with: .color(.white.opacity(0.16)), style: StrokeStyle(lineWidth: 11, lineCap: .round))
-                        if fill > 0 {
-                            var lit = Path()
-                            lit.addArc(center: c, radius: radius, startAngle: .degrees(a0), endAngle: .degrees(a0 + (a1 - a0) * fill), clockwise: false)
+                        var arc = Path()
+                        arc.addArc(center: c, radius: radius, startAngle: .degrees(a0), endAngle: .degrees(a1), clockwise: false)
+                        ctx.stroke(arc, with: .color(.white.opacity(0.16)), style: StrokeStyle(lineWidth: 11, lineCap: .round))
+                        let f = session.rings[band][k]
+                        guard f > 0.02 else { continue }
+                        if f >= 0.98 {
                             ctx.drawLayer { l in
                                 l.addFilter(.blur(radius: 5))
-                                l.stroke(lit, with: .color(mint.opacity(0.8)), style: StrokeStyle(lineWidth: 13, lineCap: .round))
+                                l.stroke(arc, with: .color(mint.opacity(0.8)), style: StrokeStyle(lineWidth: 13, lineCap: .round))
                             }
-                            ctx.stroke(lit, with: .color(mint), style: StrokeStyle(lineWidth: 11, lineCap: .round))
                         }
+                        ctx.stroke(arc, with: .color(mint.opacity(0.2 + 0.8 * f)), style: StrokeStyle(lineWidth: 11, lineCap: .round))
                     }
                 }
             }
-            center(p)
+            center
         }
-        .scaleEffect(session.phase.isDone ? 1.06 : 1)
-        .animation(.spring(response: 0.4, dampingFraction: 0.5), value: session.phase.isDone)
+        .scaleEffect(session.phase.isFinished ? 1.06 : 1)
+        .animation(.spring(response: 0.4, dampingFraction: 0.5), value: session.phase.isFinished)
     }
 
-    @ViewBuilder private func center(_ p: Double) -> some View {
+    @ViewBuilder private var center: some View {
         switch session.phase {
         case .recording:
             VStack(spacing: 0) {
-                Text("\(Int(p * 100))")
+                Text("\(session.percent)")
                     .font(.system(size: 46, weight: .heavy, design: .rounded)).monospacedDigit()
                     + Text("%").font(.system(size: 22, weight: .bold, design: .rounded))
-                Text(p < 0.5 ? "LAP 1" : "LAP 2")
+                Text("COVERED")
                     .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.5)
                     .foregroundStyle(Color.brandMint)
             }
             .foregroundStyle(.white)
+            .contentTransition(.numericText(value: Double(session.percent)))
+            .animation(.snappy(duration: 0.2), value: session.percent)
         case .saving, .done:
-            Image(systemName: "checkmark.seal.fill")
-                .font(.system(size: 54, weight: .bold))
-                .foregroundStyle(Color.brandMint)
-                .shadow(color: .brandMint.opacity(0.8), radius: 16)
+            VStack(spacing: 2) {
+                Image(systemName: "checkmark.seal.fill")
+                    .font(.system(size: 46, weight: .bold))
+                    .foregroundStyle(Color.brandMint)
+                    .shadow(color: .brandMint.opacity(0.8), radius: 16)
+                Text("\(session.percent)% COVERED")
+                    .font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.2)
+                    .foregroundStyle(.white)
+            }
         default:
             ZStack {
                 Circle().fill(.white).frame(width: 112, height: 112)
@@ -329,13 +362,6 @@ private struct CaptureRing: View {
             }
             .shadow(color: .brandMint.opacity(0.45), radius: 18)
         }
-    }
-}
-
-private extension CaptureSession.Phase {
-    var isDone: Bool {
-        if case .done = self { return true }
-        return self == .saving
     }
 }
 

@@ -1,35 +1,67 @@
 import CoreVideo
 import CoverageKit
+import simd
 import Vision
 
-/// The item's live outline for the overlay. On a sheet of paper (the demo setup) the item is what
-/// the sheet encloses (`ItemOnPaper`); otherwise Vision's subject segmentation. Runs on its own
-/// queue and drops frames while busy, so it never slows the camera or the recording.
+/// The item's live outline for the overlay and, on a sheet of paper, the paper's angle (how far the
+/// turntable has turned). On a sheet of paper (the demo setup) the item is what the sheet encloses
+/// (`ItemOnPaper`); otherwise Vision's subject segmentation. Runs on its own queue and drops frames
+/// while busy, so it never slows the camera or the recording.
 final class SubjectOutliner {
     /// Outline points, sensor-normalized (0…1, origin top-left of the landscape camera image).
     typealias Outline = [CGPoint]
+
+    /// What one camera frame shows.
+    struct Sight {
+        let outline: Outline?
+        let paper: SheetAngle.Reading?   // nil: no sheet, or its edges weren't clear (a hand over it)
+        let elevation: Float?            // the camera above the item, radians
+        let timestamp: TimeInterval
+    }
+
+    /// The camera for one frame, copied out of the ARFrame (which mustn't be held).
+    struct Camera {
+        let rotation: simd_float3x3      // camera → world, ARKit camera axes
+        let intrinsics: simd_float3x3    // sensor pixels
+        let timestamp: TimeInterval
+    }
+
+    static let step = 6   // 1920 × 1440 sensor → 320 × 240 grid
 
     private let queue = DispatchQueue(label: "mint.outline", qos: .userInitiated)
     private var busy = false  // touched on the caller's queue only
 
     /// Call from one queue. `completion` runs on the main queue; then call `markIdle()` on the caller's queue.
-    func process(_ pixelBuffer: CVPixelBuffer, completion: @escaping (Outline?) -> Void) {
+    func process(_ pixelBuffer: CVPixelBuffer, camera: Camera, completion: @escaping (Sight) -> Void) {
         guard !busy else { return }
         busy = true
         queue.async {
-            let outline = Self.onPaper(pixelBuffer) ?? Self.visionSubject(pixelBuffer)
-            DispatchQueue.main.async { completion(outline) }
+            let sight = Self.onPaper(pixelBuffer, camera: camera)
+                ?? Sight(outline: Self.visionSubject(pixelBuffer), paper: nil, elevation: nil, timestamp: camera.timestamp)
+            DispatchQueue.main.async { completion(sight) }
         }
     }
 
     func markIdle() { busy = false }
 
-    /// The item on the sheet of paper (the demo setup): what the sheet encloses. Works on the
-    /// camera image directly (sensor orientation), downsampled ×6 to 320 × 240.
-    static func onPaper(_ pixelBuffer: CVPixelBuffer) -> Outline? {
-        guard let grid = grid(pixelBuffer, step: 6), let r = ItemOnPaper.segment(grid),
+    /// The item on the sheet of paper (the demo setup): what the sheet encloses, plus the sheet's
+    /// angle. Works on the camera image directly (sensor orientation), downsampled ×6 to 320 × 240.
+    static func onPaper(_ pixelBuffer: CVPixelBuffer, camera: Camera) -> Sight? {
+        guard let grid = grid(pixelBuffer, step: step), let r = ItemOnPaper.segment(grid),
               let pts = Contours.outline(r.item, width: grid.width, height: grid.height) else { return nil }
-        return pts  // already sensor-normalized: the grid is the sensor image
+        let k = SheetAngle.Intrinsics(arkit: camera.intrinsics, step: Float(step))
+        guard let frame = SheetAngle.HeadingFrame(cameraRotation: camera.rotation) else {
+            return Sight(outline: pts, paper: nil, elevation: nil, timestamp: camera.timestamp)
+        }
+        let paper = SheetAngle.read(sheet: r.sheet, item: r.item, width: grid.width, height: grid.height, intrinsics: k, frame: frame)
+        // Elevation above the item's middle (the mean of its pixels).
+        var sx: Float = 0, sy: Float = 0, n: Float = 0
+        for y in 0..<grid.height {
+            for x in 0..<grid.width where r.item[y * grid.width + x] != 0 { sx += Float(x); sy += Float(y); n += 1 }
+        }
+        let elevation = n > 0 ? frame.elevation(sx / n, sy / n, k) : nil
+        // `pts` is already sensor-normalized: the grid is the sensor image.
+        return Sight(outline: pts, paper: paper, elevation: elevation, timestamp: camera.timestamp)
     }
 
     /// Brightness + colour strength from the YCbCr camera image, every `step`-th pixel.

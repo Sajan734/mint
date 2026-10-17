@@ -1,5 +1,6 @@
 import ARKit
 import Combine
+import CoverageKit
 import RealityKit
 import UIKit
 
@@ -25,12 +26,22 @@ final class CaptureSession: NSObject, ObservableObject {
     }
 
     static let duration: TimeInterval = 20
-    static let segments = 12   // per lap ring
+    static let segments = 12   // per height ring
+    static let tintSamples = 25
 
     @Published private(set) var phase: Phase = .ready
     @Published private(set) var recordStart: Date?
-    /// The percentage on screen: stalls and jumps like a live measurement catching up (see ProgressStepper).
-    @Published private(set) var shownPercent = 0
+    /// How much of the item has been seen (`TurnCoverage`): measured from the paper's turn and the
+    /// camera's height, nothing scripted.
+    @Published private(set) var percent = 0
+    /// rings[height][arc], 0…1: the first height's ring, then the other height's.
+    @Published private(set) var rings: [[Double]] = Array(repeating: Array(repeating: 0, count: segments), count: 2)
+    /// How well each side of the item has been seen, sampled across its silhouette from one edge to the
+    /// other along `tintAxis` (view space): the overlay paints the item mintier where it's been seen.
+    @Published private(set) var tint: [Double] = []
+    @Published private(set) var tintAxis = CGVector(dx: 1, dy: 0)
+    /// The sheet's edges were read in the last moment (false: no paper, or hands covering it).
+    @Published private(set) var paperSeen = false
     @Published private(set) var outline: [CGPoint] = []      // view points, smoothed
     @Published private(set) var sparkles: [CGPoint] = []     // ARKit feature points on/near the item, view points
     @Published private(set) var upload: Upload = .notConfigured
@@ -42,8 +53,11 @@ final class CaptureSession: NSObject, ObservableObject {
     private var smoother = OutlineSmoother()
     private var lastOutlineAt = Date.distantPast
     private var ticker: Timer?
-    private var lastSegment = -1
-    private var stepper = ProgressStepper()
+    private var turn = PaperTurn()
+    private var coverage = TurnCoverage()
+    private var lastObservation: TimeInterval?
+    private var lastPaperAt = Date.distantPast
+    private var fullArcs: Set<Int> = []
     private var exposureLocked = false
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let bump = UIImpactFeedbackGenerator(style: .heavy)
@@ -56,7 +70,7 @@ final class CaptureSession: NSObject, ObservableObject {
                                 .disableGroundingShadows, .disableAREnvironmentLighting]
         arView.session.delegate = loop
         arView.session.delegateQueue = loop.queue
-        loop.onOutline = { [weak self] in self?.applyOutline($0) }
+        loop.onSight = { [weak self] in self?.apply($0) }
     }
 
     func run() {
@@ -93,6 +107,9 @@ final class CaptureSession: NSObject, ObservableObject {
         phase = .ready
         recordStart = nil
         upload = .notConfigured
+        coverage = TurnCoverage()
+        tint = []
+        publishCoverage()
     }
 
     func retryUpload() {
@@ -115,9 +132,11 @@ final class CaptureSession: NSObject, ObservableObject {
             return
         }
         exposureLocked = CameraLock.lock()
-        lastSegment = -1
-        stepper = ProgressStepper()
-        shownPercent = 0
+        turn.restart()
+        coverage = TurnCoverage()
+        lastObservation = nil
+        fullArcs = []
+        publishCoverage()
         recordStart = Date()
         phase = .recording
         bump.impactOccurred()
@@ -127,7 +146,6 @@ final class CaptureSession: NSObject, ObservableObject {
     private func stop() {
         guard phase == .recording else { return }
         phase = .saving
-        shownPercent = 100
         success.notificationOccurred(.success)
         let locked = exposureLocked
         loop.stopRecording { recorder, sensorSize in
@@ -176,23 +194,65 @@ final class CaptureSession: NSObject, ObservableObject {
         }
     }
 
-    /// 15 Hz: recording clock (haptic per lit segment, lap change, auto-stop at 20 s) and sparkles.
+    /// 15 Hz: recording clock (auto-stop at 20 s), sparkles, and whether the paper is in view.
     private func onTick() {
-        if phase == .recording, let start = recordStart {
-            let t = Date().timeIntervalSince(start)
-            shownPercent = stepper.step(elapsed: t, duration: Self.duration)
-            let segment = min(2 * Self.segments, shownPercent * 2 * Self.segments / 100)
-            if segment != lastSegment {
-                if segment == Self.segments { bump.impactOccurred() } else if segment > 0 { tick.impactOccurred(intensity: 0.5) }
-                lastSegment = segment
-            }
-            if t >= Self.duration { stop() }
-        }
+        if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.duration { stop() }
+        let seen = Date().timeIntervalSince(lastPaperAt) < 0.6
+        if seen != paperSeen { paperSeen = seen }
         updateSparkles()
         // The outline fades if the item hasn't been seen for a moment.
         if !outline.isEmpty && Date().timeIntervalSince(lastOutlineAt) > 0.8 {
             outline = []
             smoother = OutlineSmoother()
+        }
+    }
+
+    /// A new reading of the frame: the outline, and (on paper) how far it has turned, which while
+    /// recording is what fills the coverage.
+    private func apply(_ sight: SubjectOutliner.Sight) {
+        if let reading = sight.paper, turn.update(reading, time: sight.timestamp) {
+            lastPaperAt = Date()
+            if phase == .recording, let elevation = sight.elevation {
+                coverage.observe(turned: turn.turned, elevation: elevation, dt: lastObservation.map { sight.timestamp - $0 } ?? 0)
+                lastObservation = sight.timestamp
+                publishCoverage()
+            }
+        }
+        applyOutline(sight.outline)
+        if phase == .recording || phase.isFinished { updateTint() }
+    }
+
+    private func publishCoverage() {
+        percent = coverage.percent
+        rings = (0..<TurnCoverage.bands).map { b in coverage.arcs(band: b, count: Self.segments).map(Double.init) }
+        // A tick for every arc that fills, a thump when a whole height is done.
+        for b in 0..<TurnCoverage.bands {
+            for (k, f) in rings[b].enumerated() where f >= 0.98 && !fullArcs.contains(b * Self.segments + k) {
+                fullArcs.insert(b * Self.segments + k)
+                tick.impactOccurred(intensity: 0.5)
+                if rings[b].allSatisfy({ $0 >= 0.98 }) { bump.impactOccurred() }
+            }
+        }
+    }
+
+    /// Samples how well each side has been seen across the silhouette as it faces the camera now,
+    /// and which way the item's sides run across the screen (the camera's horizontal right).
+    private func updateTint() {
+        guard let frame = arView.session.currentFrame else { return }
+        let t = frame.camera.transform
+        let r = simd_float3x3(SIMD3(t.columns.0.x, t.columns.0.y, t.columns.0.z), SIMD3(t.columns.1.x, t.columns.1.y, t.columns.1.z),
+                              SIMD3(t.columns.2.x, t.columns.2.y, t.columns.2.z))
+        guard let heading = SheetAngle.HeadingFrame(cameraRotation: r) else { return }
+        let size = arView.bounds.size
+        let position = SIMD3(t.columns.3.x, t.columns.3.y, t.columns.3.z)
+        let ahead = position + r * SIMD3<Float>(0, 0, -0.3)
+        let a = frame.camera.projectPoint(ahead, orientation: .portrait, viewportSize: size)
+        let b = frame.camera.projectPoint(ahead + 0.02 * heading.right, orientation: .portrait, viewportSize: size)
+        let len = hypot(b.x - a.x, b.y - a.y)
+        if len > 0.5 { tintAxis = CGVector(dx: (b.x - a.x) / len, dy: (b.y - a.y) / len) }
+        tint = (0..<Self.tintSamples).map { i in
+            let s = Float(i) / Float(Self.tintSamples - 1) * 2 - 1
+            return Double(coverage.level(side: coverage.side(atOffset: s)))
         }
     }
 
@@ -227,36 +287,16 @@ final class CaptureSession: NSObject, ObservableObject {
     }
 }
 
-private extension CaptureSession.Phase {
+extension CaptureSession.Phase {
     var isCountdown: Bool {
         if case .countdown = self { return true }
         return false
     }
-}
 
-/// The on-screen percentage. The recording itself is a fixed 20 s; this makes the number read like a
-/// live measurement: it holds for a moment (sometimes longer), then jumps by an uneven amount,
-/// with a big catch-up after a long stall. It never goes backwards, never runs more than 2 points
-/// ahead of the real elapsed share, and only shows 100 when the 20 s are up.
-struct ProgressStepper {
-    private(set) var shown = 0
-    private var holdUntil: TimeInterval = 0
-
-    mutating func step(elapsed t: TimeInterval, duration: TimeInterval) -> Int {
-        if t >= duration {
-            shown = 100
-            return shown
-        }
-        guard t >= holdUntil else { return shown }
-        let truth = Int(t / duration * 100)
-        let gap = truth - shown
-        guard gap > 0 else { return shown }
-        let jump = gap > 10 ? Int.random(in: gap / 2...gap)          // catching up after a stall
-                            : Int.random(in: 1...min(gap + 2, 7))     // small, uneven steps
-        shown = min(99, shown + jump, truth + 2)
-        // Mostly short pauses; now and then a longer "thinking" stall.
-        holdUntil = t + (Double.random(in: 0...1) < 0.15 ? Double.random(in: 1.1...2.0) : Double.random(in: 0.12...0.7))
-        return shown
+    /// Saving or done: the scan is over and its coverage stays on screen.
+    var isFinished: Bool {
+        if case .done = self { return true }
+        return self == .saving
     }
 }
 
