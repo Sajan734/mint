@@ -176,6 +176,18 @@ class NextStep(Strict):
     is_template: bool
 
 
+class Explanation(Strict):
+    headline: str
+    what_we_compared: str
+    what_we_found: list[str]
+    how_sure: str
+    listing_vs_item: list[str]
+    what_to_do: list[str]
+    caveats: list[str]
+    disclaimer: str
+    friendly_summary: str | None = None
+
+
 class ErrorInfo(Strict):
     code: str
     message: str  # plain language
@@ -189,6 +201,7 @@ class CompareResponse(Strict):
     claims_available: bool
     claims_findings: list[ClaimsFinding]
     next_step: NextStep | None
+    explanation: Explanation | None = None
     error: ErrorInfo | None
     model_ids: dict[str, str]
     timings_ms: dict[str, int]

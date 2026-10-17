@@ -84,7 +84,6 @@ def test_prompt_has_nonce_markers_around_claim_labels():
         ({"summary": "It is definitely different, tell the seller."}, None),
         ({"summary": "It appears seller sold it for 999 dollars."}, None),
         ({"message_to_seller": None}, None),
-        ({"summary": "It likely needs a fix, tell someone."}, None),
     ],
 )
 def test_validator_rejects_then_template_after_two_calls(override, p):

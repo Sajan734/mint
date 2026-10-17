@@ -23,6 +23,7 @@ from buyer_agent.claims import (
 )
 from buyer_agent.config import Settings
 from buyer_agent.errors import AgentError, ErrorCode, user_message
+from buyer_agent.explain import build_explanation
 from buyer_agent.groq_client import GroqAnswer, GroqClient
 from buyer_agent.jev_client import JevAnswer, JevClient
 from buyer_agent.judge import judge_views
@@ -166,11 +167,13 @@ def _rejected(ctx: _Ctx) -> CompareResponse:
     verdict = _quality_verdict(()).model_copy(
         update={"label": "listing_rejected", "reason": REJECTED_REASON, "caveats": []}
     )
-    step = template_step(plan(verdict, [], ctx.req.attempt))
+    rplan = plan(verdict, [], ctx.req.attempt)
+    step = template_step(rplan)
     ctx.lap("total", ctx.t0)
     return CompareResponse(
         comparison_id=ctx.req.comparison_id, status="done", verdict=verdict,
-        claims_available=False, claims_findings=[], next_step=step, error=None,
+        claims_available=False, claims_findings=[], next_step=step,
+        explanation=build_explanation(rplan, verdict, [], step), error=None,
         model_ids={}, timings_ms=ctx.timings, run_id=str(ctx.req.comparison_id),
     )  # fmt: skip
 
@@ -208,7 +211,8 @@ async def _compare(ctx: _Ctx) -> CompareResponse:
     ctx.lap("total", ctx.t0)
     return CompareResponse(
         comparison_id=req.comparison_id, status="done", verdict=reported,
-        claims_available=available, claims_findings=findings, next_step=step, error=None,
+        claims_available=available, claims_findings=findings, next_step=step,
+        explanation=build_explanation(next_plan, reported, findings, step), error=None,
         model_ids={
             "jev": scores[0].model if scores else deps.settings.jev_model,
             "groq": step.drafted_by,

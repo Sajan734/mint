@@ -71,7 +71,33 @@ def build_pairs_from_folders(data_root: Path, a_dir: Path, b_dir: Path, name: st
     return (folder / "pairs.json").relative_to(data_root).as_posix()
 
 
-def show(d: dict) -> None:
+def show_explanation(e: dict) -> None:
+    out(e["headline"])
+    out()
+    if e.get("friendly_summary"):
+        out(e["friendly_summary"])
+        out()
+    out(f"What we compared: {e['what_we_compared']}")
+    out("What we found:")
+    for line in e["what_we_found"]:
+        out(f"  - {line}")
+    out(f"How sure: {e['how_sure']}")
+    if e["listing_vs_item"]:
+        out("Listing vs your item:")
+        for line in e["listing_vs_item"]:
+            out(f"  - {line}")
+    out("What to do:")
+    for i, line in enumerate(e["what_to_do"], 1):
+        out(f"  {i}. {line}")
+    for note in e["caveats"]:
+        out(f"Note: {note}")
+    out(e["disclaimer"])
+
+
+def show(d: dict, brief: bool = False) -> None:
+    if brief and d.get("explanation"):
+        show_explanation(d["explanation"])
+        return
     verdict = d.get("verdict") or {}
     out(f"status        : {d.get('status')}")
     out(f"verdict       : {verdict.get('label')}   evidence score: {verdict.get('evidence_score')}")
@@ -97,6 +123,9 @@ def show(d: dict) -> None:
     out(f"timings (ms)  : {d.get('timings_ms')}")
     if d.get("error"):
         out(f"error         : {d['error']}")
+    if d.get("explanation"):
+        out()
+        show_explanation(d["explanation"])
 
 
 def main() -> None:
@@ -107,6 +136,7 @@ def main() -> None:
     ap.add_argument("--folders", nargs=2, metavar=("SELLER_DIR", "BUYER_DIR"))
     ap.add_argument("--name", default="mine")
     ap.add_argument("--list", action="store_true")
+    ap.add_argument("--brief", action="store_true", help="print only the explanation")
     args = ap.parse_args()
 
     import os
@@ -144,7 +174,7 @@ def main() -> None:
     out(f"Running {manifest} with listing {args.listing} (live Jev + Groq)...")
     r = client.post("/v1/comparisons", json=body, headers={"Authorization": f"Bearer {token}"})
     out(f"HTTP {r.status_code}")
-    show(r.json())
+    show(r.json(), args.brief)
 
 
 if __name__ == "__main__":
