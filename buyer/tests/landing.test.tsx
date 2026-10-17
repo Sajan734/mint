@@ -78,7 +78,7 @@ describe("Landing page", { timeout: 20_000 }, () => {
     await home();
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Good finds from down the street.");
     expect(screen.getByRole("link", { name: /^Browse \d+ items$/ })).toHaveAttribute("href", "#items-h");
-    expect(screen.getByText(/^A real Mint scan of a ThinkPad mouse/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Sony Alpha 7 for sale here" })).toHaveAttribute("href", "/listing/itm_sony_a7");
     for (const name of ["Picked for you", "Bought from a neighbour, seen from every side.", "Great deals", "Garage sales near you", "Everything for sale"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
@@ -117,8 +117,8 @@ describe("Landing page", { timeout: 20_000 }, () => {
   });
 
   it("a search shows its results without the shelves", async () => {
-    await home({ q: "headphones" });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Results for “headphones”");
+    await home({ q: "lego" });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Results for “lego”");
     expect(screen.queryByRole("heading", { name: "Great deals" })).toBeNull();
     expect(screen.queryByRole("heading", { name: "Picked for you" })).toBeNull();
     expect(screen.getByRole("list", { name: "Items for sale" })).toBeInTheDocument();

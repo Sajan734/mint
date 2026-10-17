@@ -94,6 +94,8 @@ final class CaptureSession: NSObject, ObservableObject {
     private var previewing = false   // Debug screen previews only
     private var reportedTenth = -1
     private var exposureLocked = false
+    private var lastAim: CGPoint?
+    private var lastAimAt = Date.distantPast
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let bump = UIImpactFeedbackGenerator(style: .heavy)
     private let success = UINotificationFeedbackGenerator()
@@ -112,12 +114,17 @@ final class CaptureSession: NSObject, ObservableObject {
 
     func run() {
         let config = ARWorldTrackingConfiguration()
-        // Full 4:3 sensor frames: ARKit's K refers to exactly these pixels (the poses stay exact).
-        if let format = ARWorldTrackingConfiguration.supportedVideoFormats
-            .filter({ $0.imageResolution == CGSize(width: 1920, height: 1440) })
-            .max(by: { $0.framesPerSecond < $1.framesPerSecond }) {
+        // Full 4:3 sensor frames from the main (1x, wide-angle) back camera: ARKit's K refers to exactly these
+        // pixels (the poses stay exact). Asking for the wide camera by name: a format is otherwise picked by size
+        // and frame rate alone, which on some iPhones can land on the ultra-wide, with softer edges and weaker
+        // autofocus up close.
+        let formats = ARWorldTrackingConfiguration.supportedVideoFormats
+            .filter { $0.imageResolution == CGSize(width: 1920, height: 1440) }
+        let wide = formats.filter { $0.captureDeviceType == .builtInWideAngleCamera && $0.captureDevicePosition == .back }
+        if let format = (wide.isEmpty ? formats : wide).max(by: { $0.framesPerSecond < $1.framesPerSecond }) {
             config.videoFormat = format
         }
+        config.isAutoFocusEnabled = true
         arView.session.run(config, options: [.resetTracking])
         ticker?.invalidate()
         ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
@@ -369,7 +376,10 @@ final class CaptureSession: NSObject, ObservableObject {
     /// turned, which while recording fills the coverage.
     private func apply(_ sight: PaperReader.Sight) {
         if let code = sight.code { follow(code) }
-        if let box = sight.itemBox { track(box) }
+        if let box = sight.itemBox {
+            track(box)
+            aimCamera(at: box)
+        }
         guard let reading = sight.paper, turn.update(reading, time: sight.timestamp) else { return }
         lastPaperAt = Date()
         // Once the lap is done the measurement stops: hand-held touch-ups (walking round, other heights)
@@ -378,6 +388,18 @@ final class CaptureSession: NSObject, ObservableObject {
         coverage.observe(turned: turn.turned, elevation: elevation, dt: lastObservation.map { sight.timestamp - $0 } ?? 0)
         lastObservation = sight.timestamp
         publishCoverage()
+    }
+
+    /// While lining up, keep autofocus and exposure on the item (twice a second at most, and only when it
+    /// has moved), so the lens has settled on it when the scan starts and locks.
+    private func aimCamera(at sensorBox: CGRect) {
+        guard phase == .ready else { return }
+        let centre = CGPoint(x: sensorBox.midX, y: sensorBox.midY)
+        let moved = lastAim.map { hypot($0.x - centre.x, $0.y - centre.y) > 0.04 } ?? true
+        guard moved, Date().timeIntervalSince(lastAimAt) > 0.5 else { return }
+        CameraLock.aim(at: centre)
+        lastAim = centre
+        lastAimAt = Date()
     }
 
     /// The item's box from a reading, on screen. The paper finder only ever reports what the sheet
@@ -391,7 +413,10 @@ final class CaptureSession: NSObject, ObservableObject {
                        CGPoint(x: sensorBox.minX, y: sensorBox.maxY), CGPoint(x: sensorBox.maxX, y: sensorBox.maxY)]
             .map { $0.applying(toView) }.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
         let xs = corners.map(\.x), ys = corners.map(\.y)
-        let box = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        // In screen coordinates: the camera preview is letterboxed to the sensor's 4:3 (CaptureView), so it no
+        // longer starts at the top of the screen where the brackets' overlay does.
+        let origin = arView.convert(CGPoint.zero, to: nil)
+        let box = CGRect(x: xs.min()! + origin.x, y: ys.min()! + origin.y, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
         let area = box.width * box.height / (size.width * size.height)
         guard area > 0.002, area < 0.5 else { return }
         func far(_ a: CGRect, _ b: CGRect) -> Bool { hypot(a.midX - b.midX, a.midY - b.midY) > 0.25 * size.width }

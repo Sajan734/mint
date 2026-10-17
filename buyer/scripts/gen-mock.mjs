@@ -1,5 +1,5 @@
 // Run once: node scripts/gen-mock.mjs  -> writes mock/*.json, public/avatars/*.svg and ../seller/mock/my-listings.json (outputs are committed).
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -7,11 +7,6 @@ const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const real = join(root, "..", "multiagent");
 const out = (p, d) => { mkdirSync(dirname(join(root, p)), { recursive: true }); writeFileSync(join(root, p), typeof d === "string" ? d : JSON.stringify(d, null, 2) + "\n"); };
 
-// seeded rng + shuffle (mulberry32)
-let s = 20261017;
-const rnd = () => { s = (s + 0x6d2b79f5) | 0; let t = Math.imul(s ^ (s >>> 15), 1 | s); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
-const shuffle = (a) => { const b = [...a]; for (let i = b.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [b[i], b[j]] = [b[j], b[i]]; } return b; };
-const between = (a, b) => a + rnd() * (b - a);
 
 // ---- sellers
 const sellers = [
@@ -37,11 +32,10 @@ const slots = (day, startH, n) => Array.from({ length: n }, (_, i) => { const m 
 const saleDefs = [
   ["gs_leslieville_moving", 0, "Moving sale on Queen St", "Packing up a two-bedroom. Everything is scanned and ready to spin.", "2026-10-24", 10, 16, true, "Leslieville"],
   ["gs_danforth_declutter", 1, "Annex declutter weekend", "Lamps, shelves and things that deserve a second home.", "2026-10-24", 10, 15, true, "The Annex"],
-  ["gs_junction_vintage", 2, "Vintage closet clear-out", "Coats and pieces collected over ten years.", "2026-10-25", 11, 17, false, "Junction"],
-  ["gs_scarborough_gear", 3, "Summer gear and game night", "Helmets, games and camping bits.", "2026-10-31", 9, 14, true, "Scarborough Village"],
+  ["gs_junction_vintage", 2, "Vintage closet clear-out", "A guitar, a chair and pieces collected over ten years.", "2026-10-25", 11, 17, false, "Junction"],
+  ["gs_scarborough_gear", 3, "Summer gear and game night", "Sneakers, a toy truck and a few other things.", "2026-10-31", 9, 14, true, "Scarborough Village"],
   ["gs_highland_kids", 4, "Highland Creek kids' stuff", "Outgrown toys and books, gently loved.", "2026-10-24", 9, 13, false, "Highland Creek"],
-  ["gs_agincourt_tech", 5, "Agincourt tech upgrade sale", "Headphones, speakers and desk gear.", "2026-10-25", 12, 18, true, "Agincourt"],
-  ["gs_annex_bookshelf", 1, "Annex bookshelf purge", "Shelves cleared, one box at a time.", "2026-11-07", 10, 15, false, "The Annex"],
+  ["gs_agincourt_tech", 5, "Agincourt tech upgrade sale", "A camera, a lens and some desk things.", "2026-10-25", 12, 18, true, "Agincourt"],
   ["gs_beaches_ended", 0, "Beaches porch sale", "Our porch sale. It has ended; sold items stay for the record.", "2026-10-10", 10, 15, false, "Leslieville"],
 ];
 const gsales = saleDefs.map(([id, si, name, blurb, day, h0, h1, ships, nb]) => ({
@@ -51,102 +45,108 @@ const gsales = saleDefs.map(([id, si, name, blurb, day, h0, h1, ships, nb]) => (
   pickup_slots: slots(day, h0, 6), ships, location: { neighbourhood: nb, city: "Toronto" },
 }));
 
-// ---- items [title, category, shape, palette, price]; first two are heroes
+// ---- items. The two heroes are real photographed listings (pots: real listing-agent output). Every other item is a
+// real 3D Gaussian splat published on SuperSplat (superspl.at) under CC BY 4.0 (one CC BY-SA 4.0), streamed from its
+// CDN; the pictures are rendered from the same splats (buyer/scripts/render-splats.mjs -> public/demo/splats/{key}/).
+// The listing text, prices and sales around them are demo data, written for the demo.
 const C = { h: "home_kitchen", e: "electronics", g: "garden_plants", s: "sports_outdoors", t: "toys_games", b: "books_media", f: "furniture", c: "clothing_accessories" };
-const items = [
-  ["Succulents and houseplants in plastic and terracotta pots on pallet shelf", C.g, "vase", "sage", 30],
-  ["Tabletop zen garden set with rake and stones", C.h, "boardgame", "sand", 25],
-  ["Stoneware mug set (4)", C.h, "mug", "sage", 25], ["Speckled glaze vase", C.h, "vase", "sand", 35], ["Glass canister trio", C.h, "vase", "mint", 20], ["Enamel camp mug", C.h, "mug", "coral", 15],
-  ["Wireless over-ear headphones", C.e, "headphones", "ink", 120], ["Kids on-ear headphones", C.e, "headphones", "coral", 30], ["LED desk lamp", C.e, "lamp", "mint", 25], ["Studio headphones", C.e, "headphones", "sand", 95], ["Bluetooth speaker", C.e, "vase", "ink", 40],
-  ["Terracotta planter trio", C.g, "vase", "clay", 20], ["Ceramic hanging planter", C.g, "vase", "sage", 15], ["Glazed plant pot, large", C.g, "vase", "coral", 25], ["Watering can and trowel set", C.g, "mug", "mint", 15],
-  ["Cycling helmet", C.s, "helmet", "coral", 35], ["Kids bike helmet", C.s, "helmet", "mint", 20], ["Climbing helmet", C.s, "helmet", "ink", 45], ["Skate helmet", C.s, "helmet", "sand", 25], ["Insulated camping mug", C.s, "mug", "ink", 10],
-  ["Wooden puzzle box", C.t, "boardgame", "sand", 20], ["Strategy board game", C.t, "boardgame", "coral", 30], ["Family card game box", C.t, "boardgame", "mint", 15], ["Building blocks set", C.t, "boardgame", "clay", 25], ["Trivia night box", C.t, "boardgame", "ink", 20],
-  ["Paperback mystery bundle", C.b, "book", "clay", 15], ["Hardcover cookbook", C.b, "book", "sage", 20], ["Graphic novel set", C.b, "book", "ink", 30], ["Travel guide, Japan", C.b, "book", "coral", 10], ["Art history textbook", C.b, "book", "sand", 40],
-  ["Brass floor lamp", C.f, "lamp", "sand", 60], ["Reading lamp, linen shade", C.f, "lamp", "clay", 40], ["Arc floor lamp", C.f, "lamp", "ink", 85], ["Entryway bench", C.f, "boardgame", "ink", 220], ["Oak coffee table", C.f, "boardgame", "clay", 400],
-  ["Wool coat", C.c, "jacket", "clay", 90], ["Denim jacket", C.c, "jacket", "ink", 45], ["Rain jacket", C.c, "jacket", "mint", 40], ["Puffer vest", C.c, "jacket", "coral", 55], ["Waxed field jacket", C.c, "jacket", "sage", 110],
+const CDN = "https://d28zzqy0iyovbz.cloudfront.net";
+// Orientation per splat, as a URL fragment the viewer reads (lib/splat-scene.ts fragmentRotation): SuperSplat scenes
+// come in their capture tool's axes. Checked by eye on renders.
+const ROT = Object.fromEntries(
+  ["garden-table", "dragon-lamp", "chair-02", "vanadinite", "chair", "shoe", "toy-truck", "donkey", "trex", "lego-bulldozer",
+    "lens", "lego-bonsai", "chair-01", "fruit-bowl", "green-vase"].map((k) => [k, "#rx=180"]),
+);
+// Turned so the viewer and the first frame face the item's front.
+Object.assign(ROT, { elephant: "#rx=-90", "sony-a7": "#rx=180&ry=180", nike: "#ry=-90" });
+// key, scene, version, rotation fragment, title, category, sale, price, reference (null: no price check), grade, status,
+// colour, description, credit [author, licence]
+export const SPLATS = [
+  ["garden-table", "87c30a43", "v1", ROT["garden-table"], "Round garden table with vase", C.f, 0, 45, 50, "light_wear", "available", "natural wood", "Round wooden garden table on folding legs. The vase and dried flowers come with it.", ["omaregeh", "CC BY 4.0"]],
+  ["dragon-lamp", "210d7b7b", "v2", ROT["dragon-lamp"], "Dragon table lamp", C.h, 1, 40, 35, "like_new", "available", "bronze", "Sculpted dragon lamp for a desk or shelf. Works with a standard E26 bulb.", ["natural_ai", "CC BY 4.0"]],
+  ["chair-02", "905d28c7", "v1", ROT["chair-02"], "Mesh office chair, black", C.f, 1, 140, 160, "moderate_wear", "reserved", "black", "Mesh-back office chair with arms and a five-star base. Adjustable height. Some wear on the arms.", ["jazmorow", "CC BY 4.0"]],
+  ["vanadinite", "663d6a97", "v1", ROT["vanadinite"], "Vanadinite mineral specimen", C.h, 2, 85, 70, "like_new", "available", "red", "Red vanadinite crystals on matrix, about the size of a fist. A display piece.", ["doudoid", "CC BY 4.0"]],
+  ["chair", "6be6e0ce", "v1", ROT["chair"], "Wooden side chair", C.f, 2, 30, 45, "light_wear", "available", "weathered wood", "Solid wooden chair with a slatted back. Weathered finish.", ["quinszouls", "CC BY 4.0"]],
+  ["nike", "738cbe49", "v1", ROT["nike"], "Nike sneakers, worn for gardening", C.s, 3, 25, 30, "heavy_wear", "available", "grey", "Comfortable Nike runners, now garden shoes. Clean but well worn.", ["getrakt", "CC BY 4.0"]],
+  ["shoe", "0fe63ee8", "v1", ROT["shoe"], "Painted canvas sneaker", C.c, 3, 40, 35, "light_wear", "available", "multicolour", "Hand-painted canvas sneaker. One of a kind.", ["yyw", "CC BY 4.0"]],
+  ["toy-truck", "d14f063c", "v1", ROT["toy-truck"], "Toy moving truck", C.t, 3, 20, 25, "light_wear", "reserved", "white", "Toy moving truck with opening back doors.", ["alfred2010", "CC BY 4.0"]],
+  ["donkey", "40e18e4c", "v1", ROT["donkey"], "Donkey toy figure", C.t, 4, 10, 12, "like_new", "available", "grey", "Small hand-painted donkey figure.", ["alfred2010", "CC BY 4.0"]],
+  ["trex", "d281a49d", "v1", ROT["trex"], "Tyrannosaurus rex toy", C.t, 4, 15, 12, "light_wear", "available", "yellow", "Rubber T. rex figure. Kid-tested.", ["alfred2010", "CC BY 4.0"]],
+  ["elephant", "b01bfc43", "v1", ROT["elephant"], "Thai souvenir elephant toy", C.t, 4, 15, 20, "like_new", "reserved", "multicolour", "Fabric elephant from Thailand, bright pattern.", ["shiroeftddee", "CC BY 4.0"]],
+  ["lego-bulldozer", "747ff4f8", "v1", ROT["lego-bulldozer"], "LEGO bulldozer, built", C.t, 4, 35, null, "light_wear", "available", "yellow", "Built LEGO bulldozer. All pieces there as far as we can tell.", ["omaregeh", "CC BY 4.0"]],
+  ["sony-a7", "467df6a2", "v1", ROT["sony-a7"], "Sony Alpha 7 camera body", C.e, 5, 450, 520, "light_wear", "available", "black", "Sony Alpha 7 full-frame body. Battery and charger included.", ["veryos", "CC BY 4.0"]],
+  ["lens", "59cf6487", "v1", ROT["lens"], "7Artisans manual camera lens", C.e, 5, 95, 70, "like_new", "available", "black", "7Artisans manual-focus lens with caps. Clean glass.", ["veryos", "CC BY 4.0"]],
+  ["lego-bonsai", "14d76a85", "v1", ROT["lego-bonsai"], "LEGO bonsai tree with pot and stand", C.t, 5, 40, 45, "like_new", "reserved", "green", "Built LEGO bonsai tree on its stand, with the pebbles.", ["omaregeh", "CC BY 4.0"]],
+  ["chair-01", "912d1a49", "v1", ROT["chair-01"], "Mesh office chair", C.f, 5, 120, 120, "moderate_wear", "sold", "black", "Mesh office chair with arms. Comfortable for long days; the seat shows wear.", ["jazmorow", "CC BY 4.0"]],
+  ["fruit-bowl", "d8ba72a6", "v1", ROT["fruit-bowl"], "Wooden fruit bowl", C.h, 5, 20, 25, "like_new", "sold", "dark wood", "Wide wooden fruit bowl. The fruit is not included.", ["superdelphi", "CC BY 4.0"]],
+  ["green-vase", "8d6803b0", "v2", ROT["green-vase"], "Black urn planter with ivy", C.g, 6, 30, 30, "light_wear", "sold", "black", "Black urn planter on a pedestal, planted with ivy.", ["explossive_99", "CC BY-SA 4.0"]],
 ];
 
-const kinds = ["great", "fair", "high", "overpriced", "unknown"];
-const dist = { great: 12, fair: 16, high: 7, overpriced: 3, unknown: 2 };
-// pots (index 0) is fair at ratio 1.0 (real finalize price); shuffle the rest
-const pool = shuffle(kinds.flatMap((k) => Array(dist[k] - (k === "fair" ? 1 : 0)).fill(k)));
-const badge = ["fair", ...pool];
-const grades = ["light_wear", ...shuffle([...Array(10).fill("like_new"), ...Array(15).fill("light_wear"), ...Array(10).fill("moderate_wear"), ...Array(4).fill("heavy_wear")])];
 const MULT = { like_new: 0.8, light_wear: 0.65, moderate_wear: 0.5, heavy_wear: 0.35 };
-const reserved = new Set([3, 9, 16, 22, 28]);
-const sold = new Set([35, 37, 25, 27]); // 25, 27 and 28 are sel_raj's, so the seller dashboard shows how items sold
-const check = { 5: ["The back view was unclear."], 12: ["One scuff is hard to read.", "Only 6 usable views."], 20: ["A label could not be read."], 28: ["The base view shows a possible crack."] };
-const boundary = { great: [85, 100], fair: [110, 100], high: [130, 100] };
-const ratioRange = { great: [0.55, 0.84], fair: [0.9, 1.08], high: [1.13, 1.28], overpriced: [1.4, 1.8] };
-const kindOf = (p, r) => { if (r === null) return "unknown"; const x = p / r; return x <= 0.85 ? "great" : x <= 1.1 ? "fair" : x <= 1.3 ? "high" : "overpriced"; };
-const usedBoundary = new Set();
-const blurbs = {
-  home_kitchen: "Everyday kitchen and home piece, easy to clean. Pickup is easy.",
-  electronics: "Works as it should. Charger or cable noted in the scan where included.",
-  garden_plants: "Good for a sunny sill or a balcony. Drainage holes are included.",
-  sports_outdoors: "Ready for the next ride, climb or trip. Straps are adjustable.",
-  toys_games: "Complete and ready for game night. Pieces counted before the scan.",
-  books_media: "Clean pages and a straight spine. Part of a bundle you can mix and match.",
-  furniture: "Solid build, easy to move. Dimensions are on the listing.",
-  clothing_accessories: "Sized as marked. Lining and buttons checked on the scan.",
+const NOTES = {
+  like_new: ["No defects stood out in any view."],
+  light_wear: ["2 views show a small scuff."],
+  moderate_wear: ["4 views show scratches or scuffs."],
+  heavy_wear: ["6 views show scratches or scuffs.", "The sole shows stains."],
 };
 const src = JSON.parse(readFileSync(join(real, "mock", "listings", "pots_listing.json"), "utf8"));
-
-const listings = items.map(([title, category, shape, palette, price0], i) => {
-  const sale = gsales[Math.floor(i / 5)];
-  const seller = sellers.find((x) => x.id === sale.seller_id);
-  const grade = grades[i];
-  let price = price0, ref;
-  const k = badge[i];
-  if (i === 0) ref = 30;
-  else if (k === "unknown") ref = null;
-  else if (boundary[k] && !usedBoundary.has(k) && i > 1) { usedBoundary.add(k); [price, ref] = boundary[k]; }
-  else {
-    price = Math.max(10, price0);
-    const [lo, hi] = ratioRange[k];
-    ref = Math.round(price / between(lo, hi));
-    for (let n = 0; kindOf(price, ref) !== k && n < 50; n++) ref += kindOf(price, ref) === "great" ? 1 : -1;
-    if (kindOf(price, ref) !== k) { price += 5; ref = Math.round(price / ((lo + hi) / 2)); }
-  }
-  const id = i === 0 ? "pots_i1" : i === 1 ? "zen_i1" : `itm_${String(i + 1).padStart(4, "0")}`;
-  const hero = i < 2 ? (i === 0 ? "pots" : "zen") : null;
-  const frames = Array.from({ length: 24 }, (_, n) => hero ? `/local/${hero}/f${String(n).padStart(2, "0")}.webp` : `/frames/${shape}/${palette}/${n}`);
-  const mkt = ref ? Math.round(ref / MULT[grade]) : null;
-  const slug = title.toLowerCase().replace(/[^a-z0-9 ]/g, "");
-  const nChk = check[i] ?? [];
-  const base = i === 0 ? src : {
-    item_id: id, title, description: `${title}. ${blurbs[category]}`,
-    attributes: { type: category.replace("_", " "), colour: palette }, tags: [...slug.split(" ").filter((w) => w.length > 2).slice(0, 3), category.split("_")[0]],
-    condition_grade: grade,
-    condition_notes: grade === "like_new" ? ["No defects found in 11 usable views."] : [`${grade === "heavy_wear" ? 5 : 2} views show ${grade === "light_wear" ? "a small scuff" : "scratches or scuffs"}.`, ...(grade === "heavy_wear" ? ["The base view shows stains or discolouration."] : [])],
-    price_cad: price,
-    price_justification: ref ? [`We estimate the used market price at about $${mkt}; x ${MULT[grade]} for ${grade.replace("_", " ")} gives $${ref}.`, `Seller priced it at $${price}.`] : ["No comparable sales found yet, so Mint has no price check for this item."],
-    preview_images: [], viewer_url: null, needs_seller_check: nChk.length > 0, seller_check_reasons: nChk,
-  };
-  const listing = { ...base, item_id: id, preview_images: [0, 6, 12, 18].map((n) => frames[n]), ...(i === 0 ? {} : {}) };
-  return {
-    listing, seller_id: seller.id, garage_sale_id: sale.id, category,
-    location: { neighbourhood: sale.location.neighbourhood, city: "Toronto" },
-    reference_price_cad: ref, frames, splat_url: null,
-    usable_view_count: nChk.length ? 6 : 8 + Math.floor(rnd() * 7),
-    listed_at: `2026-10-${String(8 + (i % 8)).padStart(2, "0")}T${String(9 + (i % 9)).padStart(2, "0")}:15:00Z`,
-    status: sold.has(i) ? "sold" : reserved.has(i) ? "reserved" : "available",
-  };
+const heroFrames = (hero) => Array.from({ length: 24 }, (_, n) => `/local/${hero}/f${String(n).padStart(2, "0")}.webp`);
+const wrap = (listing, i, { sale, category, ref, frames, splat_url, views, status }) => ({
+  listing, seller_id: gsales[sale].seller_id, garage_sale_id: gsales[sale].id, category,
+  location: { neighbourhood: gsales[sale].location.neighbourhood, city: "Toronto" },
+  reference_price_cad: ref, frames, splat_url, usable_view_count: views,
+  listed_at: `2026-10-${String(8 + (i % 8)).padStart(2, "0")}T${String(9 + (i % 9)).padStart(2, "0")}:15:00Z`,
+  status,
 });
+const pots = wrap({ ...src, item_id: "pots_i1", preview_images: [0, 6, 12, 18].map((n) => heroFrames("pots")[n]) }, 0,
+  { sale: 0, category: C.g, ref: 30, frames: heroFrames("pots"), splat_url: null, views: 11, status: "available" });
+const zen = wrap({
+  item_id: "zen_i1", title: "Tabletop zen garden set with rake and stones",
+  description: "Tabletop zen garden set with rake and stones. Everyday home piece, easy to clean. Pickup is easy.",
+  attributes: { type: "home kitchen", colour: "sand" }, tags: ["tabletop", "zen", "garden", "home"],
+  condition_grade: "light_wear", condition_notes: NOTES.light_wear, price_cad: 25,
+  price_justification: ["We estimate the used market price at about $35; x 0.65 for light wear gives $23.", "Seller priced it at $25."],
+  preview_images: [0, 6, 12, 18].map((n) => heroFrames("zen")[n]), viewer_url: null, needs_seller_check: false, seller_check_reasons: [],
+}, 1, { sale: 1, category: C.h, ref: 23, frames: heroFrames("zen"), splat_url: null, views: 10, status: "available" });
 
-const fallbacks = Object.fromEntries([0, 1].map((i) => [listings[i].listing.item_id, Array.from({ length: 24 }, (_, n) => `/frames/${items[i][2]}/${items[i][3]}/${n}`)]));
+const listings = [pots, zen, ...SPLATS.map(([key, scene, ver, rot, title, category, sale, price, ref, grade, status, colour, description, credit], k) => {
+  const frames = Array.from({ length: 24 }, (_, n) => `/demo/splats/${key}/f${String(n).padStart(2, "0")}.webp`);
+  const checks = key === "chair-01" ? ["The underside was not scanned.", "Condition needs a quick check before publishing."] : [];
+  const mkt = ref ? Math.round(ref / MULT[grade]) : null;
+  const listing = {
+    item_id: `itm_${key.replace(/-/g, "_")}`, title, description,
+    attributes: { type: title.toLowerCase(), colour, "3D scan": `${credit[0]} on SuperSplat, ${credit[1]}` },
+    tags: [...new Set(title.toLowerCase().replace(/[^a-z0-9 ]/g, "").split(" ").filter((w) => w.length > 3))].slice(0, 4),
+    condition_grade: grade, condition_notes: NOTES[grade], price_cad: price,
+    price_justification: ref
+      ? [`We estimate the used market price at about $${mkt}; x ${MULT[grade]} for ${grade.replace("_", " ")} gives $${ref}.`, `Seller priced it at $${price}.`]
+      : ["No comparable sales found yet, so Mint has no price check for this item."],
+    preview_images: [0, 6, 12, 18].map((n) => frames[n]), viewer_url: null,
+    needs_seller_check: checks.length > 0, seller_check_reasons: checks,
+  };
+  return wrap(listing, k + 2, { sale, category, ref, frames, splat_url: `${CDN}/${scene}/${ver}/meta.json${rot ?? ""}`, views: 10 + (k % 5), status });
+})];
 
-const L = (idx) => listings[idx].listing;
+// Credits for the 3D models, shown on the About page (CC BY needs the author and the licence).
+out("mock/splat-credits.json", SPLATS.map(([key, scene, , , title, , , , , , , , , [author, licence]]) => (
+  { key, title, author, licence, url: `https://superspl.at/scene/${scene}` })));
+
+const fallbacks = { pots_i1: Array.from({ length: 24 }, (_, n) => `/frames/vase/sage/${n}`), zen_i1: Array.from({ length: 24 }, (_, n) => `/frames/boardgame/sand/${n}`) };
+
+const byId = (id) => listings.find((m) => m.listing.item_id === id).listing;
 const orders = [
-  { id: "ord_seed_meetup", item_id: L(3).item_id, created_at: "2026-10-16T14:05:00Z", method: "meetup", pickup_slot: gsales[0].pickup_slots[2], price_cad: L(3).price_cad, shipping_cad: 0, total_cad: L(3).price_cad, status: "reserved", comparison_id: "fc4b95cb" },
-  { id: "ord_seed_shipped", item_id: L(9).item_id, created_at: "2026-10-12T18:40:00Z", method: "shipping", ship_to: { name: "Sam Okafor", street: "48 Willowdale Ave", city: "Toronto", postal_code: "M2N 4Y5" }, price_cad: L(9).price_cad, shipping_cad: 12, total_cad: L(9).price_cad + 12, status: "delivered", comparison_id: "fc4b95cb" },
+  { id: "ord_seed_meetup", item_id: "itm_elephant", created_at: "2026-10-16T14:05:00Z", method: "meetup", pickup_slot: gsales[4].pickup_slots[2], price_cad: byId("itm_elephant").price_cad, shipping_cad: 0, total_cad: byId("itm_elephant").price_cad, status: "reserved", comparison_id: "fc4b95cb" },
+  { id: "ord_seed_shipped", item_id: "itm_toy_truck", created_at: "2026-10-12T18:40:00Z", method: "shipping", ship_to: { name: "Sam Okafor", street: "48 Willowdale Ave", city: "Toronto", postal_code: "M2N 4Y5" }, price_cad: byId("itm_toy_truck").price_cad, shipping_cad: 12, total_cad: byId("itm_toy_truck").price_cad + 12, status: "delivered", comparison_id: "fc4b95cb" },
 ];
 
-const run = JSON.parse(readFileSync(join(real, "runs", "fc4b95cb-70e4-4d89-b91e-ea58f4257869", "response.json"), "utf8"));
-const verify = {
-  _note: "Real buyer-agent output copied from runs/fc4b95cb-70e4-4d89-b91e-ea58f4257869/response.json (subset). Shown in the site as a sample result.",
-  comparison_id: "fc4b95cb", status: run.status, verdict_label: run.verdict.label, explanation: run.explanation, error: run.error ?? null,
-};
+const runPath = join(real, "runs", "fc4b95cb-70e4-4d89-b91e-ea58f4257869", "response.json");
+const run = existsSync(runPath) ? JSON.parse(readFileSync(runPath, "utf8")) : null;
+const verify = run
+  ? {
+      _note: "Real buyer-agent output copied from runs/fc4b95cb-70e4-4d89-b91e-ea58f4257869/response.json (subset). Shown in the site as a sample result.",
+      comparison_id: "fc4b95cb", status: run.status, verdict_label: run.verdict.label, explanation: run.explanation, error: run.error ?? null,
+    }
+  : JSON.parse(readFileSync(join(root, "mock", "verify-sample.json"), "utf8")); // the run folder is not on every machine
 
 out("mock/sellers.json", sellers);
 out("mock/garage-sales.json", gsales);

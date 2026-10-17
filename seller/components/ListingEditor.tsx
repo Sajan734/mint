@@ -6,7 +6,7 @@ import { MediaProvider, MediaTiles, MediaViewer } from "@/components/MediaPanel"
 import PriceBadge from "@/components/PriceBadge";
 import { GRADE_LABEL, formatPrice } from "@/lib/format";
 import { getLocal, upsertLocal, useLocalListings, type LocalListing, type LocalState } from "@/lib/local-listings";
-import { DEMO_SELLER_ID, sampleSplatFor, useMockMode } from "@/lib/mock-mode";
+import { DEMO_SELLER_ID, useMockMode } from "@/lib/mock-mode";
 import { publishRemote } from "@/lib/api";
 import type { ListingDoc, MarketListing } from "@/lib/types";
 import scanResult from "@/mock/scan-result.json";
@@ -194,7 +194,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
 
   if (published) return <Published entry={entry} remote={remote} />;
 
-  const splatUrl = m.splat_url ?? (mock ? sampleSplatFor(entry.id) : null);
+  const splatUrl = m.splat_url;
   const priceOk = !validateFields({ ...fields, title: "x", description: "x" }).price;
   const fieldCls = (bad: boolean) =>
     `field px-4 ${bad ? "outline outline-2 outline-offset-0 outline-coral" : ""}`;
@@ -211,7 +211,7 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
   const aria = (k: keyof Fields) => ({ "aria-invalid": errors[k] ? true : undefined, "aria-describedby": errors[k] ? `f-${k}-err` : undefined });
 
   return (
-    <MediaProvider title={l.title} splatUrl={splatUrl} frames={m.frames} photos={photosFor(m)} sample={!m.splat_url && mock}>
+    <MediaProvider title={l.title} splatUrl={splatUrl} frames={m.frames} photos={photosFor(m)}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm">
         <Link href="/" className="inline-flex min-h-11 items-center font-medium text-ink-2 underline-offset-2 hover:text-ink hover:underline">
           ← Your listings

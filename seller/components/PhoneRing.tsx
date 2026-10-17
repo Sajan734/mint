@@ -18,7 +18,7 @@ export default function PhoneRing({ pct, label = "Sending" }: { pct: number; lab
       className="relative grid size-52 place-items-center"
     >
       <svg viewBox="0 0 200 200" className="absolute inset-0 size-full -rotate-90" aria-hidden>
-        <circle cx="100" cy="100" r={R} fill="none" stroke="rgb(255 255 255 / 0.12)" strokeWidth="14" />
+        <circle cx="100" cy="100" r={R} fill="none" stroke="rgb(11 15 14 / 0.1)" strokeWidth="14" />
         <circle
           cx="100"
           cy="100"
@@ -34,7 +34,7 @@ export default function PhoneRing({ pct, label = "Sending" }: { pct: number; lab
       </svg>
       <div className="relative flex flex-col items-center" style={{ fontFamily: ROUNDED }}>
         <span className="text-5xl font-black tabular-nums leading-none">{p}%</span>
-        <span className="mt-1.5 text-[15px] font-semibold text-spark">{label}</span>
+        <span className="mt-1.5 text-[15px] font-semibold text-leaf">{label}</span>
       </div>
     </div>
   );

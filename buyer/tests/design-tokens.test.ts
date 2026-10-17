@@ -1,5 +1,5 @@
 // @vitest-environment node
-// docs/design/DESIGN.md §2: the palette's text pairs pass WCAG AA (4.5:1) in light and dark, read from the real CSS.
+// The theme's text pairs pass WCAG AA (4.5:1), read from the real CSS (light mode only).
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
@@ -11,7 +11,6 @@ function block(selector: string): Record<string, string> {
   return Object.fromEntries([...body.matchAll(/--([a-z0-9-]+):\s*(#[0-9a-f]{6})/gi)].map((m) => [m[1], m[2].toLowerCase()]));
 }
 const light = block(":root {");
-const dark = { ...light, ...block(':root[data-theme="dark"]') };
 
 function luminance(hex: string): number {
   const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
@@ -31,7 +30,7 @@ const PAIRS: [string, string][] = [
   ["ink-2", "surface"],
   ["leaf", "bg"],
   ["leaf", "wash"],
-  ["btn-fg", "leaf"],
+  ["bg", "ink"], // button text (paper) on the ink button
   ["amber", "amber-wash"],
   ["coral", "coral-wash"],
 ];
@@ -40,13 +39,13 @@ describe("design tokens", () => {
   it.each(PAIRS)("light: %s on %s is at least 4.5:1", (fg, bg) => {
     expect(contrast(light[fg], light[bg])).toBeGreaterThanOrEqual(4.5);
   });
-  it.each(PAIRS)("dark: %s on %s is at least 4.5:1", (fg, bg) => {
-    expect(contrast(dark[fg], dark[bg])).toBeGreaterThanOrEqual(4.5);
-  });
-  it("oat type and spark on the pine field pass", () => {
+  it("type on the light band passes", () => {
     expect(contrast(light["on-pine"], light.pine)).toBeGreaterThanOrEqual(7);
     expect(contrast(light["on-pine-2"], light.pine)).toBeGreaterThanOrEqual(4.5);
-    expect(contrast(light.spark, light.pine)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(light.leaf, light.pine)).toBeGreaterThanOrEqual(4.5);
+  });
+  it("is light mode only", () => {
+    expect(css).not.toMatch(/prefers-color-scheme: dark|data-theme="dark"/);
   });
   it("the seller app uses the same tokens", () => {
     expect(readFileSync(new URL("../../seller/app/globals.css", import.meta.url), "utf8")).toBe(css);

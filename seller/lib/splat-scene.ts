@@ -28,6 +28,35 @@ export function loadEngine(): Promise<Engine> {
   return engine;
 }
 
+/** Optional orientation in the URL fragment, e.g. `….ply#rx=180` (degrees about x, y, z). Splats from other tools
+ *  often come y-down; the fragment is never sent to the server, so the file loads as usual. */
+export function fragmentRotation(src: string): [number, number, number] {
+  const hash = new URL(src, "http://x").hash.slice(1);
+  const q = new URLSearchParams(hash);
+  return (["rx", "ry", "rz"] as const).map((k) => (Number(q.get(k)) || 0) * (Math.PI / 180)) as [number, number, number];
+}
+
+/** meta.json + the files it lists -> the bytes of an equivalent .sog zip. */
+async function sogsZip(metaUrl: string): Promise<Uint8Array> {
+  const { zipSync } = await import("fflate");
+  const metaBytes = new Uint8Array(await (await fetch(metaUrl)).arrayBuffer());
+  const meta = JSON.parse(new TextDecoder().decode(metaBytes)) as Record<string, { files?: string[] } | unknown>;
+  const names = new Set<string>();
+  for (const k of ["means", "scales", "quats", "sh0", "shN"]) {
+    const part = meta[k] as { files?: string[] } | undefined;
+    for (const f of part?.files ?? []) names.add(f);
+  }
+  const files: Record<string, Uint8Array> = { "meta.json": metaBytes };
+  await Promise.all(
+    [...names].map(async (n) => {
+      const res = await fetch(new URL(n, new URL(metaUrl, window.location.href)));
+      if (!res.ok) throw new Error(`${n}: ${res.status}`);
+      files[n] = new Uint8Array(await res.arrayBuffer());
+    }),
+  );
+  return zipSync(files, { level: 0 });
+}
+
 function poseOf(p: { x: number; y: number; z: number }, c: { x: number; y: number; z: number }, r: number): CameraPose {
   const dx = p.x - c.x, dy = p.y - c.y, dz = p.z - c.z;
   const d = Math.hypot(dx, dy, dz);
@@ -36,6 +65,11 @@ function poseOf(p: { x: number; y: number; z: number }, c: { x: number; y: numbe
 
 export async function mountSplatScene(host: HTMLElement, o: SceneOptions): Promise<SceneHandle> {
   const [THREE, { OrbitControls }, { SparkRenderer, SplatMesh, SplatFileType }] = await loadEngine();
+  const ext = new URL(o.src, window.location.href).pathname.split(".").pop()?.toLowerCase();
+  // PlayCanvas SOGS (a meta.json beside its .webp textures, as SuperSplat publishes them): Spark reads SOGS only as a
+  // single .sog zip, so fetch the parts and zip them here (stored: the webp files are compressed already). Before any
+  // renderer exists, so a failed fetch leaves nothing behind.
+  const sog = ext === "json" ? await sogsZip(o.src) : null;
   let disposed = false;
   const renderer = new THREE.WebGLRenderer({ antialias: false, alpha: true, powerPreference: "high-performance" });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, o.maxPixelRatio));
@@ -96,9 +130,10 @@ export async function mountSplatScene(host: HTMLElement, o: SceneOptions): Promi
   const io = new IntersectionObserver(([en]) => { visible = en.isIntersecting; });
   io.observe(host);
 
-  const ext = new URL(o.src, window.location.href).pathname.split(".").pop()?.toLowerCase();
-  const fileType = Object.values(SplatFileType).find((t) => t === ext) ?? SplatFileType.SPZ;
-  const mesh = new SplatMesh({ url: o.src, fileType });
+  const mesh = sog
+    ? new SplatMesh({ fileBytes: sog, fileType: SplatFileType.PCSOGSZIP })
+    : new SplatMesh({ url: o.src, fileType: Object.values(SplatFileType).find((t) => t === ext) ?? SplatFileType.SPZ });
+  mesh.rotation.set(...fragmentRotation(o.src), "XYZ");
   scene.add(mesh);
 
   let drawn = false;
@@ -127,10 +162,24 @@ export async function mountSplatScene(host: HTMLElement, o: SceneOptions): Promi
   mesh.initialized
     .then(() => {
       if (disposed) return;
-      const box = mesh.getBoundingBox();
-      if (box.isEmpty()) throw new Error("empty splat");
-      box.getCenter(center);
-      radius = box.getSize(new THREE.Vector3()).length() / 2;
+      // Frame the middle 96% of the splat centres: stray background splats in a capture would otherwise blow up
+      // the bounding box and leave the item tiny.
+      mesh.updateMatrixWorld(true);
+      const axes: number[][] = [[], [], []], v = new THREE.Vector3();
+      const splats = mesh.packedSplats;
+      if (!splats) throw new Error("empty splat");
+      const n = splats.numSplats, step = Math.max(1, Math.floor(n / 40000));
+      splats.forEachSplat((i, c) => {
+        if (i % step) return;
+        v.copy(c).applyMatrix4(mesh.matrixWorld);
+        axes[0].push(v.x); axes[1].push(v.y); axes[2].push(v.z);
+      });
+      if (!axes[0].length) throw new Error("empty splat");
+      const pct = (a: number[], q: number) => { const s = Float64Array.from(a).sort(); return s[Math.floor(q * (s.length - 1))]; };
+      const lo = new THREE.Vector3(pct(axes[0], 0.02), pct(axes[1], 0.02), pct(axes[2], 0.02));
+      const hi = new THREE.Vector3(pct(axes[0], 0.98), pct(axes[1], 0.98), pct(axes[2], 0.98));
+      center.copy(lo).add(hi).multiplyScalar(0.5);
+      radius = Math.max(hi.clone().sub(lo).length() / 2, 1e-3);
       controls.target.copy(center);
       const d = (radius / Math.sin((FOV / 2) * (Math.PI / 180))) * 0.9;
       camera.position.set(center.x, center.y + radius * 0.6, center.z + d);

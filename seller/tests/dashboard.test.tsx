@@ -33,16 +33,16 @@ const local = (id: string, state: LocalListing["state"], over: Partial<MarketLis
 describe("buildRows", () => {
   it("puts this device first and drops demo rows with the same id", () => {
     const newer = { ...local("abc", "draft"), updated_at: "2026-10-17T12:00:00Z" };
-    const rows = buildRows([local("itm_0027", "published", { title: "Edited cookbook" }), newer], mock);
-    expect(rows.map((r) => r.id)).toEqual(["abc", "itm_0027", "itm_0030", "itm_0029", "itm_0028", "itm_0026"]);
-    const edited = rows.find((r) => r.id === "itm_0027")!;
-    expect(edited).toMatchObject({ source: "local", title: "Edited cookbook", status: "available" });
-    expect(rows.filter((r) => r.id === "itm_0027")).toHaveLength(1);
+    const rows = buildRows([local("itm_lens", "published", { title: "Edited lens" }), newer], mock);
+    expect(rows.map((r) => r.id)).toEqual(["abc", "itm_lens", "itm_sony_a7", "itm_fruit_bowl", "itm_chair_01", "itm_lego_bonsai"]);
+    const edited = rows.find((r) => r.id === "itm_lens")!;
+    expect(edited).toMatchObject({ source: "local", title: "Edited lens", status: "available" });
+    expect(rows.filter((r) => r.id === "itm_lens")).toHaveLength(1);
   });
   it("drafts are drafts, everything else uses the market status", () => {
     const rows = buildRows([local("d", "draft")], mock);
     expect(rows[0]).toMatchObject({ status: "draft", date: "2026-10-17T11:00:00Z" });
-    expect(rows.find((r) => r.id === "itm_0026")).toMatchObject({ status: "sold", source: "mock", date: "2026-10-09T16:15:00Z" });
+    expect(rows.find((r) => r.id === "itm_chair_01")).toMatchObject({ status: "sold", source: "mock", date: "2026-10-09T17:15:00Z" });
   });
 });
 

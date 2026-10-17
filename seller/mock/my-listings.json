@@ -1,105 +1,34 @@
 [
   {
     "listing": {
-      "item_id": "itm_0026",
-      "title": "Paperback mystery bundle",
-      "description": "Paperback mystery bundle. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "item_id": "itm_sony_a7",
+      "title": "Sony Alpha 7 camera body",
+      "description": "Sony Alpha 7 full-frame body. Battery and charger included.",
       "attributes": {
-        "type": "books media",
-        "colour": "clay"
+        "type": "sony alpha 7 camera body",
+        "colour": "black",
+        "3D scan": "veryos on SuperSplat, CC BY 4.0"
       },
       "tags": [
-        "paperback",
-        "mystery",
-        "bundle",
-        "books"
-      ],
-      "condition_grade": "like_new",
-      "condition_notes": [
-        "No defects found in 11 usable views."
-      ],
-      "price_cad": 15,
-      "price_justification": [
-        "We estimate the used market price at about $20; x 0.8 for like new gives $16.",
-        "Seller priced it at $15."
-      ],
-      "preview_images": [
-        "/frames/book/clay/0",
-        "/frames/book/clay/6",
-        "/frames/book/clay/12",
-        "/frames/book/clay/18"
-      ],
-      "viewer_url": null,
-      "needs_seller_check": false,
-      "seller_check_reasons": []
-    },
-    "seller_id": "sel_raj",
-    "garage_sale_id": "gs_agincourt_tech",
-    "category": "books_media",
-    "location": {
-      "neighbourhood": "Agincourt",
-      "city": "Toronto"
-    },
-    "reference_price_cad": 16,
-    "frames": [
-      "/frames/book/clay/0",
-      "/frames/book/clay/1",
-      "/frames/book/clay/2",
-      "/frames/book/clay/3",
-      "/frames/book/clay/4",
-      "/frames/book/clay/5",
-      "/frames/book/clay/6",
-      "/frames/book/clay/7",
-      "/frames/book/clay/8",
-      "/frames/book/clay/9",
-      "/frames/book/clay/10",
-      "/frames/book/clay/11",
-      "/frames/book/clay/12",
-      "/frames/book/clay/13",
-      "/frames/book/clay/14",
-      "/frames/book/clay/15",
-      "/frames/book/clay/16",
-      "/frames/book/clay/17",
-      "/frames/book/clay/18",
-      "/frames/book/clay/19",
-      "/frames/book/clay/20",
-      "/frames/book/clay/21",
-      "/frames/book/clay/22",
-      "/frames/book/clay/23"
-    ],
-    "splat_url": null,
-    "usable_view_count": 12,
-    "listed_at": "2026-10-09T16:15:00Z",
-    "status": "sold"
-  },
-  {
-    "listing": {
-      "item_id": "itm_0027",
-      "title": "Hardcover cookbook",
-      "description": "Hardcover cookbook. Clean pages and a straight spine. Part of a bundle you can mix and match.",
-      "attributes": {
-        "type": "books media",
-        "colour": "sage"
-      },
-      "tags": [
-        "hardcover",
-        "cookbook",
-        "books"
+        "sony",
+        "alpha",
+        "camera",
+        "body"
       ],
       "condition_grade": "light_wear",
       "condition_notes": [
         "2 views show a small scuff."
       ],
-      "price_cad": 20,
+      "price_cad": 450,
       "price_justification": [
-        "We estimate the used market price at about $29; x 0.65 for light wear gives $19.",
-        "Seller priced it at $20."
+        "We estimate the used market price at about $800; x 0.65 for light wear gives $520.",
+        "Seller priced it at $450."
       ],
       "preview_images": [
-        "/frames/book/sage/0",
-        "/frames/book/sage/6",
-        "/frames/book/sage/12",
-        "/frames/book/sage/18"
+        "/demo/splats/sony-a7/f00.webp",
+        "/demo/splats/sony-a7/f06.webp",
+        "/demo/splats/sony-a7/f12.webp",
+        "/demo/splats/sony-a7/f18.webp"
       ],
       "viewer_url": null,
       "needs_seller_check": false,
@@ -107,72 +36,73 @@
     },
     "seller_id": "sel_raj",
     "garage_sale_id": "gs_agincourt_tech",
-    "category": "books_media",
+    "category": "electronics",
     "location": {
       "neighbourhood": "Agincourt",
       "city": "Toronto"
     },
-    "reference_price_cad": 19,
+    "reference_price_cad": 520,
     "frames": [
-      "/frames/book/sage/0",
-      "/frames/book/sage/1",
-      "/frames/book/sage/2",
-      "/frames/book/sage/3",
-      "/frames/book/sage/4",
-      "/frames/book/sage/5",
-      "/frames/book/sage/6",
-      "/frames/book/sage/7",
-      "/frames/book/sage/8",
-      "/frames/book/sage/9",
-      "/frames/book/sage/10",
-      "/frames/book/sage/11",
-      "/frames/book/sage/12",
-      "/frames/book/sage/13",
-      "/frames/book/sage/14",
-      "/frames/book/sage/15",
-      "/frames/book/sage/16",
-      "/frames/book/sage/17",
-      "/frames/book/sage/18",
-      "/frames/book/sage/19",
-      "/frames/book/sage/20",
-      "/frames/book/sage/21",
-      "/frames/book/sage/22",
-      "/frames/book/sage/23"
+      "/demo/splats/sony-a7/f00.webp",
+      "/demo/splats/sony-a7/f01.webp",
+      "/demo/splats/sony-a7/f02.webp",
+      "/demo/splats/sony-a7/f03.webp",
+      "/demo/splats/sony-a7/f04.webp",
+      "/demo/splats/sony-a7/f05.webp",
+      "/demo/splats/sony-a7/f06.webp",
+      "/demo/splats/sony-a7/f07.webp",
+      "/demo/splats/sony-a7/f08.webp",
+      "/demo/splats/sony-a7/f09.webp",
+      "/demo/splats/sony-a7/f10.webp",
+      "/demo/splats/sony-a7/f11.webp",
+      "/demo/splats/sony-a7/f12.webp",
+      "/demo/splats/sony-a7/f13.webp",
+      "/demo/splats/sony-a7/f14.webp",
+      "/demo/splats/sony-a7/f15.webp",
+      "/demo/splats/sony-a7/f16.webp",
+      "/demo/splats/sony-a7/f17.webp",
+      "/demo/splats/sony-a7/f18.webp",
+      "/demo/splats/sony-a7/f19.webp",
+      "/demo/splats/sony-a7/f20.webp",
+      "/demo/splats/sony-a7/f21.webp",
+      "/demo/splats/sony-a7/f22.webp",
+      "/demo/splats/sony-a7/f23.webp"
     ],
-    "splat_url": null,
-    "usable_view_count": 9,
-    "listed_at": "2026-10-10T17:15:00Z",
+    "splat_url": "https://d28zzqy0iyovbz.cloudfront.net/467df6a2/v1/meta.json#rx=180&ry=180",
+    "usable_view_count": 12,
+    "listed_at": "2026-10-14T14:15:00Z",
     "status": "available"
   },
   {
     "listing": {
-      "item_id": "itm_0028",
-      "title": "Graphic novel set",
-      "description": "Graphic novel set. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "item_id": "itm_lens",
+      "title": "7Artisans manual camera lens",
+      "description": "7Artisans manual-focus lens with caps. Clean glass.",
       "attributes": {
-        "type": "books media",
-        "colour": "ink"
+        "type": "7artisans manual camera lens",
+        "colour": "black",
+        "3D scan": "veryos on SuperSplat, CC BY 4.0"
       },
       "tags": [
-        "graphic",
-        "novel",
-        "set",
-        "books"
+        "7artisans",
+        "manual",
+        "camera",
+        "lens"
       ],
       "condition_grade": "like_new",
       "condition_notes": [
-        "No defects found in 11 usable views."
+        "No defects stood out in any view."
       ],
-      "price_cad": 30,
+      "price_cad": 95,
       "price_justification": [
-        "We estimate the used market price at about $53; x 0.8 for like new gives $42.",
-        "Seller priced it at $30."
+        "We estimate the used market price at about $88; x 0.8 for like new gives $70.",
+        "Seller priced it at $95."
       ],
       "preview_images": [
-        "/frames/book/ink/0",
-        "/frames/book/ink/6",
-        "/frames/book/ink/12",
-        "/frames/book/ink/18"
+        "/demo/splats/lens/f00.webp",
+        "/demo/splats/lens/f06.webp",
+        "/demo/splats/lens/f12.webp",
+        "/demo/splats/lens/f18.webp"
       ],
       "viewer_url": null,
       "needs_seller_check": false,
@@ -180,147 +110,222 @@
     },
     "seller_id": "sel_raj",
     "garage_sale_id": "gs_agincourt_tech",
-    "category": "books_media",
+    "category": "electronics",
     "location": {
       "neighbourhood": "Agincourt",
       "city": "Toronto"
     },
-    "reference_price_cad": 42,
+    "reference_price_cad": 70,
     "frames": [
-      "/frames/book/ink/0",
-      "/frames/book/ink/1",
-      "/frames/book/ink/2",
-      "/frames/book/ink/3",
-      "/frames/book/ink/4",
-      "/frames/book/ink/5",
-      "/frames/book/ink/6",
-      "/frames/book/ink/7",
-      "/frames/book/ink/8",
-      "/frames/book/ink/9",
-      "/frames/book/ink/10",
-      "/frames/book/ink/11",
-      "/frames/book/ink/12",
-      "/frames/book/ink/13",
-      "/frames/book/ink/14",
-      "/frames/book/ink/15",
-      "/frames/book/ink/16",
-      "/frames/book/ink/17",
-      "/frames/book/ink/18",
-      "/frames/book/ink/19",
-      "/frames/book/ink/20",
-      "/frames/book/ink/21",
-      "/frames/book/ink/22",
-      "/frames/book/ink/23"
+      "/demo/splats/lens/f00.webp",
+      "/demo/splats/lens/f01.webp",
+      "/demo/splats/lens/f02.webp",
+      "/demo/splats/lens/f03.webp",
+      "/demo/splats/lens/f04.webp",
+      "/demo/splats/lens/f05.webp",
+      "/demo/splats/lens/f06.webp",
+      "/demo/splats/lens/f07.webp",
+      "/demo/splats/lens/f08.webp",
+      "/demo/splats/lens/f09.webp",
+      "/demo/splats/lens/f10.webp",
+      "/demo/splats/lens/f11.webp",
+      "/demo/splats/lens/f12.webp",
+      "/demo/splats/lens/f13.webp",
+      "/demo/splats/lens/f14.webp",
+      "/demo/splats/lens/f15.webp",
+      "/demo/splats/lens/f16.webp",
+      "/demo/splats/lens/f17.webp",
+      "/demo/splats/lens/f18.webp",
+      "/demo/splats/lens/f19.webp",
+      "/demo/splats/lens/f20.webp",
+      "/demo/splats/lens/f21.webp",
+      "/demo/splats/lens/f22.webp",
+      "/demo/splats/lens/f23.webp"
     ],
-    "splat_url": null,
-    "usable_view_count": 9,
-    "listed_at": "2026-10-11T09:15:00Z",
-    "status": "sold"
+    "splat_url": "https://d28zzqy0iyovbz.cloudfront.net/59cf6487/v1/meta.json#rx=180",
+    "usable_view_count": 13,
+    "listed_at": "2026-10-15T15:15:00Z",
+    "status": "available"
   },
   {
     "listing": {
-      "item_id": "itm_0029",
-      "title": "Travel guide, Japan",
-      "description": "Travel guide, Japan. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "item_id": "itm_lego_bonsai",
+      "title": "LEGO bonsai tree with pot and stand",
+      "description": "Built LEGO bonsai tree on its stand, with the pebbles.",
       "attributes": {
-        "type": "books media",
-        "colour": "coral"
+        "type": "lego bonsai tree with pot and stand",
+        "colour": "green",
+        "3D scan": "omaregeh on SuperSplat, CC BY 4.0"
       },
       "tags": [
-        "travel",
-        "guide",
-        "japan",
-        "books"
+        "lego",
+        "bonsai",
+        "tree",
+        "with"
       ],
-      "condition_grade": "moderate_wear",
+      "condition_grade": "like_new",
       "condition_notes": [
-        "2 views show scratches or scuffs."
+        "No defects stood out in any view."
       ],
-      "price_cad": 10,
+      "price_cad": 40,
       "price_justification": [
-        "We estimate the used market price at about $14; x 0.5 for moderate wear gives $7.",
-        "Seller priced it at $10."
+        "We estimate the used market price at about $56; x 0.8 for like new gives $45.",
+        "Seller priced it at $40."
       ],
       "preview_images": [
-        "/frames/book/coral/0",
-        "/frames/book/coral/6",
-        "/frames/book/coral/12",
-        "/frames/book/coral/18"
+        "/demo/splats/lego-bonsai/f00.webp",
+        "/demo/splats/lego-bonsai/f06.webp",
+        "/demo/splats/lego-bonsai/f12.webp",
+        "/demo/splats/lego-bonsai/f18.webp"
       ],
       "viewer_url": null,
-      "needs_seller_check": true,
-      "seller_check_reasons": [
-        "The base view shows a possible crack."
-      ]
+      "needs_seller_check": false,
+      "seller_check_reasons": []
     },
     "seller_id": "sel_raj",
     "garage_sale_id": "gs_agincourt_tech",
-    "category": "books_media",
+    "category": "toys_games",
     "location": {
       "neighbourhood": "Agincourt",
       "city": "Toronto"
     },
-    "reference_price_cad": 7,
+    "reference_price_cad": 45,
     "frames": [
-      "/frames/book/coral/0",
-      "/frames/book/coral/1",
-      "/frames/book/coral/2",
-      "/frames/book/coral/3",
-      "/frames/book/coral/4",
-      "/frames/book/coral/5",
-      "/frames/book/coral/6",
-      "/frames/book/coral/7",
-      "/frames/book/coral/8",
-      "/frames/book/coral/9",
-      "/frames/book/coral/10",
-      "/frames/book/coral/11",
-      "/frames/book/coral/12",
-      "/frames/book/coral/13",
-      "/frames/book/coral/14",
-      "/frames/book/coral/15",
-      "/frames/book/coral/16",
-      "/frames/book/coral/17",
-      "/frames/book/coral/18",
-      "/frames/book/coral/19",
-      "/frames/book/coral/20",
-      "/frames/book/coral/21",
-      "/frames/book/coral/22",
-      "/frames/book/coral/23"
+      "/demo/splats/lego-bonsai/f00.webp",
+      "/demo/splats/lego-bonsai/f01.webp",
+      "/demo/splats/lego-bonsai/f02.webp",
+      "/demo/splats/lego-bonsai/f03.webp",
+      "/demo/splats/lego-bonsai/f04.webp",
+      "/demo/splats/lego-bonsai/f05.webp",
+      "/demo/splats/lego-bonsai/f06.webp",
+      "/demo/splats/lego-bonsai/f07.webp",
+      "/demo/splats/lego-bonsai/f08.webp",
+      "/demo/splats/lego-bonsai/f09.webp",
+      "/demo/splats/lego-bonsai/f10.webp",
+      "/demo/splats/lego-bonsai/f11.webp",
+      "/demo/splats/lego-bonsai/f12.webp",
+      "/demo/splats/lego-bonsai/f13.webp",
+      "/demo/splats/lego-bonsai/f14.webp",
+      "/demo/splats/lego-bonsai/f15.webp",
+      "/demo/splats/lego-bonsai/f16.webp",
+      "/demo/splats/lego-bonsai/f17.webp",
+      "/demo/splats/lego-bonsai/f18.webp",
+      "/demo/splats/lego-bonsai/f19.webp",
+      "/demo/splats/lego-bonsai/f20.webp",
+      "/demo/splats/lego-bonsai/f21.webp",
+      "/demo/splats/lego-bonsai/f22.webp",
+      "/demo/splats/lego-bonsai/f23.webp"
     ],
-    "splat_url": null,
-    "usable_view_count": 6,
-    "listed_at": "2026-10-12T10:15:00Z",
+    "splat_url": "https://d28zzqy0iyovbz.cloudfront.net/14d76a85/v1/meta.json#rx=180",
+    "usable_view_count": 14,
+    "listed_at": "2026-10-08T16:15:00Z",
     "status": "reserved"
   },
   {
     "listing": {
-      "item_id": "itm_0030",
-      "title": "Art history textbook",
-      "description": "Art history textbook. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "item_id": "itm_chair_01",
+      "title": "Mesh office chair",
+      "description": "Mesh office chair with arms. Comfortable for long days; the seat shows wear.",
       "attributes": {
-        "type": "books media",
-        "colour": "sand"
+        "type": "mesh office chair",
+        "colour": "black",
+        "3D scan": "jazmorow on SuperSplat, CC BY 4.0"
       },
       "tags": [
-        "art",
-        "history",
-        "textbook",
-        "books"
+        "mesh",
+        "office",
+        "chair"
       ],
       "condition_grade": "moderate_wear",
       "condition_notes": [
-        "2 views show scratches or scuffs."
+        "4 views show scratches or scuffs."
       ],
-      "price_cad": 40,
+      "price_cad": 120,
       "price_justification": [
-        "We estimate the used market price at about $50; x 0.5 for moderate wear gives $25.",
-        "Seller priced it at $40."
+        "We estimate the used market price at about $240; x 0.5 for moderate wear gives $120.",
+        "Seller priced it at $120."
       ],
       "preview_images": [
-        "/frames/book/sand/0",
-        "/frames/book/sand/6",
-        "/frames/book/sand/12",
-        "/frames/book/sand/18"
+        "/demo/splats/chair-01/f00.webp",
+        "/demo/splats/chair-01/f06.webp",
+        "/demo/splats/chair-01/f12.webp",
+        "/demo/splats/chair-01/f18.webp"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": true,
+      "seller_check_reasons": [
+        "The underside was not scanned.",
+        "Condition needs a quick check before publishing."
+      ]
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "furniture",
+    "location": {
+      "neighbourhood": "Agincourt",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 120,
+    "frames": [
+      "/demo/splats/chair-01/f00.webp",
+      "/demo/splats/chair-01/f01.webp",
+      "/demo/splats/chair-01/f02.webp",
+      "/demo/splats/chair-01/f03.webp",
+      "/demo/splats/chair-01/f04.webp",
+      "/demo/splats/chair-01/f05.webp",
+      "/demo/splats/chair-01/f06.webp",
+      "/demo/splats/chair-01/f07.webp",
+      "/demo/splats/chair-01/f08.webp",
+      "/demo/splats/chair-01/f09.webp",
+      "/demo/splats/chair-01/f10.webp",
+      "/demo/splats/chair-01/f11.webp",
+      "/demo/splats/chair-01/f12.webp",
+      "/demo/splats/chair-01/f13.webp",
+      "/demo/splats/chair-01/f14.webp",
+      "/demo/splats/chair-01/f15.webp",
+      "/demo/splats/chair-01/f16.webp",
+      "/demo/splats/chair-01/f17.webp",
+      "/demo/splats/chair-01/f18.webp",
+      "/demo/splats/chair-01/f19.webp",
+      "/demo/splats/chair-01/f20.webp",
+      "/demo/splats/chair-01/f21.webp",
+      "/demo/splats/chair-01/f22.webp",
+      "/demo/splats/chair-01/f23.webp"
+    ],
+    "splat_url": "https://d28zzqy0iyovbz.cloudfront.net/912d1a49/v1/meta.json#rx=180",
+    "usable_view_count": 10,
+    "listed_at": "2026-10-09T17:15:00Z",
+    "status": "sold"
+  },
+  {
+    "listing": {
+      "item_id": "itm_fruit_bowl",
+      "title": "Wooden fruit bowl",
+      "description": "Wide wooden fruit bowl. The fruit is not included.",
+      "attributes": {
+        "type": "wooden fruit bowl",
+        "colour": "dark wood",
+        "3D scan": "superdelphi on SuperSplat, CC BY 4.0"
+      },
+      "tags": [
+        "wooden",
+        "fruit",
+        "bowl"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects stood out in any view."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "We estimate the used market price at about $31; x 0.8 for like new gives $25.",
+        "Seller priced it at $20."
+      ],
+      "preview_images": [
+        "/demo/splats/fruit-bowl/f00.webp",
+        "/demo/splats/fruit-bowl/f06.webp",
+        "/demo/splats/fruit-bowl/f12.webp",
+        "/demo/splats/fruit-bowl/f18.webp"
       ],
       "viewer_url": null,
       "needs_seller_check": false,
@@ -328,41 +333,41 @@
     },
     "seller_id": "sel_raj",
     "garage_sale_id": "gs_agincourt_tech",
-    "category": "books_media",
+    "category": "home_kitchen",
     "location": {
       "neighbourhood": "Agincourt",
       "city": "Toronto"
     },
     "reference_price_cad": 25,
     "frames": [
-      "/frames/book/sand/0",
-      "/frames/book/sand/1",
-      "/frames/book/sand/2",
-      "/frames/book/sand/3",
-      "/frames/book/sand/4",
-      "/frames/book/sand/5",
-      "/frames/book/sand/6",
-      "/frames/book/sand/7",
-      "/frames/book/sand/8",
-      "/frames/book/sand/9",
-      "/frames/book/sand/10",
-      "/frames/book/sand/11",
-      "/frames/book/sand/12",
-      "/frames/book/sand/13",
-      "/frames/book/sand/14",
-      "/frames/book/sand/15",
-      "/frames/book/sand/16",
-      "/frames/book/sand/17",
-      "/frames/book/sand/18",
-      "/frames/book/sand/19",
-      "/frames/book/sand/20",
-      "/frames/book/sand/21",
-      "/frames/book/sand/22",
-      "/frames/book/sand/23"
+      "/demo/splats/fruit-bowl/f00.webp",
+      "/demo/splats/fruit-bowl/f01.webp",
+      "/demo/splats/fruit-bowl/f02.webp",
+      "/demo/splats/fruit-bowl/f03.webp",
+      "/demo/splats/fruit-bowl/f04.webp",
+      "/demo/splats/fruit-bowl/f05.webp",
+      "/demo/splats/fruit-bowl/f06.webp",
+      "/demo/splats/fruit-bowl/f07.webp",
+      "/demo/splats/fruit-bowl/f08.webp",
+      "/demo/splats/fruit-bowl/f09.webp",
+      "/demo/splats/fruit-bowl/f10.webp",
+      "/demo/splats/fruit-bowl/f11.webp",
+      "/demo/splats/fruit-bowl/f12.webp",
+      "/demo/splats/fruit-bowl/f13.webp",
+      "/demo/splats/fruit-bowl/f14.webp",
+      "/demo/splats/fruit-bowl/f15.webp",
+      "/demo/splats/fruit-bowl/f16.webp",
+      "/demo/splats/fruit-bowl/f17.webp",
+      "/demo/splats/fruit-bowl/f18.webp",
+      "/demo/splats/fruit-bowl/f19.webp",
+      "/demo/splats/fruit-bowl/f20.webp",
+      "/demo/splats/fruit-bowl/f21.webp",
+      "/demo/splats/fruit-bowl/f22.webp",
+      "/demo/splats/fruit-bowl/f23.webp"
     ],
-    "splat_url": null,
-    "usable_view_count": 9,
-    "listed_at": "2026-10-13T11:15:00Z",
-    "status": "available"
+    "splat_url": "https://d28zzqy0iyovbz.cloudfront.net/d8ba72a6/v1/meta.json#rx=180",
+    "usable_view_count": 11,
+    "listed_at": "2026-10-10T09:15:00Z",
+    "status": "sold"
   }
 ]

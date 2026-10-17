@@ -40,12 +40,17 @@ final class PaperReader {
         }
     }
 
-    /// The first QR code in view, if any.
+    /// The first QR code in view, if any. The whole frame first; then the middle of it, which Vision reads at a
+    /// higher effective resolution, for a code that is small in the frame (a small or far-away screen).
     static func qrCode(_ pixelBuffer: CVPixelBuffer) -> String? {
-        let request = VNDetectBarcodesRequest()
-        request.symbologies = [.qr]
-        try? VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right).perform([request])
-        return request.results?.compactMap(\.payloadStringValue).first
+        for region in [CGRect(x: 0, y: 0, width: 1, height: 1), CGRect(x: 0.2, y: 0.2, width: 0.6, height: 0.6)] {
+            let request = VNDetectBarcodesRequest()
+            request.symbologies = [.qr]
+            request.regionOfInterest = region
+            try? VNImageRequestHandler(cvPixelBuffer: pixelBuffer, orientation: .right).perform([request])
+            if let text = request.results?.compactMap(\.payloadStringValue).first { return text }
+        }
+        return nil
     }
 
     func markIdle() { busy = false }

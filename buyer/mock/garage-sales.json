@@ -45,7 +45,7 @@
     "id": "gs_junction_vintage",
     "seller_id": "sel_amara",
     "name": "Vintage closet clear-out",
-    "blurb": "Coats and pieces collected over ten years.",
+    "blurb": "A guitar, a chair and pieces collected over ten years.",
     "starts_at": "2026-10-25T11:00:00-04:00",
     "ends_at": "2026-10-25T17:00:00-04:00",
     "pickup_slots": [
@@ -66,7 +66,7 @@
     "id": "gs_scarborough_gear",
     "seller_id": "sel_daniel",
     "name": "Summer gear and game night",
-    "blurb": "Helmets, games and camping bits.",
+    "blurb": "Sneakers, a toy truck and a few other things.",
     "starts_at": "2026-10-31T09:00:00-04:00",
     "ends_at": "2026-10-31T14:00:00-04:00",
     "pickup_slots": [
@@ -108,7 +108,7 @@
     "id": "gs_agincourt_tech",
     "seller_id": "sel_raj",
     "name": "Agincourt tech upgrade sale",
-    "blurb": "Headphones, speakers and desk gear.",
+    "blurb": "A camera, a lens and some desk things.",
     "starts_at": "2026-10-25T12:00:00-04:00",
     "ends_at": "2026-10-25T18:00:00-04:00",
     "pickup_slots": [
@@ -122,27 +122,6 @@
     "ships": true,
     "location": {
       "neighbourhood": "Agincourt",
-      "city": "Toronto"
-    }
-  },
-  {
-    "id": "gs_annex_bookshelf",
-    "seller_id": "sel_marcus",
-    "name": "Annex bookshelf purge",
-    "blurb": "Shelves cleared, one box at a time.",
-    "starts_at": "2026-11-07T10:00:00-05:00",
-    "ends_at": "2026-11-07T15:00:00-05:00",
-    "pickup_slots": [
-      "2026-11-07T10:00:00-04:00",
-      "2026-11-07T10:30:00-04:00",
-      "2026-11-07T11:00:00-04:00",
-      "2026-11-07T11:30:00-04:00",
-      "2026-11-07T12:00:00-04:00",
-      "2026-11-07T12:30:00-04:00"
-    ],
-    "ships": false,
-    "location": {
-      "neighbourhood": "The Annex",
       "city": "Toronto"
     }
   },

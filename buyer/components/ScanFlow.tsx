@@ -25,8 +25,8 @@ export interface ScanFlowProps {
   onDone?: (s: ScanState) => void;
 }
 
-const MINT_BTN = "inline-flex min-h-12 items-center justify-center rounded-full bg-spark px-6 font-semibold text-pine transition-transform hover:bg-[#5be6aa] active:scale-[0.97]";
-const LINE_BTN = "inline-flex min-h-11 items-center justify-center rounded-full bg-white/10 px-5 text-sm font-semibold text-on-pine transition-colors hover:bg-white/15";
+const MINT_BTN = "inline-flex min-h-12 items-center justify-center rounded-[14px] bg-ink px-6 font-semibold text-bg transition-transform hover:bg-[#2a3330] active:scale-[0.97]";
+const LINE_BTN = "inline-flex min-h-11 items-center justify-center rounded-[14px] bg-raised px-5 text-sm font-semibold text-ink transition-colors hover:bg-surface";
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "es"}`;
 
 /** The panel's words for a state: [title, line under it]. Also what the live region reads out. */
@@ -65,7 +65,7 @@ function Ripples({ from }: { from: number }) {
       {[0, 0.8, 1.6].map((d) => (
         <span
           key={d}
-          className="animate-mint-ripple absolute inset-0 rounded-full border-[1.5px] border-mint opacity-0"
+          className="animate-mint-ripple absolute inset-0 rounded-full border-2 border-leaf opacity-0"
           style={{ ["--ripple-from" as string]: from, animationDelay: `${-d}s` }}
         />
       ))}
@@ -139,9 +139,9 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   } else if (s.phase === "connected") {
     body = (
       <>
-        <span className="grid size-28 place-items-center rounded-full bg-spark/15 text-spark"><PhoneGlyph /></span>
+        <span className="grid size-28 place-items-center rounded-full bg-raised text-leaf"><PhoneGlyph /></span>
         {heading}
-        {s.passes > 0 && <p className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">{plural(s.passes, "pass")} recorded</p>}
+        {s.passes > 0 && <p className="rounded-full bg-raised px-3 py-1 text-sm font-semibold">{plural(s.passes, "pass")} recorded</p>}
       </>
     );
   } else if (s.phase === "uploading") {
@@ -157,10 +157,10 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
         {s.spinUrls?.length && !framesFailed ? (
           <Frames frames={s.spinUrls} onFail={() => setFramesFailed(true)} />
         ) : (
-          <span className="size-14 animate-spin rounded-full border-4 border-white/15 border-t-spark motion-reduce:animate-none" aria-hidden />
+          <span className="size-14 animate-spin rounded-full border-4 border-ink/10 border-t-leaf motion-reduce:animate-none" aria-hidden />
         )}
         {heading}
-        {s.message && <p className="max-w-sm rounded-[16px] bg-white/10 px-4 py-3 text-sm">{s.message}</p>}
+        {s.message && <p className="max-w-sm rounded-[16px] bg-raised px-4 py-3 text-sm">{s.message}</p>}
       </>
     );
   } else if (s.phase === "ready") {
@@ -168,11 +168,11 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
       <>
         <span className="relative grid size-72 place-items-center">
           <Ripples from={0.31} />
-          <span className="relative grid size-28 place-items-center rounded-full bg-spark text-pine">
+          <span className="relative grid size-28 place-items-center rounded-full bg-spark text-ink">
             <Check className="size-12" />
           </span>
         </span>
-        {s.kind === "listing" && <p className="font-semibold text-spark">Your phone is done</p>}
+        {s.kind === "listing" && <p className="font-semibold text-leaf">Your phone is done</p>}
         {heading}
         {s.kind === "listing" && <Link href={`/listing/${scanId}`} className={MINT_BTN}>Review your listing</Link>}
       </>
@@ -180,7 +180,7 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   } else {
     body = (
       <>
-        <span className="grid size-20 place-items-center rounded-full bg-[#ff9a84] text-pine"><Cross className="size-9" /></span>
+        <span className="grid size-20 place-items-center rounded-full bg-coral text-white"><Cross className="size-9" /></span>
         {heading}
         {s.phase === "failed" && s.message && (
           <details className="max-w-sm text-left text-sm text-on-pine-2">

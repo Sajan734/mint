@@ -11,6 +11,7 @@ import FilterBar from "@/components/FilterBar";
 import SaveButton from "@/components/SaveButton";
 import JustListed, { Rail } from "@/components/JustListed";
 import HeroScan from "@/components/HeroScan";
+import { HERO, heroFrame } from "@/lib/hero";
 
 type Params = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
@@ -53,8 +54,8 @@ function cardsFor(list: MarketListing[], sellerById: Map<string, Seller>, saleBy
   });
 }
 
-// Real spin frames of the scan in the hero (buyer/public/demo/listings/a6816dfc/spin): what "scanned in 3D" means.
-const SPIN = [0, 4, 8, 12, 16, 20].map((n) => `/demo/listings/a6816dfc/spin/f${String(n).padStart(2, "0")}.webp`);
+// Six views rendered from the hero's real splat (public/demo/splats): what "scanned in 3D" means.
+const SPIN = [0, 4, 8, 12, 16, 20].map(heroFrame);
 
 const STEPS = [
   {
@@ -122,7 +123,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Par
                 </a>
               </div>
             </div>
-            <HeroScan />
+            <HeroScan src={all.find((m) => m.listing.item_id === HERO.item)?.splat_url} />
           </section>
           <JustListed sellers={sellers} sales={sales} />
           {picks.length > 0 && (
@@ -143,7 +144,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Par
                   </li>
                 ))}
               </ul>
-              <Link href="/about" className="inline-flex min-h-11 w-fit items-center font-semibold text-spark underline-offset-4 hover:underline">
+              <Link href="/about" className="inline-flex min-h-11 w-fit items-center font-semibold text-leaf underline-offset-4 hover:underline">
                 How Mint works
               </Link>
             </div>
@@ -156,7 +157,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Par
                   </li>
                 ))}
               </ul>
-              <figcaption className="text-sm text-on-pine-2">Six of the 24 views from the scan at the top of the page.</figcaption>
+              <figcaption className="text-sm text-on-pine-2">Six of the 24 views of the camera at the top of the page.</figcaption>
             </figure>
           </section>
           {deals.length > 0 && (
