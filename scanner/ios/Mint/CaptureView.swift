@@ -87,6 +87,7 @@ private struct CameraView: UIViewRepresentable {
 struct ScannerHUD: View {
     @ObservedObject var session: CaptureSession
     @State private var confirmCancel = false
+    @State private var focusTap: FocusTap?
 
     var body: some View {
         ZStack {
@@ -96,6 +97,22 @@ struct ScannerHUD: View {
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
+
+            // Tap to focus, anywhere on the camera picture outside the controls (before and during a scan).
+            Color.clear
+                .contentShape(Rectangle())
+                .ignoresSafeArea()
+                .onTapGesture(coordinateSpace: .global) { point in
+                    if session.focus(atScreen: point) { focusTap = FocusTap(point: point) }
+                }
+            ZStack {
+                if let focusTap {
+                    FocusMark().position(focusTap.point).id(focusTap.id)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
+            .allowsHitTesting(false)
 
             VStack(spacing: 10) {
                 topBar
@@ -193,6 +210,41 @@ struct ScannerHUD: View {
             Color.clear.frame(width: 50, height: 50)
         }
         .foregroundStyle(.white)
+    }
+}
+
+struct FocusTap: Equatable {
+    let point: CGPoint   // window points
+    let id = UUID()
+}
+
+/// Where the camera is focusing, after a tap: a square that drops onto the point, like the Camera app's,
+/// then fades.
+struct FocusMark: View {
+    @State private var settled = false
+    @State private var faded = false
+    private let side: CGFloat = 78
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 7, style: .continuous).stroke(Color.brandMint, lineWidth: 2)
+            Path { p in
+                let m = side / 2, t: CGFloat = 8
+                p.move(to: CGPoint(x: m, y: 0)); p.addLine(to: CGPoint(x: m, y: t))
+                p.move(to: CGPoint(x: m, y: side)); p.addLine(to: CGPoint(x: m, y: side - t))
+                p.move(to: CGPoint(x: 0, y: m)); p.addLine(to: CGPoint(x: t, y: m))
+                p.move(to: CGPoint(x: side, y: m)); p.addLine(to: CGPoint(x: side - t, y: m))
+            }
+            .stroke(Color.brandMint, style: StrokeStyle(lineWidth: 2, lineCap: .round))
+        }
+        .frame(width: side, height: side)
+        .shadow(color: .brandMint.opacity(0.7), radius: 6)
+        .scaleEffect(settled ? 1 : 1.45)
+        .opacity(faded ? 0 : 1)
+        .onAppear {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.62)) { settled = true }
+            withAnimation(.easeOut(duration: 0.5).delay(1.3)) { faded = true }
+        }
     }
 }
 
@@ -319,8 +371,8 @@ private struct Caption: View {
         switch session.phase {
         case .ready:
             if session.passes.isEmpty {
-                if session.job?.isVerify == true { return ("Line up the item you're buying", "checkmark.shield") }
-                return ("Line up the item · tap Scan", "viewfinder")
+                if session.job?.isVerify == true { return ("Tap the item you're buying to focus", "checkmark.shield") }
+                return ("Tap the item to focus · then Scan", "viewfinder")
             }
             return ("Pass \(session.nextPass) · flip it or try another angle", "arrow.uturn.down")
         case .recording:

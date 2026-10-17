@@ -49,6 +49,8 @@ struct WaitingScreen: View {
                     .fill(Color.brandPaper.opacity(0.96), style: FillStyle(eoFill: true))
                     QRWindow()
                         .frame(width: window.width, height: window.height)
+                        .contentShape(Rectangle())
+                        .onTapGesture(coordinateSpace: .global) { session.focus(atScreen: $0) }   // a soft QR: tap it
                         .offset(x: window.minX, y: window.minY)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                     VStack(spacing: 0) {
@@ -136,7 +138,6 @@ private struct QRWindow: View {
                 g.fill(line, with: .color(.brandMint))
             }
         }
-        .allowsHitTesting(false)
     }
 }
 

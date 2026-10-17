@@ -91,8 +91,6 @@ final class CaptureSession: NSObject, ObservableObject {
     private(set) var isRunning = false
     private var startedAt = Date.distantPast
     private var lastRestart = Date.distantPast
-    private var lastAim: CGPoint?
-    private var lastAimAt = Date.distantPast
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let bump = UIImpactFeedbackGenerator(style: .heavy)
     private let success = UINotificationFeedbackGenerator()
@@ -222,6 +220,7 @@ final class CaptureSession: NSObject, ObservableObject {
 
     private func begin(_ job: Job) {
         handled.insert(job.scanID)
+        CameraLock.unlock(resetPoint: true)   // a new item: focus on the middle until tapped
         self.job = job
         passes = []
         resetCoverage()
@@ -239,6 +238,7 @@ final class CaptureSession: NSObject, ObservableObject {
     }
 
     func backToWaiting() {
+        CameraLock.unlock(resetPoint: true)
         job = nil
         passes = []
         recordStart = nil
@@ -399,11 +399,10 @@ final class CaptureSession: NSObject, ObservableObject {
         if phase == .recording, lapCompletedAt == nil, !previewing, abs(goal - ringTurn) > 0.0005 { ringTurn += (goal - ringTurn) * 0.3 }
     }
 
-    /// A new reading of the frame: a QR code (while waiting), where the item is, and how far the paper has
-    /// turned, which while recording fills the coverage.
+    /// A new reading of the frame: a QR code (while waiting), or how far the paper has turned, which while
+    /// recording fills the coverage.
     private func apply(_ sight: PaperReader.Sight) {
         if let code = sight.code { follow(code) }
-        if let box = sight.itemBox { aimCamera(at: box) }
         guard let reading = sight.paper, turn.update(reading, time: sight.timestamp) else { return }
         lastPaperAt = Date()
         // Once the lap is done the measurement stops: hand-held touch-ups (walking round, other heights)
@@ -414,16 +413,26 @@ final class CaptureSession: NSObject, ObservableObject {
         publishCoverage()
     }
 
-    /// While lining up, keep autofocus and exposure on the item (twice a second at most, and only when it
-    /// has moved), so the lens has settled on it when the scan starts and locks.
-    private func aimCamera(at sensorBox: CGRect) {
-        guard phase == .ready else { return }
-        let centre = CGPoint(x: sensorBox.midX, y: sensorBox.midY)
-        let moved = lastAim.map { hypot($0.x - centre.x, $0.y - centre.y) > 0.04 } ?? true
-        guard moved, Date().timeIntervalSince(lastAimAt) > 0.5 else { return }
-        CameraLock.aim(at: centre)
-        lastAim = centre
-        lastAimAt = Date()
+    // MARK: - Tap to focus
+
+    /// Focus where the screen was tapped (window points), like the Camera app. Before a scan, focus and exposure
+    /// follow that point until the scan starts and locks them; during a scan, focus runs once there and holds
+    /// (exposure stays locked). false: the tap wasn't on the camera picture, or the camera can't be set.
+    @discardableResult
+    func focus(atScreen point: CGPoint) -> Bool {
+        guard isRunning, phase == .waiting || phase == .ready || phase == .recording,
+              let frame = arView.session.currentFrame else { return false }
+        let size = arView.bounds.size
+        let p = arView.convert(point, from: nil)
+        guard size.width > 0, size.height > 0, arView.bounds.contains(p) else { return false }
+        // View → sensor-normalized (the camera's landscape image, top-left origin): the inverse of how the
+        // camera image is laid onto the view.
+        let toView = frame.displayTransform(for: .portrait, viewportSize: size)
+        let sensor = CGPoint(x: p.x / size.width, y: p.y / size.height).applying(toView.inverted())
+        let target = CGPoint(x: min(max(sensor.x, 0), 1), y: min(max(sensor.y, 0), 1))
+        guard CameraLock.focus(at: target, holdExposure: phase == .recording) else { return false }
+        tick.impactOccurred(intensity: 0.6)
+        return true
     }
 
     private func publishCoverage() {
