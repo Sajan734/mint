@@ -117,6 +117,30 @@ def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
     assert len(asked) == 12 and all(b is None for b in asked)
 
 
+def test_seller_name_reaches_reference_price(tmp_path, monkeypatch):
+    import stages.reference_price as rp
+    from gemini import GeminiReply
+
+    prompts = []
+
+    async def fake(contents, system_prompt, schema, **kwargs):
+        prompts.append(contents)
+        return GeminiReply(raw={"amount_cad": 450.0, "note": "Sony WH-1000XM4 at sony.ca."}, model="fake",
+                           latency_ms=1.0, grounding=[{"uri": "https://example.test", "title": "sony.ca", "domain": None}])
+
+    monkeypatch.setattr(rp, "generate_json", fake)
+    item_dir = tmp_path / "item_seller_named"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "stubs" / "reference_price.json").unlink()
+    (item_dir / "input.json").write_text(json.dumps({"seller_name": "Sony WH-1000XM4 Midnight Blue"}))
+
+    result = run(item_dir, tmp_path)
+    assert isinstance(result, Listing)
+    assert len(prompts) == 1 and "Sony WH-1000XM4 Midnight Blue" in prompts[0]
+    assert result.price_cad == 284  # 450 x 0.70 new_retail x 0.90 light_wear, rounded
+    assert any("Search-grounded" in line for line in result.price_justification)
+
+
 def test_demo_mode_reads_cache_first(tmp_path):
     ctx = RunContext(item_id="item01", item_dir=FIXTURES / "item01", run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache", demo_mode=True)
     cached = Views.model_validate_json((FIXTURES / "item01" / "stubs" / "render.json").read_text(encoding="utf-8"))

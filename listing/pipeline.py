@@ -125,7 +125,7 @@ async def run_pipeline(
     else:
         draft, reference, cond = await asyncio.gather(
             run_stage(ctx, "listing_text", ListingDraft, listing_text, identity),
-            run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity),
+            run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity, seller_name),
             run_stage(ctx, "condition", Condition, condition, views, baseline),
         )
         result = await run_stage(ctx, "finalize", Listing, finalize, views, match, draft, reference, cond)
