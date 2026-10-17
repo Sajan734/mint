@@ -51,11 +51,11 @@ def test_data_root_must_exist(env, monkeypatch, tmp_path):
         config.load_settings(env)
 
 
-def test_relative_data_root_resolves_against_repo_root(env, monkeypatch):
+def test_relative_data_root_resolves_against_repo_root(env, monkeypatch, tmp_path):
+    (tmp_path / "multiagent" / "data").mkdir(parents=True)
+    monkeypatch.setattr(config, "REPO_ROOT", tmp_path)
     monkeypatch.setenv("DATA_ROOT", "multiagent/data")
-    assert (
-        config.load_settings(env).data_root == (config.REPO_ROOT / "multiagent" / "data").resolve()
-    )
+    assert config.load_settings(env).data_root == (tmp_path / "multiagent" / "data").resolve()
 
 
 def test_amended_defaults(env):
