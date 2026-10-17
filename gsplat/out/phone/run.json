@@ -1,0 +1,72 @@
+{
+  "frames_used": {
+    "top": 80
+  },
+  "poses": {
+    "top": {
+      "up_source": "support_plane",
+      "plane_inlier_frac": 0.143,
+      "up_vs_camera_deg": 20.1,
+      "object_radius": 0.2403,
+      "init_points": 120000,
+      "vggt_res": [
+        518,
+        294
+      ],
+      "vggt_s": 2.63,
+      "post_s": 1.19
+    }
+  },
+  "gaussians": {
+    "before": 200000,
+    "after": 115753,
+    "dropped_vote": 3272,
+    "dropped_opacity": 72642,
+    "dropped_scale": 2,
+    "dropped_invisible": 56448
+  },
+  "sizes_mb": {
+    "splat.spz": 2.32
+  },
+  "timings": {
+    "1_frames": 2.17,
+    "2_masks_top": 2.62,
+    "3_poses_top": 3.82,
+    "4_train": 17.05,
+    "5_clean_export": 0.69,
+    "6_views": 0.54,
+    "total": 26.89
+  },
+  "eval_heldout_raw": {
+    "psnr_masked": 23.79,
+    "ssim_masked": 0.7481,
+    "n_views": 8,
+    "pose_fit_steps": 0
+  },
+  "eval_heldout": {
+    "psnr_masked": 23.6,
+    "ssim_masked": 0.7396,
+    "n_views": 8,
+    "pose_fit_steps": 0
+  },
+  "eval_heldout_posefit": {
+    "psnr_masked": 26.8,
+    "ssim_masked": 0.8516,
+    "n_views": 8,
+    "pose_fit_steps": 60
+  },
+  "eval_heldout_spz": {
+    "psnr_masked": 23.58,
+    "ssim_masked": 0.7345,
+    "n_views": 8,
+    "pose_fit_steps": 0
+  },
+  "eval_train": {
+    "psnr_masked": 25.81,
+    "ssim_masked": 0.8498,
+    "n_views": 9,
+    "pose_fit_steps": 0
+  },
+  "debug_extras_s": 2.62,
+  "wall_incl_upload_and_cold_start": 52.1
+}
