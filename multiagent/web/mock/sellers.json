@@ -1,0 +1,62 @@
+[
+  {
+    "id": "sel_priya",
+    "name": "Priya N.",
+    "avatar": "/avatars/sel_priya.svg",
+    "neighbourhood": "Leslieville",
+    "member_since": "2026-03",
+    "rating": 4.9,
+    "rating_count": 31,
+    "response_time": "usually replies within an hour"
+  },
+  {
+    "id": "sel_marcus",
+    "name": "Marcus T.",
+    "avatar": "/avatars/sel_marcus.svg",
+    "neighbourhood": "The Annex",
+    "member_since": "2026-05",
+    "rating": 4.8,
+    "rating_count": 22,
+    "response_time": "usually replies within a few hours"
+  },
+  {
+    "id": "sel_amara",
+    "name": "Amara O.",
+    "avatar": "/avatars/sel_amara.svg",
+    "neighbourhood": "Junction",
+    "member_since": "2026-02",
+    "rating": 4.7,
+    "rating_count": 18,
+    "response_time": "usually replies within a day"
+  },
+  {
+    "id": "sel_daniel",
+    "name": "Daniel K.",
+    "avatar": "/avatars/sel_daniel.svg",
+    "neighbourhood": "Scarborough Village",
+    "member_since": "2026-06",
+    "rating": 4.6,
+    "rating_count": 9,
+    "response_time": "usually replies within an hour"
+  },
+  {
+    "id": "sel_hannah",
+    "name": "Hannah L.",
+    "avatar": "/avatars/sel_hannah.svg",
+    "neighbourhood": "Highland Creek",
+    "member_since": "2026-04",
+    "rating": 5,
+    "rating_count": 12,
+    "response_time": "usually replies within a few hours"
+  },
+  {
+    "id": "sel_raj",
+    "name": "Raj S.",
+    "avatar": "/avatars/sel_raj.svg",
+    "neighbourhood": "Agincourt",
+    "member_since": "2026-07",
+    "rating": 4.5,
+    "rating_count": 7,
+    "response_time": "usually replies within a day"
+  }
+]

@@ -1,0 +1,2925 @@
+[
+  {
+    "listing": {
+      "item_id": "pots_i1",
+      "title": "Succulents and houseplants in plastic and terracotta pots on pallet shelf",
+      "description": "About 20 potted succulents and houseplants in black plastic, terracotta and yellow pots on a stacked pallet and brick shelf. Includes a white plastic watering can.",
+      "attributes": {
+        "type": "houseplant collection",
+        "colour": "green",
+        "material": "plastic and terracotta pots",
+        "count": "about 20 plants"
+      },
+      "tags": [
+        "succulents",
+        "houseplants",
+        "plant pots",
+        "terracotta",
+        "garden"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs: front, 10° above; right, 10° above.",
+        "The back view shows stains or discolouration."
+      ],
+      "price_cad": 30,
+      "price_justification": [
+        "We estimate the used market price at about $46.00; x 0.65 for light wear gives $29.90, rounded to $30."
+      ],
+      "preview_images": [
+        "/local/pots/f00.webp",
+        "/local/pots/f06.webp",
+        "/local/pots/f12.webp",
+        "/local/pots/f18.webp"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_leslieville_moving",
+    "category": "garden_plants",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 30,
+    "frames": [
+      "/local/pots/f00.webp",
+      "/local/pots/f01.webp",
+      "/local/pots/f02.webp",
+      "/local/pots/f03.webp",
+      "/local/pots/f04.webp",
+      "/local/pots/f05.webp",
+      "/local/pots/f06.webp",
+      "/local/pots/f07.webp",
+      "/local/pots/f08.webp",
+      "/local/pots/f09.webp",
+      "/local/pots/f10.webp",
+      "/local/pots/f11.webp",
+      "/local/pots/f12.webp",
+      "/local/pots/f13.webp",
+      "/local/pots/f14.webp",
+      "/local/pots/f15.webp",
+      "/local/pots/f16.webp",
+      "/local/pots/f17.webp",
+      "/local/pots/f18.webp",
+      "/local/pots/f19.webp",
+      "/local/pots/f20.webp",
+      "/local/pots/f21.webp",
+      "/local/pots/f22.webp",
+      "/local/pots/f23.webp"
+    ],
+    "splat_url": null,
+    "usable_view_count": 9,
+    "listed_at": "2026-10-08T09:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "zen_i1",
+      "title": "Tabletop zen garden set with rake and stones",
+      "description": "Tabletop zen garden set with rake and stones. Everyday kitchen and home piece, easy to clean. Pickup is easy.",
+      "attributes": {
+        "type": "home kitchen",
+        "colour": "sand"
+      },
+      "tags": [
+        "tabletop",
+        "zen",
+        "garden",
+        "home"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 25,
+      "price_justification": [
+        "We estimate the used market price at about $42; x 0.5 for moderate wear gives $21.",
+        "Seller priced it at $25."
+      ],
+      "preview_images": [
+        "/local/zen/f00.webp",
+        "/local/zen/f06.webp",
+        "/local/zen/f12.webp",
+        "/local/zen/f18.webp"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_leslieville_moving",
+    "category": "home_kitchen",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 21,
+    "frames": [
+      "/local/zen/f00.webp",
+      "/local/zen/f01.webp",
+      "/local/zen/f02.webp",
+      "/local/zen/f03.webp",
+      "/local/zen/f04.webp",
+      "/local/zen/f05.webp",
+      "/local/zen/f06.webp",
+      "/local/zen/f07.webp",
+      "/local/zen/f08.webp",
+      "/local/zen/f09.webp",
+      "/local/zen/f10.webp",
+      "/local/zen/f11.webp",
+      "/local/zen/f12.webp",
+      "/local/zen/f13.webp",
+      "/local/zen/f14.webp",
+      "/local/zen/f15.webp",
+      "/local/zen/f16.webp",
+      "/local/zen/f17.webp",
+      "/local/zen/f18.webp",
+      "/local/zen/f19.webp",
+      "/local/zen/f20.webp",
+      "/local/zen/f21.webp",
+      "/local/zen/f22.webp",
+      "/local/zen/f23.webp"
+    ],
+    "splat_url": null,
+    "usable_view_count": 13,
+    "listed_at": "2026-10-09T10:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0003",
+      "title": "Stoneware mug set (4)",
+      "description": "Stoneware mug set (4). Everyday kitchen and home piece, easy to clean. Pickup is easy.",
+      "attributes": {
+        "type": "home kitchen",
+        "colour": "sage"
+      },
+      "tags": [
+        "stoneware",
+        "mug",
+        "set",
+        "home"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 110,
+      "price_justification": [
+        "We estimate the used market price at about $154; x 0.65 for light wear gives $100.",
+        "Seller priced it at $110."
+      ],
+      "preview_images": [
+        "/frames/mug/sage/0",
+        "/frames/mug/sage/6",
+        "/frames/mug/sage/12",
+        "/frames/mug/sage/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_leslieville_moving",
+    "category": "home_kitchen",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 100,
+    "frames": [
+      "/frames/mug/sage/0",
+      "/frames/mug/sage/1",
+      "/frames/mug/sage/2",
+      "/frames/mug/sage/3",
+      "/frames/mug/sage/4",
+      "/frames/mug/sage/5",
+      "/frames/mug/sage/6",
+      "/frames/mug/sage/7",
+      "/frames/mug/sage/8",
+      "/frames/mug/sage/9",
+      "/frames/mug/sage/10",
+      "/frames/mug/sage/11",
+      "/frames/mug/sage/12",
+      "/frames/mug/sage/13",
+      "/frames/mug/sage/14",
+      "/frames/mug/sage/15",
+      "/frames/mug/sage/16",
+      "/frames/mug/sage/17",
+      "/frames/mug/sage/18",
+      "/frames/mug/sage/19",
+      "/frames/mug/sage/20",
+      "/frames/mug/sage/21",
+      "/frames/mug/sage/22",
+      "/frames/mug/sage/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 8,
+    "listed_at": "2026-10-10T11:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0004",
+      "title": "Speckled glaze vase",
+      "description": "Speckled glaze vase. Everyday kitchen and home piece, easy to clean. Pickup is easy.",
+      "attributes": {
+        "type": "home kitchen",
+        "colour": "sand"
+      },
+      "tags": [
+        "speckled",
+        "glaze",
+        "vase",
+        "home"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 85,
+      "price_justification": [
+        "We estimate the used market price at about $200; x 0.5 for moderate wear gives $100.",
+        "Seller priced it at $85."
+      ],
+      "preview_images": [
+        "/frames/vase/sand/0",
+        "/frames/vase/sand/6",
+        "/frames/vase/sand/12",
+        "/frames/vase/sand/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_leslieville_moving",
+    "category": "home_kitchen",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 100,
+    "frames": [
+      "/frames/vase/sand/0",
+      "/frames/vase/sand/1",
+      "/frames/vase/sand/2",
+      "/frames/vase/sand/3",
+      "/frames/vase/sand/4",
+      "/frames/vase/sand/5",
+      "/frames/vase/sand/6",
+      "/frames/vase/sand/7",
+      "/frames/vase/sand/8",
+      "/frames/vase/sand/9",
+      "/frames/vase/sand/10",
+      "/frames/vase/sand/11",
+      "/frames/vase/sand/12",
+      "/frames/vase/sand/13",
+      "/frames/vase/sand/14",
+      "/frames/vase/sand/15",
+      "/frames/vase/sand/16",
+      "/frames/vase/sand/17",
+      "/frames/vase/sand/18",
+      "/frames/vase/sand/19",
+      "/frames/vase/sand/20",
+      "/frames/vase/sand/21",
+      "/frames/vase/sand/22",
+      "/frames/vase/sand/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 12,
+    "listed_at": "2026-10-11T12:15:00Z",
+    "status": "reserved"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0005",
+      "title": "Glass canister trio",
+      "description": "Glass canister trio. Everyday kitchen and home piece, easy to clean. Pickup is easy.",
+      "attributes": {
+        "type": "home kitchen",
+        "colour": "mint"
+      },
+      "tags": [
+        "glass",
+        "canister",
+        "trio",
+        "home"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "We estimate the used market price at about $40; x 0.8 for like new gives $32.",
+        "Seller priced it at $20."
+      ],
+      "preview_images": [
+        "/frames/vase/mint/0",
+        "/frames/vase/mint/6",
+        "/frames/vase/mint/12",
+        "/frames/vase/mint/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_leslieville_moving",
+    "category": "home_kitchen",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 32,
+    "frames": [
+      "/frames/vase/mint/0",
+      "/frames/vase/mint/1",
+      "/frames/vase/mint/2",
+      "/frames/vase/mint/3",
+      "/frames/vase/mint/4",
+      "/frames/vase/mint/5",
+      "/frames/vase/mint/6",
+      "/frames/vase/mint/7",
+      "/frames/vase/mint/8",
+      "/frames/vase/mint/9",
+      "/frames/vase/mint/10",
+      "/frames/vase/mint/11",
+      "/frames/vase/mint/12",
+      "/frames/vase/mint/13",
+      "/frames/vase/mint/14",
+      "/frames/vase/mint/15",
+      "/frames/vase/mint/16",
+      "/frames/vase/mint/17",
+      "/frames/vase/mint/18",
+      "/frames/vase/mint/19",
+      "/frames/vase/mint/20",
+      "/frames/vase/mint/21",
+      "/frames/vase/mint/22",
+      "/frames/vase/mint/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 14,
+    "listed_at": "2026-10-12T13:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0006",
+      "title": "Enamel camp mug",
+      "description": "Enamel camp mug. Everyday kitchen and home piece, easy to clean. Pickup is easy.",
+      "attributes": {
+        "type": "home kitchen",
+        "colour": "coral"
+      },
+      "tags": [
+        "enamel",
+        "camp",
+        "mug",
+        "home"
+      ],
+      "condition_grade": "heavy_wear",
+      "condition_notes": [
+        "5 views show scratches or scuffs.",
+        "The base view shows stains or discolouration."
+      ],
+      "price_cad": 15,
+      "price_justification": [
+        "We estimate the used market price at about $43; x 0.35 for heavy wear gives $15.",
+        "Seller priced it at $15."
+      ],
+      "preview_images": [
+        "/frames/mug/coral/0",
+        "/frames/mug/coral/6",
+        "/frames/mug/coral/12",
+        "/frames/mug/coral/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": true,
+      "seller_check_reasons": [
+        "The back view was unclear."
+      ]
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_danforth_declutter",
+    "category": "home_kitchen",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 15,
+    "frames": [
+      "/frames/mug/coral/0",
+      "/frames/mug/coral/1",
+      "/frames/mug/coral/2",
+      "/frames/mug/coral/3",
+      "/frames/mug/coral/4",
+      "/frames/mug/coral/5",
+      "/frames/mug/coral/6",
+      "/frames/mug/coral/7",
+      "/frames/mug/coral/8",
+      "/frames/mug/coral/9",
+      "/frames/mug/coral/10",
+      "/frames/mug/coral/11",
+      "/frames/mug/coral/12",
+      "/frames/mug/coral/13",
+      "/frames/mug/coral/14",
+      "/frames/mug/coral/15",
+      "/frames/mug/coral/16",
+      "/frames/mug/coral/17",
+      "/frames/mug/coral/18",
+      "/frames/mug/coral/19",
+      "/frames/mug/coral/20",
+      "/frames/mug/coral/21",
+      "/frames/mug/coral/22",
+      "/frames/mug/coral/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 6,
+    "listed_at": "2026-10-13T14:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0007",
+      "title": "Wireless over-ear headphones",
+      "description": "Wireless over-ear headphones. Works as it should. Charger or cable noted in the scan where included.",
+      "attributes": {
+        "type": "electronics",
+        "colour": "ink"
+      },
+      "tags": [
+        "wireless",
+        "overear",
+        "headphones",
+        "electronics"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 120,
+      "price_justification": [
+        "We estimate the used market price at about $309; x 0.65 for light wear gives $201.",
+        "Seller priced it at $120."
+      ],
+      "preview_images": [
+        "/frames/headphones/ink/0",
+        "/frames/headphones/ink/6",
+        "/frames/headphones/ink/12",
+        "/frames/headphones/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_danforth_declutter",
+    "category": "electronics",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 201,
+    "frames": [
+      "/frames/headphones/ink/0",
+      "/frames/headphones/ink/1",
+      "/frames/headphones/ink/2",
+      "/frames/headphones/ink/3",
+      "/frames/headphones/ink/4",
+      "/frames/headphones/ink/5",
+      "/frames/headphones/ink/6",
+      "/frames/headphones/ink/7",
+      "/frames/headphones/ink/8",
+      "/frames/headphones/ink/9",
+      "/frames/headphones/ink/10",
+      "/frames/headphones/ink/11",
+      "/frames/headphones/ink/12",
+      "/frames/headphones/ink/13",
+      "/frames/headphones/ink/14",
+      "/frames/headphones/ink/15",
+      "/frames/headphones/ink/16",
+      "/frames/headphones/ink/17",
+      "/frames/headphones/ink/18",
+      "/frames/headphones/ink/19",
+      "/frames/headphones/ink/20",
+      "/frames/headphones/ink/21",
+      "/frames/headphones/ink/22",
+      "/frames/headphones/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 9,
+    "listed_at": "2026-10-14T15:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0008",
+      "title": "Kids on-ear headphones",
+      "description": "Kids on-ear headphones. Works as it should. Charger or cable noted in the scan where included.",
+      "attributes": {
+        "type": "electronics",
+        "colour": "coral"
+      },
+      "tags": [
+        "kids",
+        "onear",
+        "headphones",
+        "electronics"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 30,
+      "price_justification": [
+        "We estimate the used market price at about $82; x 0.65 for light wear gives $53.",
+        "Seller priced it at $30."
+      ],
+      "preview_images": [
+        "/frames/headphones/coral/0",
+        "/frames/headphones/coral/6",
+        "/frames/headphones/coral/12",
+        "/frames/headphones/coral/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_danforth_declutter",
+    "category": "electronics",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 53,
+    "frames": [
+      "/frames/headphones/coral/0",
+      "/frames/headphones/coral/1",
+      "/frames/headphones/coral/2",
+      "/frames/headphones/coral/3",
+      "/frames/headphones/coral/4",
+      "/frames/headphones/coral/5",
+      "/frames/headphones/coral/6",
+      "/frames/headphones/coral/7",
+      "/frames/headphones/coral/8",
+      "/frames/headphones/coral/9",
+      "/frames/headphones/coral/10",
+      "/frames/headphones/coral/11",
+      "/frames/headphones/coral/12",
+      "/frames/headphones/coral/13",
+      "/frames/headphones/coral/14",
+      "/frames/headphones/coral/15",
+      "/frames/headphones/coral/16",
+      "/frames/headphones/coral/17",
+      "/frames/headphones/coral/18",
+      "/frames/headphones/coral/19",
+      "/frames/headphones/coral/20",
+      "/frames/headphones/coral/21",
+      "/frames/headphones/coral/22",
+      "/frames/headphones/coral/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 14,
+    "listed_at": "2026-10-15T16:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0009",
+      "title": "LED desk lamp",
+      "description": "LED desk lamp. Works as it should. Charger or cable noted in the scan where included.",
+      "attributes": {
+        "type": "electronics",
+        "colour": "mint"
+      },
+      "tags": [
+        "led",
+        "desk",
+        "lamp",
+        "electronics"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 130,
+      "price_justification": [
+        "We estimate the used market price at about $154; x 0.65 for light wear gives $100.",
+        "Seller priced it at $130."
+      ],
+      "preview_images": [
+        "/frames/lamp/mint/0",
+        "/frames/lamp/mint/6",
+        "/frames/lamp/mint/12",
+        "/frames/lamp/mint/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_danforth_declutter",
+    "category": "electronics",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 100,
+    "frames": [
+      "/frames/lamp/mint/0",
+      "/frames/lamp/mint/1",
+      "/frames/lamp/mint/2",
+      "/frames/lamp/mint/3",
+      "/frames/lamp/mint/4",
+      "/frames/lamp/mint/5",
+      "/frames/lamp/mint/6",
+      "/frames/lamp/mint/7",
+      "/frames/lamp/mint/8",
+      "/frames/lamp/mint/9",
+      "/frames/lamp/mint/10",
+      "/frames/lamp/mint/11",
+      "/frames/lamp/mint/12",
+      "/frames/lamp/mint/13",
+      "/frames/lamp/mint/14",
+      "/frames/lamp/mint/15",
+      "/frames/lamp/mint/16",
+      "/frames/lamp/mint/17",
+      "/frames/lamp/mint/18",
+      "/frames/lamp/mint/19",
+      "/frames/lamp/mint/20",
+      "/frames/lamp/mint/21",
+      "/frames/lamp/mint/22",
+      "/frames/lamp/mint/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 13,
+    "listed_at": "2026-10-08T17:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0010",
+      "title": "Studio headphones",
+      "description": "Studio headphones. Works as it should. Charger or cable noted in the scan where included.",
+      "attributes": {
+        "type": "electronics",
+        "colour": "sand"
+      },
+      "tags": [
+        "studio",
+        "headphones",
+        "electronics"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 95,
+      "price_justification": [
+        "We estimate the used market price at about $178; x 0.65 for light wear gives $116.",
+        "Seller priced it at $95."
+      ],
+      "preview_images": [
+        "/frames/headphones/sand/0",
+        "/frames/headphones/sand/6",
+        "/frames/headphones/sand/12",
+        "/frames/headphones/sand/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_danforth_declutter",
+    "category": "electronics",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 116,
+    "frames": [
+      "/frames/headphones/sand/0",
+      "/frames/headphones/sand/1",
+      "/frames/headphones/sand/2",
+      "/frames/headphones/sand/3",
+      "/frames/headphones/sand/4",
+      "/frames/headphones/sand/5",
+      "/frames/headphones/sand/6",
+      "/frames/headphones/sand/7",
+      "/frames/headphones/sand/8",
+      "/frames/headphones/sand/9",
+      "/frames/headphones/sand/10",
+      "/frames/headphones/sand/11",
+      "/frames/headphones/sand/12",
+      "/frames/headphones/sand/13",
+      "/frames/headphones/sand/14",
+      "/frames/headphones/sand/15",
+      "/frames/headphones/sand/16",
+      "/frames/headphones/sand/17",
+      "/frames/headphones/sand/18",
+      "/frames/headphones/sand/19",
+      "/frames/headphones/sand/20",
+      "/frames/headphones/sand/21",
+      "/frames/headphones/sand/22",
+      "/frames/headphones/sand/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 9,
+    "listed_at": "2026-10-09T09:15:00Z",
+    "status": "reserved"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0011",
+      "title": "Bluetooth speaker",
+      "description": "Bluetooth speaker. Works as it should. Charger or cable noted in the scan where included.",
+      "attributes": {
+        "type": "electronics",
+        "colour": "ink"
+      },
+      "tags": [
+        "bluetooth",
+        "speaker",
+        "electronics"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 40,
+      "price_justification": [
+        "We estimate the used market price at about $81; x 0.8 for like new gives $65.",
+        "Seller priced it at $40."
+      ],
+      "preview_images": [
+        "/frames/vase/ink/0",
+        "/frames/vase/ink/6",
+        "/frames/vase/ink/12",
+        "/frames/vase/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_amara",
+    "garage_sale_id": "gs_junction_vintage",
+    "category": "electronics",
+    "location": {
+      "neighbourhood": "Junction",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 65,
+    "frames": [
+      "/frames/vase/ink/0",
+      "/frames/vase/ink/1",
+      "/frames/vase/ink/2",
+      "/frames/vase/ink/3",
+      "/frames/vase/ink/4",
+      "/frames/vase/ink/5",
+      "/frames/vase/ink/6",
+      "/frames/vase/ink/7",
+      "/frames/vase/ink/8",
+      "/frames/vase/ink/9",
+      "/frames/vase/ink/10",
+      "/frames/vase/ink/11",
+      "/frames/vase/ink/12",
+      "/frames/vase/ink/13",
+      "/frames/vase/ink/14",
+      "/frames/vase/ink/15",
+      "/frames/vase/ink/16",
+      "/frames/vase/ink/17",
+      "/frames/vase/ink/18",
+      "/frames/vase/ink/19",
+      "/frames/vase/ink/20",
+      "/frames/vase/ink/21",
+      "/frames/vase/ink/22",
+      "/frames/vase/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 11,
+    "listed_at": "2026-10-10T10:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0012",
+      "title": "Terracotta planter trio",
+      "description": "Terracotta planter trio. Good for a sunny sill or a balcony. Drainage holes are included.",
+      "attributes": {
+        "type": "garden plants",
+        "colour": "clay"
+      },
+      "tags": [
+        "terracotta",
+        "planter",
+        "trio",
+        "garden"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "We estimate the used market price at about $21; x 0.8 for like new gives $17.",
+        "Seller priced it at $20."
+      ],
+      "preview_images": [
+        "/frames/vase/clay/0",
+        "/frames/vase/clay/6",
+        "/frames/vase/clay/12",
+        "/frames/vase/clay/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_amara",
+    "garage_sale_id": "gs_junction_vintage",
+    "category": "garden_plants",
+    "location": {
+      "neighbourhood": "Junction",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 17,
+    "frames": [
+      "/frames/vase/clay/0",
+      "/frames/vase/clay/1",
+      "/frames/vase/clay/2",
+      "/frames/vase/clay/3",
+      "/frames/vase/clay/4",
+      "/frames/vase/clay/5",
+      "/frames/vase/clay/6",
+      "/frames/vase/clay/7",
+      "/frames/vase/clay/8",
+      "/frames/vase/clay/9",
+      "/frames/vase/clay/10",
+      "/frames/vase/clay/11",
+      "/frames/vase/clay/12",
+      "/frames/vase/clay/13",
+      "/frames/vase/clay/14",
+      "/frames/vase/clay/15",
+      "/frames/vase/clay/16",
+      "/frames/vase/clay/17",
+      "/frames/vase/clay/18",
+      "/frames/vase/clay/19",
+      "/frames/vase/clay/20",
+      "/frames/vase/clay/21",
+      "/frames/vase/clay/22",
+      "/frames/vase/clay/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 10,
+    "listed_at": "2026-10-11T11:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0013",
+      "title": "Ceramic hanging planter",
+      "description": "Ceramic hanging planter. Good for a sunny sill or a balcony. Drainage holes are included.",
+      "attributes": {
+        "type": "garden plants",
+        "colour": "sage"
+      },
+      "tags": [
+        "ceramic",
+        "hanging",
+        "planter",
+        "garden"
+      ],
+      "condition_grade": "heavy_wear",
+      "condition_notes": [
+        "5 views show scratches or scuffs.",
+        "The base view shows stains or discolouration."
+      ],
+      "price_cad": 15,
+      "price_justification": [
+        "We estimate the used market price at about $40; x 0.35 for heavy wear gives $14.",
+        "Seller priced it at $15."
+      ],
+      "preview_images": [
+        "/frames/vase/sage/0",
+        "/frames/vase/sage/6",
+        "/frames/vase/sage/12",
+        "/frames/vase/sage/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": true,
+      "seller_check_reasons": [
+        "One scuff is hard to read.",
+        "Only 6 usable views."
+      ]
+    },
+    "seller_id": "sel_amara",
+    "garage_sale_id": "gs_junction_vintage",
+    "category": "garden_plants",
+    "location": {
+      "neighbourhood": "Junction",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 14,
+    "frames": [
+      "/frames/vase/sage/0",
+      "/frames/vase/sage/1",
+      "/frames/vase/sage/2",
+      "/frames/vase/sage/3",
+      "/frames/vase/sage/4",
+      "/frames/vase/sage/5",
+      "/frames/vase/sage/6",
+      "/frames/vase/sage/7",
+      "/frames/vase/sage/8",
+      "/frames/vase/sage/9",
+      "/frames/vase/sage/10",
+      "/frames/vase/sage/11",
+      "/frames/vase/sage/12",
+      "/frames/vase/sage/13",
+      "/frames/vase/sage/14",
+      "/frames/vase/sage/15",
+      "/frames/vase/sage/16",
+      "/frames/vase/sage/17",
+      "/frames/vase/sage/18",
+      "/frames/vase/sage/19",
+      "/frames/vase/sage/20",
+      "/frames/vase/sage/21",
+      "/frames/vase/sage/22",
+      "/frames/vase/sage/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 6,
+    "listed_at": "2026-10-12T12:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0014",
+      "title": "Glazed plant pot, large",
+      "description": "Glazed plant pot, large. Good for a sunny sill or a balcony. Drainage holes are included.",
+      "attributes": {
+        "type": "garden plants",
+        "colour": "coral"
+      },
+      "tags": [
+        "glazed",
+        "plant",
+        "pot",
+        "garden"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 25,
+      "price_justification": [
+        "We estimate the used market price at about $54; x 0.65 for light wear gives $35.",
+        "Seller priced it at $25."
+      ],
+      "preview_images": [
+        "/frames/vase/coral/0",
+        "/frames/vase/coral/6",
+        "/frames/vase/coral/12",
+        "/frames/vase/coral/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_amara",
+    "garage_sale_id": "gs_junction_vintage",
+    "category": "garden_plants",
+    "location": {
+      "neighbourhood": "Junction",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 35,
+    "frames": [
+      "/frames/vase/coral/0",
+      "/frames/vase/coral/1",
+      "/frames/vase/coral/2",
+      "/frames/vase/coral/3",
+      "/frames/vase/coral/4",
+      "/frames/vase/coral/5",
+      "/frames/vase/coral/6",
+      "/frames/vase/coral/7",
+      "/frames/vase/coral/8",
+      "/frames/vase/coral/9",
+      "/frames/vase/coral/10",
+      "/frames/vase/coral/11",
+      "/frames/vase/coral/12",
+      "/frames/vase/coral/13",
+      "/frames/vase/coral/14",
+      "/frames/vase/coral/15",
+      "/frames/vase/coral/16",
+      "/frames/vase/coral/17",
+      "/frames/vase/coral/18",
+      "/frames/vase/coral/19",
+      "/frames/vase/coral/20",
+      "/frames/vase/coral/21",
+      "/frames/vase/coral/22",
+      "/frames/vase/coral/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 10,
+    "listed_at": "2026-10-13T13:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0015",
+      "title": "Watering can and trowel set",
+      "description": "Watering can and trowel set. Good for a sunny sill or a balcony. Drainage holes are included.",
+      "attributes": {
+        "type": "garden plants",
+        "colour": "mint"
+      },
+      "tags": [
+        "watering",
+        "can",
+        "and",
+        "garden"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 15,
+      "price_justification": [
+        "No comparable sales found yet, so Mint has no price check for this item."
+      ],
+      "preview_images": [
+        "/frames/mug/mint/0",
+        "/frames/mug/mint/6",
+        "/frames/mug/mint/12",
+        "/frames/mug/mint/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_amara",
+    "garage_sale_id": "gs_junction_vintage",
+    "category": "garden_plants",
+    "location": {
+      "neighbourhood": "Junction",
+      "city": "Toronto"
+    },
+    "reference_price_cad": null,
+    "frames": [
+      "/frames/mug/mint/0",
+      "/frames/mug/mint/1",
+      "/frames/mug/mint/2",
+      "/frames/mug/mint/3",
+      "/frames/mug/mint/4",
+      "/frames/mug/mint/5",
+      "/frames/mug/mint/6",
+      "/frames/mug/mint/7",
+      "/frames/mug/mint/8",
+      "/frames/mug/mint/9",
+      "/frames/mug/mint/10",
+      "/frames/mug/mint/11",
+      "/frames/mug/mint/12",
+      "/frames/mug/mint/13",
+      "/frames/mug/mint/14",
+      "/frames/mug/mint/15",
+      "/frames/mug/mint/16",
+      "/frames/mug/mint/17",
+      "/frames/mug/mint/18",
+      "/frames/mug/mint/19",
+      "/frames/mug/mint/20",
+      "/frames/mug/mint/21",
+      "/frames/mug/mint/22",
+      "/frames/mug/mint/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 12,
+    "listed_at": "2026-10-14T14:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0016",
+      "title": "Cycling helmet",
+      "description": "Cycling helmet. Ready for the next ride, climb or trip. Straps are adjustable.",
+      "attributes": {
+        "type": "sports outdoors",
+        "colour": "coral"
+      },
+      "tags": [
+        "cycling",
+        "helmet",
+        "sports"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 35,
+      "price_justification": [
+        "We estimate the used market price at about $62; x 0.5 for moderate wear gives $31.",
+        "Seller priced it at $35."
+      ],
+      "preview_images": [
+        "/frames/helmet/coral/0",
+        "/frames/helmet/coral/6",
+        "/frames/helmet/coral/12",
+        "/frames/helmet/coral/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_daniel",
+    "garage_sale_id": "gs_scarborough_gear",
+    "category": "sports_outdoors",
+    "location": {
+      "neighbourhood": "Scarborough Village",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 31,
+    "frames": [
+      "/frames/helmet/coral/0",
+      "/frames/helmet/coral/1",
+      "/frames/helmet/coral/2",
+      "/frames/helmet/coral/3",
+      "/frames/helmet/coral/4",
+      "/frames/helmet/coral/5",
+      "/frames/helmet/coral/6",
+      "/frames/helmet/coral/7",
+      "/frames/helmet/coral/8",
+      "/frames/helmet/coral/9",
+      "/frames/helmet/coral/10",
+      "/frames/helmet/coral/11",
+      "/frames/helmet/coral/12",
+      "/frames/helmet/coral/13",
+      "/frames/helmet/coral/14",
+      "/frames/helmet/coral/15",
+      "/frames/helmet/coral/16",
+      "/frames/helmet/coral/17",
+      "/frames/helmet/coral/18",
+      "/frames/helmet/coral/19",
+      "/frames/helmet/coral/20",
+      "/frames/helmet/coral/21",
+      "/frames/helmet/coral/22",
+      "/frames/helmet/coral/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 14,
+    "listed_at": "2026-10-15T15:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0017",
+      "title": "Kids bike helmet",
+      "description": "Kids bike helmet. Ready for the next ride, climb or trip. Straps are adjustable.",
+      "attributes": {
+        "type": "sports outdoors",
+        "colour": "mint"
+      },
+      "tags": [
+        "kids",
+        "bike",
+        "helmet",
+        "sports"
+      ],
+      "condition_grade": "heavy_wear",
+      "condition_notes": [
+        "5 views show scratches or scuffs.",
+        "The base view shows stains or discolouration."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "We estimate the used market price at about $71; x 0.35 for heavy wear gives $25.",
+        "Seller priced it at $20."
+      ],
+      "preview_images": [
+        "/frames/helmet/mint/0",
+        "/frames/helmet/mint/6",
+        "/frames/helmet/mint/12",
+        "/frames/helmet/mint/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_daniel",
+    "garage_sale_id": "gs_scarborough_gear",
+    "category": "sports_outdoors",
+    "location": {
+      "neighbourhood": "Scarborough Village",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 25,
+    "frames": [
+      "/frames/helmet/mint/0",
+      "/frames/helmet/mint/1",
+      "/frames/helmet/mint/2",
+      "/frames/helmet/mint/3",
+      "/frames/helmet/mint/4",
+      "/frames/helmet/mint/5",
+      "/frames/helmet/mint/6",
+      "/frames/helmet/mint/7",
+      "/frames/helmet/mint/8",
+      "/frames/helmet/mint/9",
+      "/frames/helmet/mint/10",
+      "/frames/helmet/mint/11",
+      "/frames/helmet/mint/12",
+      "/frames/helmet/mint/13",
+      "/frames/helmet/mint/14",
+      "/frames/helmet/mint/15",
+      "/frames/helmet/mint/16",
+      "/frames/helmet/mint/17",
+      "/frames/helmet/mint/18",
+      "/frames/helmet/mint/19",
+      "/frames/helmet/mint/20",
+      "/frames/helmet/mint/21",
+      "/frames/helmet/mint/22",
+      "/frames/helmet/mint/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 11,
+    "listed_at": "2026-10-08T16:15:00Z",
+    "status": "reserved"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0018",
+      "title": "Climbing helmet",
+      "description": "Climbing helmet. Ready for the next ride, climb or trip. Straps are adjustable.",
+      "attributes": {
+        "type": "sports outdoors",
+        "colour": "ink"
+      },
+      "tags": [
+        "climbing",
+        "helmet",
+        "sports"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 45,
+      "price_justification": [
+        "We estimate the used market price at about $60; x 0.8 for like new gives $48.",
+        "Seller priced it at $45."
+      ],
+      "preview_images": [
+        "/frames/helmet/ink/0",
+        "/frames/helmet/ink/6",
+        "/frames/helmet/ink/12",
+        "/frames/helmet/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_daniel",
+    "garage_sale_id": "gs_scarborough_gear",
+    "category": "sports_outdoors",
+    "location": {
+      "neighbourhood": "Scarborough Village",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 48,
+    "frames": [
+      "/frames/helmet/ink/0",
+      "/frames/helmet/ink/1",
+      "/frames/helmet/ink/2",
+      "/frames/helmet/ink/3",
+      "/frames/helmet/ink/4",
+      "/frames/helmet/ink/5",
+      "/frames/helmet/ink/6",
+      "/frames/helmet/ink/7",
+      "/frames/helmet/ink/8",
+      "/frames/helmet/ink/9",
+      "/frames/helmet/ink/10",
+      "/frames/helmet/ink/11",
+      "/frames/helmet/ink/12",
+      "/frames/helmet/ink/13",
+      "/frames/helmet/ink/14",
+      "/frames/helmet/ink/15",
+      "/frames/helmet/ink/16",
+      "/frames/helmet/ink/17",
+      "/frames/helmet/ink/18",
+      "/frames/helmet/ink/19",
+      "/frames/helmet/ink/20",
+      "/frames/helmet/ink/21",
+      "/frames/helmet/ink/22",
+      "/frames/helmet/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 13,
+    "listed_at": "2026-10-09T17:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0019",
+      "title": "Skate helmet",
+      "description": "Skate helmet. Ready for the next ride, climb or trip. Straps are adjustable.",
+      "attributes": {
+        "type": "sports outdoors",
+        "colour": "sand"
+      },
+      "tags": [
+        "skate",
+        "helmet",
+        "sports"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 25,
+      "price_justification": [
+        "We estimate the used market price at about $43; x 0.65 for light wear gives $28.",
+        "Seller priced it at $25."
+      ],
+      "preview_images": [
+        "/frames/helmet/sand/0",
+        "/frames/helmet/sand/6",
+        "/frames/helmet/sand/12",
+        "/frames/helmet/sand/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_daniel",
+    "garage_sale_id": "gs_scarborough_gear",
+    "category": "sports_outdoors",
+    "location": {
+      "neighbourhood": "Scarborough Village",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 28,
+    "frames": [
+      "/frames/helmet/sand/0",
+      "/frames/helmet/sand/1",
+      "/frames/helmet/sand/2",
+      "/frames/helmet/sand/3",
+      "/frames/helmet/sand/4",
+      "/frames/helmet/sand/5",
+      "/frames/helmet/sand/6",
+      "/frames/helmet/sand/7",
+      "/frames/helmet/sand/8",
+      "/frames/helmet/sand/9",
+      "/frames/helmet/sand/10",
+      "/frames/helmet/sand/11",
+      "/frames/helmet/sand/12",
+      "/frames/helmet/sand/13",
+      "/frames/helmet/sand/14",
+      "/frames/helmet/sand/15",
+      "/frames/helmet/sand/16",
+      "/frames/helmet/sand/17",
+      "/frames/helmet/sand/18",
+      "/frames/helmet/sand/19",
+      "/frames/helmet/sand/20",
+      "/frames/helmet/sand/21",
+      "/frames/helmet/sand/22",
+      "/frames/helmet/sand/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 12,
+    "listed_at": "2026-10-10T09:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0020",
+      "title": "Insulated camping mug",
+      "description": "Insulated camping mug. Ready for the next ride, climb or trip. Straps are adjustable.",
+      "attributes": {
+        "type": "sports outdoors",
+        "colour": "ink"
+      },
+      "tags": [
+        "insulated",
+        "camping",
+        "mug",
+        "sports"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 10,
+      "price_justification": [
+        "We estimate the used market price at about $12; x 0.65 for light wear gives $8.",
+        "Seller priced it at $10."
+      ],
+      "preview_images": [
+        "/frames/mug/ink/0",
+        "/frames/mug/ink/6",
+        "/frames/mug/ink/12",
+        "/frames/mug/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_daniel",
+    "garage_sale_id": "gs_scarborough_gear",
+    "category": "sports_outdoors",
+    "location": {
+      "neighbourhood": "Scarborough Village",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 8,
+    "frames": [
+      "/frames/mug/ink/0",
+      "/frames/mug/ink/1",
+      "/frames/mug/ink/2",
+      "/frames/mug/ink/3",
+      "/frames/mug/ink/4",
+      "/frames/mug/ink/5",
+      "/frames/mug/ink/6",
+      "/frames/mug/ink/7",
+      "/frames/mug/ink/8",
+      "/frames/mug/ink/9",
+      "/frames/mug/ink/10",
+      "/frames/mug/ink/11",
+      "/frames/mug/ink/12",
+      "/frames/mug/ink/13",
+      "/frames/mug/ink/14",
+      "/frames/mug/ink/15",
+      "/frames/mug/ink/16",
+      "/frames/mug/ink/17",
+      "/frames/mug/ink/18",
+      "/frames/mug/ink/19",
+      "/frames/mug/ink/20",
+      "/frames/mug/ink/21",
+      "/frames/mug/ink/22",
+      "/frames/mug/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 8,
+    "listed_at": "2026-10-11T10:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0021",
+      "title": "Wooden puzzle box",
+      "description": "Wooden puzzle box. Complete and ready for game night. Pieces counted before the scan.",
+      "attributes": {
+        "type": "toys games",
+        "colour": "sand"
+      },
+      "tags": [
+        "wooden",
+        "puzzle",
+        "box",
+        "toys"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "We estimate the used market price at about $24; x 0.8 for like new gives $19.",
+        "Seller priced it at $20."
+      ],
+      "preview_images": [
+        "/frames/boardgame/sand/0",
+        "/frames/boardgame/sand/6",
+        "/frames/boardgame/sand/12",
+        "/frames/boardgame/sand/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": true,
+      "seller_check_reasons": [
+        "A label could not be read."
+      ]
+    },
+    "seller_id": "sel_hannah",
+    "garage_sale_id": "gs_highland_kids",
+    "category": "toys_games",
+    "location": {
+      "neighbourhood": "Highland Creek",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 19,
+    "frames": [
+      "/frames/boardgame/sand/0",
+      "/frames/boardgame/sand/1",
+      "/frames/boardgame/sand/2",
+      "/frames/boardgame/sand/3",
+      "/frames/boardgame/sand/4",
+      "/frames/boardgame/sand/5",
+      "/frames/boardgame/sand/6",
+      "/frames/boardgame/sand/7",
+      "/frames/boardgame/sand/8",
+      "/frames/boardgame/sand/9",
+      "/frames/boardgame/sand/10",
+      "/frames/boardgame/sand/11",
+      "/frames/boardgame/sand/12",
+      "/frames/boardgame/sand/13",
+      "/frames/boardgame/sand/14",
+      "/frames/boardgame/sand/15",
+      "/frames/boardgame/sand/16",
+      "/frames/boardgame/sand/17",
+      "/frames/boardgame/sand/18",
+      "/frames/boardgame/sand/19",
+      "/frames/boardgame/sand/20",
+      "/frames/boardgame/sand/21",
+      "/frames/boardgame/sand/22",
+      "/frames/boardgame/sand/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 6,
+    "listed_at": "2026-10-12T11:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0022",
+      "title": "Strategy board game",
+      "description": "Strategy board game. Complete and ready for game night. Pieces counted before the scan.",
+      "attributes": {
+        "type": "toys games",
+        "colour": "coral"
+      },
+      "tags": [
+        "strategy",
+        "board",
+        "game",
+        "toys"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 30,
+      "price_justification": [
+        "We estimate the used market price at about $49; x 0.65 for light wear gives $32.",
+        "Seller priced it at $30."
+      ],
+      "preview_images": [
+        "/frames/boardgame/coral/0",
+        "/frames/boardgame/coral/6",
+        "/frames/boardgame/coral/12",
+        "/frames/boardgame/coral/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_hannah",
+    "garage_sale_id": "gs_highland_kids",
+    "category": "toys_games",
+    "location": {
+      "neighbourhood": "Highland Creek",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 32,
+    "frames": [
+      "/frames/boardgame/coral/0",
+      "/frames/boardgame/coral/1",
+      "/frames/boardgame/coral/2",
+      "/frames/boardgame/coral/3",
+      "/frames/boardgame/coral/4",
+      "/frames/boardgame/coral/5",
+      "/frames/boardgame/coral/6",
+      "/frames/boardgame/coral/7",
+      "/frames/boardgame/coral/8",
+      "/frames/boardgame/coral/9",
+      "/frames/boardgame/coral/10",
+      "/frames/boardgame/coral/11",
+      "/frames/boardgame/coral/12",
+      "/frames/boardgame/coral/13",
+      "/frames/boardgame/coral/14",
+      "/frames/boardgame/coral/15",
+      "/frames/boardgame/coral/16",
+      "/frames/boardgame/coral/17",
+      "/frames/boardgame/coral/18",
+      "/frames/boardgame/coral/19",
+      "/frames/boardgame/coral/20",
+      "/frames/boardgame/coral/21",
+      "/frames/boardgame/coral/22",
+      "/frames/boardgame/coral/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 8,
+    "listed_at": "2026-10-13T12:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0023",
+      "title": "Family card game box",
+      "description": "Family card game box. Complete and ready for game night. Pieces counted before the scan.",
+      "attributes": {
+        "type": "toys games",
+        "colour": "mint"
+      },
+      "tags": [
+        "family",
+        "card",
+        "game",
+        "toys"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 15,
+      "price_justification": [
+        "No comparable sales found yet, so Mint has no price check for this item."
+      ],
+      "preview_images": [
+        "/frames/boardgame/mint/0",
+        "/frames/boardgame/mint/6",
+        "/frames/boardgame/mint/12",
+        "/frames/boardgame/mint/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_hannah",
+    "garage_sale_id": "gs_highland_kids",
+    "category": "toys_games",
+    "location": {
+      "neighbourhood": "Highland Creek",
+      "city": "Toronto"
+    },
+    "reference_price_cad": null,
+    "frames": [
+      "/frames/boardgame/mint/0",
+      "/frames/boardgame/mint/1",
+      "/frames/boardgame/mint/2",
+      "/frames/boardgame/mint/3",
+      "/frames/boardgame/mint/4",
+      "/frames/boardgame/mint/5",
+      "/frames/boardgame/mint/6",
+      "/frames/boardgame/mint/7",
+      "/frames/boardgame/mint/8",
+      "/frames/boardgame/mint/9",
+      "/frames/boardgame/mint/10",
+      "/frames/boardgame/mint/11",
+      "/frames/boardgame/mint/12",
+      "/frames/boardgame/mint/13",
+      "/frames/boardgame/mint/14",
+      "/frames/boardgame/mint/15",
+      "/frames/boardgame/mint/16",
+      "/frames/boardgame/mint/17",
+      "/frames/boardgame/mint/18",
+      "/frames/boardgame/mint/19",
+      "/frames/boardgame/mint/20",
+      "/frames/boardgame/mint/21",
+      "/frames/boardgame/mint/22",
+      "/frames/boardgame/mint/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 13,
+    "listed_at": "2026-10-14T13:15:00Z",
+    "status": "reserved"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0024",
+      "title": "Building blocks set",
+      "description": "Building blocks set. Complete and ready for game night. Pieces counted before the scan.",
+      "attributes": {
+        "type": "toys games",
+        "colour": "clay"
+      },
+      "tags": [
+        "building",
+        "blocks",
+        "set",
+        "toys"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 25,
+      "price_justification": [
+        "We estimate the used market price at about $37; x 0.65 for light wear gives $24.",
+        "Seller priced it at $25."
+      ],
+      "preview_images": [
+        "/frames/boardgame/clay/0",
+        "/frames/boardgame/clay/6",
+        "/frames/boardgame/clay/12",
+        "/frames/boardgame/clay/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_hannah",
+    "garage_sale_id": "gs_highland_kids",
+    "category": "toys_games",
+    "location": {
+      "neighbourhood": "Highland Creek",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 24,
+    "frames": [
+      "/frames/boardgame/clay/0",
+      "/frames/boardgame/clay/1",
+      "/frames/boardgame/clay/2",
+      "/frames/boardgame/clay/3",
+      "/frames/boardgame/clay/4",
+      "/frames/boardgame/clay/5",
+      "/frames/boardgame/clay/6",
+      "/frames/boardgame/clay/7",
+      "/frames/boardgame/clay/8",
+      "/frames/boardgame/clay/9",
+      "/frames/boardgame/clay/10",
+      "/frames/boardgame/clay/11",
+      "/frames/boardgame/clay/12",
+      "/frames/boardgame/clay/13",
+      "/frames/boardgame/clay/14",
+      "/frames/boardgame/clay/15",
+      "/frames/boardgame/clay/16",
+      "/frames/boardgame/clay/17",
+      "/frames/boardgame/clay/18",
+      "/frames/boardgame/clay/19",
+      "/frames/boardgame/clay/20",
+      "/frames/boardgame/clay/21",
+      "/frames/boardgame/clay/22",
+      "/frames/boardgame/clay/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 13,
+    "listed_at": "2026-10-15T14:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0025",
+      "title": "Trivia night box",
+      "description": "Trivia night box. Complete and ready for game night. Pieces counted before the scan.",
+      "attributes": {
+        "type": "toys games",
+        "colour": "ink"
+      },
+      "tags": [
+        "trivia",
+        "night",
+        "box",
+        "toys"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "We estimate the used market price at about $25; x 0.65 for light wear gives $16.",
+        "Seller priced it at $20."
+      ],
+      "preview_images": [
+        "/frames/boardgame/ink/0",
+        "/frames/boardgame/ink/6",
+        "/frames/boardgame/ink/12",
+        "/frames/boardgame/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_hannah",
+    "garage_sale_id": "gs_highland_kids",
+    "category": "toys_games",
+    "location": {
+      "neighbourhood": "Highland Creek",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 16,
+    "frames": [
+      "/frames/boardgame/ink/0",
+      "/frames/boardgame/ink/1",
+      "/frames/boardgame/ink/2",
+      "/frames/boardgame/ink/3",
+      "/frames/boardgame/ink/4",
+      "/frames/boardgame/ink/5",
+      "/frames/boardgame/ink/6",
+      "/frames/boardgame/ink/7",
+      "/frames/boardgame/ink/8",
+      "/frames/boardgame/ink/9",
+      "/frames/boardgame/ink/10",
+      "/frames/boardgame/ink/11",
+      "/frames/boardgame/ink/12",
+      "/frames/boardgame/ink/13",
+      "/frames/boardgame/ink/14",
+      "/frames/boardgame/ink/15",
+      "/frames/boardgame/ink/16",
+      "/frames/boardgame/ink/17",
+      "/frames/boardgame/ink/18",
+      "/frames/boardgame/ink/19",
+      "/frames/boardgame/ink/20",
+      "/frames/boardgame/ink/21",
+      "/frames/boardgame/ink/22",
+      "/frames/boardgame/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 8,
+    "listed_at": "2026-10-08T15:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0026",
+      "title": "Paperback mystery bundle",
+      "description": "Paperback mystery bundle. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "attributes": {
+        "type": "books media",
+        "colour": "clay"
+      },
+      "tags": [
+        "paperback",
+        "mystery",
+        "bundle",
+        "books"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 15,
+      "price_justification": [
+        "We estimate the used market price at about $20; x 0.8 for like new gives $16.",
+        "Seller priced it at $15."
+      ],
+      "preview_images": [
+        "/frames/book/clay/0",
+        "/frames/book/clay/6",
+        "/frames/book/clay/12",
+        "/frames/book/clay/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "books_media",
+    "location": {
+      "neighbourhood": "Agincourt",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 16,
+    "frames": [
+      "/frames/book/clay/0",
+      "/frames/book/clay/1",
+      "/frames/book/clay/2",
+      "/frames/book/clay/3",
+      "/frames/book/clay/4",
+      "/frames/book/clay/5",
+      "/frames/book/clay/6",
+      "/frames/book/clay/7",
+      "/frames/book/clay/8",
+      "/frames/book/clay/9",
+      "/frames/book/clay/10",
+      "/frames/book/clay/11",
+      "/frames/book/clay/12",
+      "/frames/book/clay/13",
+      "/frames/book/clay/14",
+      "/frames/book/clay/15",
+      "/frames/book/clay/16",
+      "/frames/book/clay/17",
+      "/frames/book/clay/18",
+      "/frames/book/clay/19",
+      "/frames/book/clay/20",
+      "/frames/book/clay/21",
+      "/frames/book/clay/22",
+      "/frames/book/clay/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 12,
+    "listed_at": "2026-10-09T16:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0027",
+      "title": "Hardcover cookbook",
+      "description": "Hardcover cookbook. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "attributes": {
+        "type": "books media",
+        "colour": "sage"
+      },
+      "tags": [
+        "hardcover",
+        "cookbook",
+        "books"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "We estimate the used market price at about $29; x 0.65 for light wear gives $19.",
+        "Seller priced it at $20."
+      ],
+      "preview_images": [
+        "/frames/book/sage/0",
+        "/frames/book/sage/6",
+        "/frames/book/sage/12",
+        "/frames/book/sage/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "books_media",
+    "location": {
+      "neighbourhood": "Agincourt",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 19,
+    "frames": [
+      "/frames/book/sage/0",
+      "/frames/book/sage/1",
+      "/frames/book/sage/2",
+      "/frames/book/sage/3",
+      "/frames/book/sage/4",
+      "/frames/book/sage/5",
+      "/frames/book/sage/6",
+      "/frames/book/sage/7",
+      "/frames/book/sage/8",
+      "/frames/book/sage/9",
+      "/frames/book/sage/10",
+      "/frames/book/sage/11",
+      "/frames/book/sage/12",
+      "/frames/book/sage/13",
+      "/frames/book/sage/14",
+      "/frames/book/sage/15",
+      "/frames/book/sage/16",
+      "/frames/book/sage/17",
+      "/frames/book/sage/18",
+      "/frames/book/sage/19",
+      "/frames/book/sage/20",
+      "/frames/book/sage/21",
+      "/frames/book/sage/22",
+      "/frames/book/sage/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 9,
+    "listed_at": "2026-10-10T17:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0028",
+      "title": "Graphic novel set",
+      "description": "Graphic novel set. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "attributes": {
+        "type": "books media",
+        "colour": "ink"
+      },
+      "tags": [
+        "graphic",
+        "novel",
+        "set",
+        "books"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 30,
+      "price_justification": [
+        "We estimate the used market price at about $53; x 0.8 for like new gives $42.",
+        "Seller priced it at $30."
+      ],
+      "preview_images": [
+        "/frames/book/ink/0",
+        "/frames/book/ink/6",
+        "/frames/book/ink/12",
+        "/frames/book/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "books_media",
+    "location": {
+      "neighbourhood": "Agincourt",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 42,
+    "frames": [
+      "/frames/book/ink/0",
+      "/frames/book/ink/1",
+      "/frames/book/ink/2",
+      "/frames/book/ink/3",
+      "/frames/book/ink/4",
+      "/frames/book/ink/5",
+      "/frames/book/ink/6",
+      "/frames/book/ink/7",
+      "/frames/book/ink/8",
+      "/frames/book/ink/9",
+      "/frames/book/ink/10",
+      "/frames/book/ink/11",
+      "/frames/book/ink/12",
+      "/frames/book/ink/13",
+      "/frames/book/ink/14",
+      "/frames/book/ink/15",
+      "/frames/book/ink/16",
+      "/frames/book/ink/17",
+      "/frames/book/ink/18",
+      "/frames/book/ink/19",
+      "/frames/book/ink/20",
+      "/frames/book/ink/21",
+      "/frames/book/ink/22",
+      "/frames/book/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 9,
+    "listed_at": "2026-10-11T09:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0029",
+      "title": "Travel guide, Japan",
+      "description": "Travel guide, Japan. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "attributes": {
+        "type": "books media",
+        "colour": "coral"
+      },
+      "tags": [
+        "travel",
+        "guide",
+        "japan",
+        "books"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 10,
+      "price_justification": [
+        "We estimate the used market price at about $14; x 0.5 for moderate wear gives $7.",
+        "Seller priced it at $10."
+      ],
+      "preview_images": [
+        "/frames/book/coral/0",
+        "/frames/book/coral/6",
+        "/frames/book/coral/12",
+        "/frames/book/coral/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": true,
+      "seller_check_reasons": [
+        "The base view shows a possible crack."
+      ]
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "books_media",
+    "location": {
+      "neighbourhood": "Agincourt",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 7,
+    "frames": [
+      "/frames/book/coral/0",
+      "/frames/book/coral/1",
+      "/frames/book/coral/2",
+      "/frames/book/coral/3",
+      "/frames/book/coral/4",
+      "/frames/book/coral/5",
+      "/frames/book/coral/6",
+      "/frames/book/coral/7",
+      "/frames/book/coral/8",
+      "/frames/book/coral/9",
+      "/frames/book/coral/10",
+      "/frames/book/coral/11",
+      "/frames/book/coral/12",
+      "/frames/book/coral/13",
+      "/frames/book/coral/14",
+      "/frames/book/coral/15",
+      "/frames/book/coral/16",
+      "/frames/book/coral/17",
+      "/frames/book/coral/18",
+      "/frames/book/coral/19",
+      "/frames/book/coral/20",
+      "/frames/book/coral/21",
+      "/frames/book/coral/22",
+      "/frames/book/coral/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 6,
+    "listed_at": "2026-10-12T10:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0030",
+      "title": "Art history textbook",
+      "description": "Art history textbook. Clean pages and a straight spine. Part of a bundle you can mix and match.",
+      "attributes": {
+        "type": "books media",
+        "colour": "sand"
+      },
+      "tags": [
+        "art",
+        "history",
+        "textbook",
+        "books"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 40,
+      "price_justification": [
+        "We estimate the used market price at about $50; x 0.5 for moderate wear gives $25.",
+        "Seller priced it at $40."
+      ],
+      "preview_images": [
+        "/frames/book/sand/0",
+        "/frames/book/sand/6",
+        "/frames/book/sand/12",
+        "/frames/book/sand/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "books_media",
+    "location": {
+      "neighbourhood": "Agincourt",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 25,
+    "frames": [
+      "/frames/book/sand/0",
+      "/frames/book/sand/1",
+      "/frames/book/sand/2",
+      "/frames/book/sand/3",
+      "/frames/book/sand/4",
+      "/frames/book/sand/5",
+      "/frames/book/sand/6",
+      "/frames/book/sand/7",
+      "/frames/book/sand/8",
+      "/frames/book/sand/9",
+      "/frames/book/sand/10",
+      "/frames/book/sand/11",
+      "/frames/book/sand/12",
+      "/frames/book/sand/13",
+      "/frames/book/sand/14",
+      "/frames/book/sand/15",
+      "/frames/book/sand/16",
+      "/frames/book/sand/17",
+      "/frames/book/sand/18",
+      "/frames/book/sand/19",
+      "/frames/book/sand/20",
+      "/frames/book/sand/21",
+      "/frames/book/sand/22",
+      "/frames/book/sand/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 9,
+    "listed_at": "2026-10-13T11:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0031",
+      "title": "Brass floor lamp",
+      "description": "Brass floor lamp. Solid build, easy to move. Dimensions are on the listing.",
+      "attributes": {
+        "type": "furniture",
+        "colour": "sand"
+      },
+      "tags": [
+        "brass",
+        "floor",
+        "lamp",
+        "furniture"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 60,
+      "price_justification": [
+        "We estimate the used market price at about $106; x 0.5 for moderate wear gives $53.",
+        "Seller priced it at $60."
+      ],
+      "preview_images": [
+        "/frames/lamp/sand/0",
+        "/frames/lamp/sand/6",
+        "/frames/lamp/sand/12",
+        "/frames/lamp/sand/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_annex_bookshelf",
+    "category": "furniture",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 53,
+    "frames": [
+      "/frames/lamp/sand/0",
+      "/frames/lamp/sand/1",
+      "/frames/lamp/sand/2",
+      "/frames/lamp/sand/3",
+      "/frames/lamp/sand/4",
+      "/frames/lamp/sand/5",
+      "/frames/lamp/sand/6",
+      "/frames/lamp/sand/7",
+      "/frames/lamp/sand/8",
+      "/frames/lamp/sand/9",
+      "/frames/lamp/sand/10",
+      "/frames/lamp/sand/11",
+      "/frames/lamp/sand/12",
+      "/frames/lamp/sand/13",
+      "/frames/lamp/sand/14",
+      "/frames/lamp/sand/15",
+      "/frames/lamp/sand/16",
+      "/frames/lamp/sand/17",
+      "/frames/lamp/sand/18",
+      "/frames/lamp/sand/19",
+      "/frames/lamp/sand/20",
+      "/frames/lamp/sand/21",
+      "/frames/lamp/sand/22",
+      "/frames/lamp/sand/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 8,
+    "listed_at": "2026-10-14T12:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0032",
+      "title": "Reading lamp, linen shade",
+      "description": "Reading lamp, linen shade. Solid build, easy to move. Dimensions are on the listing.",
+      "attributes": {
+        "type": "furniture",
+        "colour": "clay"
+      },
+      "tags": [
+        "reading",
+        "lamp",
+        "linen",
+        "furniture"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 40,
+      "price_justification": [
+        "We estimate the used market price at about $56; x 0.5 for moderate wear gives $28.",
+        "Seller priced it at $40."
+      ],
+      "preview_images": [
+        "/frames/lamp/clay/0",
+        "/frames/lamp/clay/6",
+        "/frames/lamp/clay/12",
+        "/frames/lamp/clay/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_annex_bookshelf",
+    "category": "furniture",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 28,
+    "frames": [
+      "/frames/lamp/clay/0",
+      "/frames/lamp/clay/1",
+      "/frames/lamp/clay/2",
+      "/frames/lamp/clay/3",
+      "/frames/lamp/clay/4",
+      "/frames/lamp/clay/5",
+      "/frames/lamp/clay/6",
+      "/frames/lamp/clay/7",
+      "/frames/lamp/clay/8",
+      "/frames/lamp/clay/9",
+      "/frames/lamp/clay/10",
+      "/frames/lamp/clay/11",
+      "/frames/lamp/clay/12",
+      "/frames/lamp/clay/13",
+      "/frames/lamp/clay/14",
+      "/frames/lamp/clay/15",
+      "/frames/lamp/clay/16",
+      "/frames/lamp/clay/17",
+      "/frames/lamp/clay/18",
+      "/frames/lamp/clay/19",
+      "/frames/lamp/clay/20",
+      "/frames/lamp/clay/21",
+      "/frames/lamp/clay/22",
+      "/frames/lamp/clay/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 14,
+    "listed_at": "2026-10-15T13:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0033",
+      "title": "Arc floor lamp",
+      "description": "Arc floor lamp. Solid build, easy to move. Dimensions are on the listing.",
+      "attributes": {
+        "type": "furniture",
+        "colour": "ink"
+      },
+      "tags": [
+        "arc",
+        "floor",
+        "lamp",
+        "furniture"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 85,
+      "price_justification": [
+        "We estimate the used market price at about $131; x 0.65 for light wear gives $85.",
+        "Seller priced it at $85."
+      ],
+      "preview_images": [
+        "/frames/lamp/ink/0",
+        "/frames/lamp/ink/6",
+        "/frames/lamp/ink/12",
+        "/frames/lamp/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_annex_bookshelf",
+    "category": "furniture",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 85,
+    "frames": [
+      "/frames/lamp/ink/0",
+      "/frames/lamp/ink/1",
+      "/frames/lamp/ink/2",
+      "/frames/lamp/ink/3",
+      "/frames/lamp/ink/4",
+      "/frames/lamp/ink/5",
+      "/frames/lamp/ink/6",
+      "/frames/lamp/ink/7",
+      "/frames/lamp/ink/8",
+      "/frames/lamp/ink/9",
+      "/frames/lamp/ink/10",
+      "/frames/lamp/ink/11",
+      "/frames/lamp/ink/12",
+      "/frames/lamp/ink/13",
+      "/frames/lamp/ink/14",
+      "/frames/lamp/ink/15",
+      "/frames/lamp/ink/16",
+      "/frames/lamp/ink/17",
+      "/frames/lamp/ink/18",
+      "/frames/lamp/ink/19",
+      "/frames/lamp/ink/20",
+      "/frames/lamp/ink/21",
+      "/frames/lamp/ink/22",
+      "/frames/lamp/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 9,
+    "listed_at": "2026-10-08T14:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0034",
+      "title": "Entryway bench",
+      "description": "Entryway bench. Solid build, easy to move. Dimensions are on the listing.",
+      "attributes": {
+        "type": "furniture",
+        "colour": "ink"
+      },
+      "tags": [
+        "entryway",
+        "bench",
+        "furniture"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 220,
+      "price_justification": [
+        "We estimate the used market price at about $636; x 0.5 for moderate wear gives $318.",
+        "Seller priced it at $220."
+      ],
+      "preview_images": [
+        "/frames/boardgame/ink/0",
+        "/frames/boardgame/ink/6",
+        "/frames/boardgame/ink/12",
+        "/frames/boardgame/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_annex_bookshelf",
+    "category": "furniture",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 318,
+    "frames": [
+      "/frames/boardgame/ink/0",
+      "/frames/boardgame/ink/1",
+      "/frames/boardgame/ink/2",
+      "/frames/boardgame/ink/3",
+      "/frames/boardgame/ink/4",
+      "/frames/boardgame/ink/5",
+      "/frames/boardgame/ink/6",
+      "/frames/boardgame/ink/7",
+      "/frames/boardgame/ink/8",
+      "/frames/boardgame/ink/9",
+      "/frames/boardgame/ink/10",
+      "/frames/boardgame/ink/11",
+      "/frames/boardgame/ink/12",
+      "/frames/boardgame/ink/13",
+      "/frames/boardgame/ink/14",
+      "/frames/boardgame/ink/15",
+      "/frames/boardgame/ink/16",
+      "/frames/boardgame/ink/17",
+      "/frames/boardgame/ink/18",
+      "/frames/boardgame/ink/19",
+      "/frames/boardgame/ink/20",
+      "/frames/boardgame/ink/21",
+      "/frames/boardgame/ink/22",
+      "/frames/boardgame/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 10,
+    "listed_at": "2026-10-09T15:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0035",
+      "title": "Oak coffee table",
+      "description": "Oak coffee table. Solid build, easy to move. Dimensions are on the listing.",
+      "attributes": {
+        "type": "furniture",
+        "colour": "clay"
+      },
+      "tags": [
+        "oak",
+        "coffee",
+        "table",
+        "furniture"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "2 views show a small scuff."
+      ],
+      "price_cad": 400,
+      "price_justification": [
+        "We estimate the used market price at about $585; x 0.65 for light wear gives $380.",
+        "Seller priced it at $400."
+      ],
+      "preview_images": [
+        "/frames/boardgame/clay/0",
+        "/frames/boardgame/clay/6",
+        "/frames/boardgame/clay/12",
+        "/frames/boardgame/clay/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_marcus",
+    "garage_sale_id": "gs_annex_bookshelf",
+    "category": "furniture",
+    "location": {
+      "neighbourhood": "The Annex",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 380,
+    "frames": [
+      "/frames/boardgame/clay/0",
+      "/frames/boardgame/clay/1",
+      "/frames/boardgame/clay/2",
+      "/frames/boardgame/clay/3",
+      "/frames/boardgame/clay/4",
+      "/frames/boardgame/clay/5",
+      "/frames/boardgame/clay/6",
+      "/frames/boardgame/clay/7",
+      "/frames/boardgame/clay/8",
+      "/frames/boardgame/clay/9",
+      "/frames/boardgame/clay/10",
+      "/frames/boardgame/clay/11",
+      "/frames/boardgame/clay/12",
+      "/frames/boardgame/clay/13",
+      "/frames/boardgame/clay/14",
+      "/frames/boardgame/clay/15",
+      "/frames/boardgame/clay/16",
+      "/frames/boardgame/clay/17",
+      "/frames/boardgame/clay/18",
+      "/frames/boardgame/clay/19",
+      "/frames/boardgame/clay/20",
+      "/frames/boardgame/clay/21",
+      "/frames/boardgame/clay/22",
+      "/frames/boardgame/clay/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 12,
+    "listed_at": "2026-10-10T16:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0036",
+      "title": "Wool coat",
+      "description": "Wool coat. Sized as marked. Lining and buttons checked on the scan.",
+      "attributes": {
+        "type": "clothing accessories",
+        "colour": "clay"
+      },
+      "tags": [
+        "wool",
+        "coat",
+        "clothing"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 90,
+      "price_justification": [
+        "We estimate the used market price at about $118; x 0.8 for like new gives $94.",
+        "Seller priced it at $90."
+      ],
+      "preview_images": [
+        "/frames/jacket/clay/0",
+        "/frames/jacket/clay/6",
+        "/frames/jacket/clay/12",
+        "/frames/jacket/clay/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_beaches_ended",
+    "category": "clothing_accessories",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 94,
+    "frames": [
+      "/frames/jacket/clay/0",
+      "/frames/jacket/clay/1",
+      "/frames/jacket/clay/2",
+      "/frames/jacket/clay/3",
+      "/frames/jacket/clay/4",
+      "/frames/jacket/clay/5",
+      "/frames/jacket/clay/6",
+      "/frames/jacket/clay/7",
+      "/frames/jacket/clay/8",
+      "/frames/jacket/clay/9",
+      "/frames/jacket/clay/10",
+      "/frames/jacket/clay/11",
+      "/frames/jacket/clay/12",
+      "/frames/jacket/clay/13",
+      "/frames/jacket/clay/14",
+      "/frames/jacket/clay/15",
+      "/frames/jacket/clay/16",
+      "/frames/jacket/clay/17",
+      "/frames/jacket/clay/18",
+      "/frames/jacket/clay/19",
+      "/frames/jacket/clay/20",
+      "/frames/jacket/clay/21",
+      "/frames/jacket/clay/22",
+      "/frames/jacket/clay/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 14,
+    "listed_at": "2026-10-11T17:15:00Z",
+    "status": "sold"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0037",
+      "title": "Denim jacket",
+      "description": "Denim jacket. Sized as marked. Lining and buttons checked on the scan.",
+      "attributes": {
+        "type": "clothing accessories",
+        "colour": "ink"
+      },
+      "tags": [
+        "denim",
+        "jacket",
+        "clothing"
+      ],
+      "condition_grade": "like_new",
+      "condition_notes": [
+        "No defects found in 11 usable views."
+      ],
+      "price_cad": 45,
+      "price_justification": [
+        "We estimate the used market price at about $61; x 0.8 for like new gives $49.",
+        "Seller priced it at $45."
+      ],
+      "preview_images": [
+        "/frames/jacket/ink/0",
+        "/frames/jacket/ink/6",
+        "/frames/jacket/ink/12",
+        "/frames/jacket/ink/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_beaches_ended",
+    "category": "clothing_accessories",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 49,
+    "frames": [
+      "/frames/jacket/ink/0",
+      "/frames/jacket/ink/1",
+      "/frames/jacket/ink/2",
+      "/frames/jacket/ink/3",
+      "/frames/jacket/ink/4",
+      "/frames/jacket/ink/5",
+      "/frames/jacket/ink/6",
+      "/frames/jacket/ink/7",
+      "/frames/jacket/ink/8",
+      "/frames/jacket/ink/9",
+      "/frames/jacket/ink/10",
+      "/frames/jacket/ink/11",
+      "/frames/jacket/ink/12",
+      "/frames/jacket/ink/13",
+      "/frames/jacket/ink/14",
+      "/frames/jacket/ink/15",
+      "/frames/jacket/ink/16",
+      "/frames/jacket/ink/17",
+      "/frames/jacket/ink/18",
+      "/frames/jacket/ink/19",
+      "/frames/jacket/ink/20",
+      "/frames/jacket/ink/21",
+      "/frames/jacket/ink/22",
+      "/frames/jacket/ink/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 14,
+    "listed_at": "2026-10-12T09:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0038",
+      "title": "Rain jacket",
+      "description": "Rain jacket. Sized as marked. Lining and buttons checked on the scan.",
+      "attributes": {
+        "type": "clothing accessories",
+        "colour": "mint"
+      },
+      "tags": [
+        "rain",
+        "jacket",
+        "clothing"
+      ],
+      "condition_grade": "heavy_wear",
+      "condition_notes": [
+        "5 views show scratches or scuffs.",
+        "The base view shows stains or discolouration."
+      ],
+      "price_cad": 40,
+      "price_justification": [
+        "We estimate the used market price at about $137; x 0.35 for heavy wear gives $48.",
+        "Seller priced it at $40."
+      ],
+      "preview_images": [
+        "/frames/jacket/mint/0",
+        "/frames/jacket/mint/6",
+        "/frames/jacket/mint/12",
+        "/frames/jacket/mint/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_beaches_ended",
+    "category": "clothing_accessories",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 48,
+    "frames": [
+      "/frames/jacket/mint/0",
+      "/frames/jacket/mint/1",
+      "/frames/jacket/mint/2",
+      "/frames/jacket/mint/3",
+      "/frames/jacket/mint/4",
+      "/frames/jacket/mint/5",
+      "/frames/jacket/mint/6",
+      "/frames/jacket/mint/7",
+      "/frames/jacket/mint/8",
+      "/frames/jacket/mint/9",
+      "/frames/jacket/mint/10",
+      "/frames/jacket/mint/11",
+      "/frames/jacket/mint/12",
+      "/frames/jacket/mint/13",
+      "/frames/jacket/mint/14",
+      "/frames/jacket/mint/15",
+      "/frames/jacket/mint/16",
+      "/frames/jacket/mint/17",
+      "/frames/jacket/mint/18",
+      "/frames/jacket/mint/19",
+      "/frames/jacket/mint/20",
+      "/frames/jacket/mint/21",
+      "/frames/jacket/mint/22",
+      "/frames/jacket/mint/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 10,
+    "listed_at": "2026-10-13T10:15:00Z",
+    "status": "sold"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0039",
+      "title": "Puffer vest",
+      "description": "Puffer vest. Sized as marked. Lining and buttons checked on the scan.",
+      "attributes": {
+        "type": "clothing accessories",
+        "colour": "coral"
+      },
+      "tags": [
+        "puffer",
+        "vest",
+        "clothing"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 55,
+      "price_justification": [
+        "We estimate the used market price at about $104; x 0.5 for moderate wear gives $52.",
+        "Seller priced it at $55."
+      ],
+      "preview_images": [
+        "/frames/jacket/coral/0",
+        "/frames/jacket/coral/6",
+        "/frames/jacket/coral/12",
+        "/frames/jacket/coral/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_beaches_ended",
+    "category": "clothing_accessories",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 52,
+    "frames": [
+      "/frames/jacket/coral/0",
+      "/frames/jacket/coral/1",
+      "/frames/jacket/coral/2",
+      "/frames/jacket/coral/3",
+      "/frames/jacket/coral/4",
+      "/frames/jacket/coral/5",
+      "/frames/jacket/coral/6",
+      "/frames/jacket/coral/7",
+      "/frames/jacket/coral/8",
+      "/frames/jacket/coral/9",
+      "/frames/jacket/coral/10",
+      "/frames/jacket/coral/11",
+      "/frames/jacket/coral/12",
+      "/frames/jacket/coral/13",
+      "/frames/jacket/coral/14",
+      "/frames/jacket/coral/15",
+      "/frames/jacket/coral/16",
+      "/frames/jacket/coral/17",
+      "/frames/jacket/coral/18",
+      "/frames/jacket/coral/19",
+      "/frames/jacket/coral/20",
+      "/frames/jacket/coral/21",
+      "/frames/jacket/coral/22",
+      "/frames/jacket/coral/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 14,
+    "listed_at": "2026-10-14T11:15:00Z",
+    "status": "available"
+  },
+  {
+    "listing": {
+      "item_id": "itm_0040",
+      "title": "Waxed field jacket",
+      "description": "Waxed field jacket. Sized as marked. Lining and buttons checked on the scan.",
+      "attributes": {
+        "type": "clothing accessories",
+        "colour": "sage"
+      },
+      "tags": [
+        "waxed",
+        "field",
+        "jacket",
+        "clothing"
+      ],
+      "condition_grade": "moderate_wear",
+      "condition_notes": [
+        "2 views show scratches or scuffs."
+      ],
+      "price_cad": 110,
+      "price_justification": [
+        "We estimate the used market price at about $388; x 0.5 for moderate wear gives $194.",
+        "Seller priced it at $110."
+      ],
+      "preview_images": [
+        "/frames/jacket/sage/0",
+        "/frames/jacket/sage/6",
+        "/frames/jacket/sage/12",
+        "/frames/jacket/sage/18"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": false,
+      "seller_check_reasons": []
+    },
+    "seller_id": "sel_priya",
+    "garage_sale_id": "gs_beaches_ended",
+    "category": "clothing_accessories",
+    "location": {
+      "neighbourhood": "Leslieville",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 194,
+    "frames": [
+      "/frames/jacket/sage/0",
+      "/frames/jacket/sage/1",
+      "/frames/jacket/sage/2",
+      "/frames/jacket/sage/3",
+      "/frames/jacket/sage/4",
+      "/frames/jacket/sage/5",
+      "/frames/jacket/sage/6",
+      "/frames/jacket/sage/7",
+      "/frames/jacket/sage/8",
+      "/frames/jacket/sage/9",
+      "/frames/jacket/sage/10",
+      "/frames/jacket/sage/11",
+      "/frames/jacket/sage/12",
+      "/frames/jacket/sage/13",
+      "/frames/jacket/sage/14",
+      "/frames/jacket/sage/15",
+      "/frames/jacket/sage/16",
+      "/frames/jacket/sage/17",
+      "/frames/jacket/sage/18",
+      "/frames/jacket/sage/19",
+      "/frames/jacket/sage/20",
+      "/frames/jacket/sage/21",
+      "/frames/jacket/sage/22",
+      "/frames/jacket/sage/23"
+    ],
+    "splat_url": null,
+    "usable_view_count": 8,
+    "listed_at": "2026-10-15T12:15:00Z",
+    "status": "available"
+  }
+]

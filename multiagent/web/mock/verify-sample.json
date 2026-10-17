@@ -1,0 +1,33 @@
+{
+  "_note": "Real buyer-agent output copied from runs/fc4b95cb-70e4-4d89-b91e-ea58f4257869/response.json (subset). Shown in the site as a sample result.",
+  "comparison_id": "fc4b95cb",
+  "status": "done",
+  "verdict_label": "different",
+  "explanation": {
+    "caveats": [
+      "Very small dents or scratches may not show up in this check.",
+      "The two scans were not aligned by us; views were taken as supplied."
+    ],
+    "disclaimer": "This is an automated visual comparison and can be wrong. It does not check price or payment.",
+    "friendly_summary": "The item appears to be a different part than described, as indicated by a part difference seen in multiple views. This discrepancy was observed in at least two scans.",
+    "headline": "The item you received likely does not match the listing.",
+    "how_sure": "We have moderate evidence. This is not proof.",
+    "listing_vs_item": [
+      "Listing says white plastic watering can. We can see it.",
+      "Listing says 2 views show scratches or scuffs.. We cannot check this from the scan.",
+      "Listing says The back view shows stains or discolouration.. We cannot check this from the scan."
+    ],
+    "what_to_do": [
+      "Contact the seller through the marketplace first.",
+      "Attach these comparison photos.",
+      "State the differences: A part or piece looks different or missing (in 8 of 10 views).",
+      "Keep a record of messages and photos.",
+      "If the marketplace has a return window, check it and act inside it."
+    ],
+    "what_we_compared": "We compared 10 views of the listing scan with your scan.",
+    "what_we_found": [
+      "A part or piece looks different or missing (in 8 of 10 views)."
+    ]
+  },
+  "error": null
+}
