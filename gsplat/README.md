@@ -38,7 +38,7 @@ iPhone app --scan-upload Edge Function--> scans/{id}/video.mp4
 
 | Where (Supabase, public `assets` bucket unless noted) | What |
 |---|---|
-| `scans/{id}/video.mp4` (private) | the phone's video (`top.*` / `bottom.*` also accepted; bottom = flipped-over orbit) |
+| `scans/{id}/video.mp4` (private) | the phone's video (+ `bottom.mp4`, the item flipped over, uploaded first); the app's `poses.jsonl` turns its sideways frames upright |
 | `splats/{id}.spz`, `splats/{id}.json` | the splat; manifest (inputs, URLs, views, spin frames, Gaussians, stage timings) |
 | `views/{id}/` | 8 reference views (transparent + grey PNG) + `views.json` (cameras) + `spin/f00..f23.webp` |
 | `splats/index.json` | every splat, newest first (`listing/ingest.py` reads it) |
@@ -54,9 +54,28 @@ on the website under the seller and garage sale in `market.LIVE`; the category c
 
 ```bash
 modal deploy app.py                          # prints the on_upload URL that webhook.sql calls
-python client.py scan orbit.mp4              # exactly the phone's path; prints the time of each hop
-python client.py scan orbit.mp4 orbit_reverse.mp4 --gpu H100   # top + bottom: run_scan started directly
+python client.py scan orbit.mp4 orbit_reverse.mp4   # exactly the phone's path (bottom.mp4 first, video.mp4 last);
+                                                   # the webhook does the rest; prints the time of each hop
+python client.py relist <scan_id> [--title "Lenovo ThinkPad wireless mouse"]   # re-run only the listing step
 ```
+
+- **Product name:** the title the seller types on the dashboard (`scans/{id}/session.json`, scanner/DASHBOARD.md) goes
+  to listing/ as `seller_name`. Without it listing/ only searches for a reference photo when the model is printed on
+  the item, so condition is judged from the scan alone and the listing asks for a seller check.
+- **Cold start:** `session.json` (scan requested or picked up) and `bottom.mp4` also hit the webhook, which starts
+  `Splatter.prewarm` on an H100: models load and one tiny real job warms CUDA while the seller is still recording.
+- **Debugging a listing:** each stage's JSON is published to `assets/listings/{id}/run/` (`run_url` in the document),
+  also when it fails.
+
+Measured on 2026-10-17, `orbit.mp4` + `orbit_reverse.mp4` (43 MB), H100:
+
+| Path | Upload done | Splat published | Listing published |
+|---|---|---|---|
+| Cold (no prewarm) | 7.0 s | 65.9 s | 84.9 s |
+| Dashboard flow (prewarm from session.json, 30 s recording) | 4.0 s | 42.8 s | 72.7-78.6 s |
+| Warm container | 4.0 s | 39.9 s | 56.2 s |
+
+The listing step is 15-35 s of that: listing/'s render (~3-7.5 s) and Gemini identify (~5-19 s, varies).
 
 ### Demo (no cold start)
 

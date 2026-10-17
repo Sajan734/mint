@@ -24,18 +24,20 @@ DEFAULTS = {
     "debug": True,  # contact sheets, held-out eval, turntable (adds a few seconds after the timed path)
     "ply": False,  # also return the uncompressed .ply (~38 MB; the .spz is ~10x smaller)
     "views": True,  # the 8 reference renders + views.json (cameras) for downstream, see views.py
+    "rotate_cw": None,  # per video, clockwise degrees to turn frames upright (the Mint app stores them sideways)
 }
 
 
-def decode_all(videos: list[bytes], n_frames: int) -> list[list[np.ndarray]]:
-    """Pick sharp frames from every video in parallel threads (OpenCV's decoder releases the GIL)."""
+def decode_all(videos: list[bytes], n_frames: int, rotate_cw: list[int] | None = None) -> list[list[np.ndarray]]:
+    """Pick sharp frames from every video in parallel threads (OpenCV's decoder releases the GIL), turned upright
+    by rotate_cw[i] clockwise degrees (the Mint app's frames are stored sideways)."""
     from concurrent.futures import ThreadPoolExecutor
 
     def one(i_v):
         i, v = i_v
         path = f"/tmp/in_{i}.mp4"
         Path(path).write_bytes(v)
-        return frames_mod.pick_frames(path, n_frames)[0]
+        return frames_mod.pick_frames(path, n_frames, (rotate_cw or [0] * len(videos))[i])[0]
 
     with ThreadPoolExecutor(len(videos)) as ex:
         return list(ex.map(one, enumerate(videos)))
@@ -80,7 +82,7 @@ def run(models, videos: bytes | list[bytes], cfg: dict, on_event=None) -> dict:
     out: dict = {"files": {}}
 
     with T.stage("1_frames"):
-        all_frames = decode_all(videos, cfg["n_frames"])
+        all_frames = decode_all(videos, cfg["n_frames"], cfg.get("rotate_cw"))
     caps = []
     for tag, frames in zip(["top", "bottom"], all_frames):
         c = capture(models, frames, cfg, T, tag, out)

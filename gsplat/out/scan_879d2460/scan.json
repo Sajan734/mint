@@ -1,0 +1,289 @@
+{
+  "scan_id": "879d2460-248f-47d7-9ebc-c6aa1c3379a3",
+  "client_timings": {
+    "upload_mb": 42.8,
+    "uploaded_s": 4.0,
+    "splat_published_s": 49.78,
+    "listing_published_s": 72.74
+  },
+  "website_path": "/listing/879d2460-248f-47d7-9ebc-c6aa1c3379a3",
+  "manifest": {
+    "v": 3,
+    "scan_id": "879d2460-248f-47d7-9ebc-c6aa1c3379a3",
+    "batch_id": "879d2460-248f-47d7-9ebc-c6aa1c3379a3",
+    "inputs": [
+      "scans/879d2460-248f-47d7-9ebc-c6aa1c3379a3/video.mp4",
+      "scans/879d2460-248f-47d7-9ebc-c6aa1c3379a3/bottom.mp4"
+    ],
+    "splat_path": "assets/splats/879d2460-248f-47d7-9ebc-c6aa1c3379a3.spz",
+    "splat_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/splats/879d2460-248f-47d7-9ebc-c6aa1c3379a3.spz",
+    "views_json_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/views.json",
+    "views": {
+      "layout": "cube_corners",
+      "includes_bottom": true,
+      "items": [
+        {
+          "name": "00_az045_el+35",
+          "azimuth_deg": 45,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/00_az045_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/00_az045_el+35_grey.png"
+        },
+        {
+          "name": "01_az135_el+35",
+          "azimuth_deg": 135,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/01_az135_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/01_az135_el+35_grey.png"
+        },
+        {
+          "name": "02_az225_el+35",
+          "azimuth_deg": 225,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/02_az225_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/02_az225_el+35_grey.png"
+        },
+        {
+          "name": "03_az315_el+35",
+          "azimuth_deg": 315,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/03_az315_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/03_az315_el+35_grey.png"
+        },
+        {
+          "name": "04_az045_el-35",
+          "azimuth_deg": 45,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/04_az045_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/04_az045_el-35_grey.png"
+        },
+        {
+          "name": "05_az135_el-35",
+          "azimuth_deg": 135,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/05_az135_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/05_az135_el-35_grey.png"
+        },
+        {
+          "name": "06_az225_el-35",
+          "azimuth_deg": 225,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/06_az225_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/06_az225_el-35_grey.png"
+        },
+        {
+          "name": "07_az315_el-35",
+          "azimuth_deg": 315,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/07_az315_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/07_az315_el-35_grey.png"
+        }
+      ]
+    },
+    "spin_urls": [
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f00.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f01.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f02.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f03.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f04.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f05.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f06.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f07.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f08.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f09.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f10.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f11.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f12.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f13.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f14.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f15.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f16.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f17.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f18.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f19.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f20.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f21.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f22.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f23.webp"
+    ],
+    "metric_scale": null,
+    "frame": "scan frame: +Y up, +X along the object's long axis, origin under the object, right-handed (SPZ's RUB)",
+    "gaussians": 142655,
+    "sizes_mb": {
+      "splat.spz": 2.68
+    },
+    "stage_timings_ms": {
+      "1_frames": 2280,
+      "2_masks_top": 2760,
+      "3_poses_top": 5060,
+      "2_masks_bottom": 1920,
+      "3_poses_bottom": 3620,
+      "3b_register": 2750,
+      "4_train": 17330,
+      "5_clean_export": 760,
+      "6_views": 1580,
+      "total": 38060
+    },
+    "register": {
+      "scale_b_to_a": 1.1486,
+      "start_yaw_deg": 0,
+      "coarse_loss_px": 0.0546,
+      "best_distinct_alternative_px": 0.141,
+      "fine_loss_px": 0.054,
+      "up_dot": -0.985,
+      "outside_frac_bottom_in_top": 0.008,
+      "outside_frac_top_in_bottom": 0.001,
+      "outside_frac_top_in_top_baseline": 0.007,
+      "outside_px_bottom_in_top": 0.2,
+      "outside_px_top_in_bottom": 0.0
+    },
+    "io": {
+      "download_s": 2.63,
+      "download_mb": 42.8,
+      "rotate_cw": [
+        0,
+        0
+      ],
+      "session": {
+        "title": "Lenovo ThinkPad wireless mouse",
+        "seller": null,
+        "kind": "listing",
+        "source": "dashboard"
+      },
+      "upload_s": 3.54,
+      "upload_mb": 7.77
+    }
+  },
+  "listing": {
+    "v": 3,
+    "scan_id": "879d2460-248f-47d7-9ebc-c6aa1c3379a3",
+    "batch_id": "879d2460-248f-47d7-9ebc-c6aa1c3379a3",
+    "splat_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/splats/879d2460-248f-47d7-9ebc-c6aa1c3379a3.spz",
+    "spin_urls": [
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f00.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f01.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f02.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f03.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f04.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f05.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f06.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f07.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f08.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f09.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f10.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f11.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f12.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f13.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f14.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f15.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f16.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f17.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f18.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f19.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f20.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f21.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f22.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f23.webp"
+    ],
+    "seller_name": "Lenovo ThinkPad wireless mouse",
+    "created_at": "2026-10-17T17:38:43Z",
+    "timings_ms": {
+      "listing_pipeline": 20658
+    },
+    "status": "listed",
+    "market_listing": {
+      "listing": {
+        "item_id": "879d2460-248f-47d7-9ebc-c6aa1c3379a3",
+        "title": "ThinkPad wireless computer mouse (black)",
+        "description": "ThinkPad wireless computer mouse in black.",
+        "attributes": {
+          "brand": "ThinkPad",
+          "type": "wireless computer mouse",
+          "color": "black",
+          "accent_color": "red",
+          "connectivity": "wireless"
+        },
+        "tags": [
+          "wireless computer mouse",
+          "thinkpad",
+          "black"
+        ],
+        "condition_grade": "moderate_wear",
+        "condition_notes": [
+          "No defects stood out in any view."
+        ],
+        "price_cad": 20,
+        "price_justification": [
+          "Our rough estimate of the new price is about $40.00; x 0.50 for moderate wear gives $20.00, rounded to $20."
+        ],
+        "preview_images": [
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/879d2460-248f-47d7-9ebc-c6aa1c3379a3/v00.png",
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/879d2460-248f-47d7-9ebc-c6aa1c3379a3/v02.png",
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/879d2460-248f-47d7-9ebc-c6aa1c3379a3/v04.png",
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/879d2460-248f-47d7-9ebc-c6aa1c3379a3/v06.png"
+        ],
+        "viewer_url": null,
+        "needs_seller_check": true,
+        "seller_check_reasons": [
+          "Condition needs a quick check before publishing."
+        ]
+      },
+      "seller_id": "sel_raj",
+      "garage_sale_id": "gs_agincourt_tech",
+      "category": "electronics",
+      "location": {
+        "neighbourhood": "Agincourt",
+        "city": "Toronto"
+      },
+      "reference_price_cad": 20,
+      "frames": [
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f00.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f01.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f02.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f03.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f04.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f05.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f06.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f07.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f08.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f09.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f10.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f11.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f12.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f13.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f14.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f15.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f16.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f17.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f18.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f19.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f20.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f21.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f22.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/879d2460-248f-47d7-9ebc-c6aa1c3379a3/spin/f23.webp"
+      ],
+      "splat_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/splats/879d2460-248f-47d7-9ebc-c6aa1c3379a3.spz",
+      "usable_view_count": 9,
+      "listed_at": "2026-10-17T17:39:04Z",
+      "status": "available"
+    },
+    "run_files": [
+      "baseline_candidates.json",
+      "baseline_lookup.json",
+      "condition.json",
+      "condition_raw.json",
+      "finalize.json",
+      "identify.json",
+      "identify_raw.json",
+      "listing_text.json",
+      "listing_text_raw.json",
+      "match_gate.json",
+      "match_gate_raw.json",
+      "reference_price.json",
+      "reference_price_raw.json",
+      "render.json",
+      "result.json"
+    ],
+    "run_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/879d2460-248f-47d7-9ebc-c6aa1c3379a3/run/"
+  }
+}

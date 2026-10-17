@@ -24,7 +24,13 @@ CONTENT_TYPES = {".json": "application/json", ".png": "image/png", ".webp": "ima
 
 def fetch_inputs(sb, scan_id: str) -> tuple[list[str], list[bytes], dict]:
     """scans/{scan_id}/top.* or video.* (required) and bottom.* (optional) -> (names, video bytes, io timings).
-    Other files the phone uploads next to the video (poses.jsonl, capture.json, thumb.jpg) are ignored."""
+    io["rotate_cw"] turns each video's frames upright, from the app's poses.jsonl / bottom.poses.jsonl when
+    present (its frames are stored sideways); 0 for videos without one. io["session"] is the scan's session.json
+    (scanner/DASHBOARD.md: the product title the seller typed, seller, kind) when there is one."""
+    import json
+
+    from .frames import upright_rotation
+
     t0 = time.perf_counter()
     names = sb.list(SCANS, scan_id)
     videos = sorted(n for n in names if n.lower().endswith(VIDEO_EXTS))
@@ -32,9 +38,20 @@ def fetch_inputs(sb, scan_id: str) -> tuple[list[str], list[bytes], dict]:
     keys = [k for k in (pick(TOP_NAMES), pick(BOTTOM_NAMES)) if k]
     if not keys or keys[0].rsplit(".", 1)[0] not in TOP_NAMES:
         raise FileNotFoundError(f"no scans/{scan_id}/video.mp4 or top.* uploaded (found {names})")
-    with ThreadPoolExecutor(2) as ex:
+    poses = [("poses.jsonl" if k.startswith("video.") else f"{k.rsplit('.', 1)[0]}.poses.jsonl") for k in keys]
+    poses = [p if p in names else None for p in poses]
+    with ThreadPoolExecutor(4) as ex:
         videos = list(ex.map(lambda k: sb.download(SCANS, f"{scan_id}/{k}"), keys))
-    io = {"download_s": round(time.perf_counter() - t0, 2), "download_mb": round(sum(map(len, videos)) / 1e6, 1)}
+        rotate = list(ex.map(lambda p: upright_rotation(sb.download(SCANS, f"{scan_id}/{p}")) if p else 0, poses))
+    session = None
+    if "session.json" in names:
+        try:
+            raw = json.loads(sb.download(SCANS, f"{scan_id}/session.json"))
+            session = {k: raw.get(k) for k in ("title", "seller", "kind", "source")}
+        except (RuntimeError, ValueError):
+            session = None
+    io = {"download_s": round(time.perf_counter() - t0, 2), "download_mb": round(sum(map(len, videos)) / 1e6, 1),
+          "rotate_cw": rotate, "session": session}
     return keys, videos, io
 
 

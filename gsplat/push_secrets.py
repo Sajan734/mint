@@ -17,6 +17,7 @@ SECRETS = {
     "mint-supabase": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
     "mint-listing": ["TYPESAFE_API_KEY", "GEMINI_API_KEY", "SERPER_API_KEY"],
 }
+OPTIONAL = {"mint-listing": ["GEMINI_MODEL"]}  # copied when set
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -62,6 +63,7 @@ def main() -> int:
             modal.Secret.objects.delete(name)  # replace, so edited values take effect
         except modal.exception.NotFoundError:
             pass
+        keys = keys + [k for k in OPTIONAL.get(name, []) if env.get(k)]
         modal.Secret.objects.create(name, {k: env[k] for k in keys})
         print(f"{name}: set {', '.join(keys)}")
         done += 1
