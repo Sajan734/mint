@@ -77,6 +77,10 @@ Measured on 2026-10-17, `orbit.mp4` + `orbit_reverse.mp4` (43 MB), H100:
 
 The listing step is 15-35 s of that: listing/'s render (~3-7.5 s) and Gemini identify (~5-19 s, varies).
 
+**Gemini quota:** a free-tier Gemini key allows 20 requests a day; each listing makes ~3 (identify, title/text,
+price), so ~6 listings a day, then `429 RESOURCE_EXHAUSTED` and the listing is published as `failed` (the splat
+is fine). Enable billing on the key for the demo; `python client.py relist <scan_id>` redoes a failed listing.
+
 ### Demo (no cold start)
 
 ```bash
