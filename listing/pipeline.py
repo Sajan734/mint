@@ -1,12 +1,18 @@
 """run_pipeline(splat_path, seller_name=None) -> Listing | Rejection.
 
-CLI: python pipeline.py fixtures/item01 [--seller-name "Sony WH-1000XM4"]
+CLI: python pipeline.py fixtures/item01 [--seller-name "Sony WH-1000XM4"] [--asking-price 120] [--offline]
+
+The highlight runs in the background from the moment condition is done. result.json is written (and on_listing
+called) as soon as the listing is ready, with highlight.status "pending" if the highlight is still running, and is
+rewritten when it finishes. DEMO_MODE=1 reads every stage from demo_cache first, keyed by a hash of the stage's
+inputs; DEMO_MODE=offline (or --offline) also refuses to call any API or GPU, so a demo can't hit a quota.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import inspect
 import json
 import os
 import sys
@@ -20,6 +26,8 @@ import cache
 from contracts import (
     Baseline,
     Condition,
+    DealRating,
+    Highlight,
     Identity,
     Listing,
     ListingDraft,
@@ -31,7 +39,9 @@ from contracts import (
 )
 from stages.baseline_lookup import baseline_lookup
 from stages.condition import condition
+from stages.deal_rating import asking_price, deal_rating
 from stages.finalize import finalize
+from stages.highlight import PENDING, failed, highlight
 from stages.identify import identify
 from stages.listing_text import listing_text
 from stages.match_gate import match_gate
@@ -44,6 +54,11 @@ CACHE_ROOT = ROOT / "demo_cache"
 SPLAT_NAMES = ("splat.spz", "splat.ply")  # an item folder's splat: the published .spz, else a .ply
 
 M = TypeVar("M", bound=BaseModel)
+ListingHook = Callable[[Listing | Rejection], Awaitable[None] | None]
+
+
+class DemoCacheMiss(RuntimeError):
+    """Offline demo mode, and a stage that calls an API or a GPU has nothing cached for these inputs."""
 
 
 def resolve_item(path: Path) -> tuple[Path, Path]:
@@ -55,7 +70,7 @@ def resolve_item(path: Path) -> tuple[Path, Path]:
 
 
 def item_input(item_dir: Path) -> dict[str, Any]:
-    """The item folder's input.json (seller_name, up_axis), or {} when there is none."""
+    """The item folder's input.json (seller_name, up_axis, asking_price_cad), or {} when there is none."""
     path = item_dir / "input.json"
     if not path.is_file():
         return {}
@@ -73,18 +88,61 @@ async def run_stage(
     model: type[M],
     fn: Callable[..., Awaitable[M]],
     *args: Any,
+    pure: bool = False,
+    files: Callable[[M], list[str | None]] | None = None,
 ) -> M:
+    """Runs one stage and writes its JSON. In demo mode every stage reads the cache first, keyed by a hash of its
+    inputs and the run settings, so a new asking price or seller name is a miss, never a stale hit; misses are
+    cached, with the files `files` names. Offline, a miss raises DemoCacheMiss unless the stage is pure code."""
     start = time.perf_counter()
-    result = cache.get(ctx.cache_dir, ctx.item_id, name, model) if ctx.demo_mode else None
+    key = cache.key(name, ctx.up_axis, ctx.manual_baseline, *args) if ctx.demo_mode else ""
+    result = cache.get(ctx.cache_dir, ctx.item_id, name, key, model) if ctx.demo_mode else None
     hit = result is not None
     if result is None:
+        if ctx.demo_offline and not pure:
+            raise DemoCacheMiss(
+                f"the demo cache has no {name!r} for item {ctx.item_id!r} with these inputs; "
+                "run it once with DEMO_MODE=1 (online) first"
+            )
         result = await fn(ctx, *args)
         if ctx.demo_mode:
-            cache.put(ctx.cache_dir, ctx.item_id, name, result)
+            cache.put(ctx.cache_dir, ctx.item_id, name, key, result, files(result) if files else [])
     write_json(ctx.run_dir / f"{name}.json", result)
     ms = (time.perf_counter() - start) * 1000
     print(f"[{name}] {ms:.0f} ms{' (cache)' if hit else ''}", file=sys.stderr)
     return result
+
+
+def listing_path(path: str) -> Path:
+    p = Path(path)
+    return p if p.is_absolute() else ROOT / p
+
+
+async def run_highlight(ctx: RunContext, splat: Path, views: Views, baseline: Baseline, identity: Identity,
+                        cond: Condition) -> Highlight:
+    """The highlighted splat is a nice-to-have: any error becomes status "failed" and the listing goes on.
+    Errors aren't cached, so the next run tries again. The splat file and debug sheet are cached with the JSON."""
+    try:
+        result = await run_stage(ctx, "highlight", Highlight, highlight, splat, views, baseline, identity, cond,
+                                 files=lambda h: [h.splat_path, h.debug_sheet])
+    except DemoCacheMiss:
+        raise
+    except Exception as e:  # noqa: BLE001  see docstring
+        print(f"[highlight] failed, the listing goes on: {type(e).__name__}: {e}", file=sys.stderr)
+        result = failed(f"the highlight step failed ({type(e).__name__}: {e})")
+        write_json(ctx.run_dir / "highlight.json", result)
+        return result
+    if result.status == "produced" and not listing_path(result.splat_path).is_file():  # gone from runs/ and cache
+        result = failed("the cached highlighted splat file is missing; rerun without DEMO_MODE")
+        write_json(ctx.run_dir / "highlight.json", result)
+    return result
+
+
+async def notify(on_listing: ListingHook | None, result: Listing | Rejection) -> None:
+    if on_listing is not None:
+        outcome = on_listing(result)
+        if inspect.isawaitable(outcome):
+            await outcome
 
 
 async def run_pipeline(
@@ -96,18 +154,27 @@ async def run_pipeline(
     demo_mode: bool | None = None,
     manual_baseline: bool | None = None,
     up_axis: str | None = None,
+    asking_price_cad: float | None = None,
+    demo_offline: bool | None = None,
+    on_listing: ListingHook | None = None,
 ) -> Listing | Rejection:
+    """Returns the finished result. on_listing gets it as soon as the listing is ready, possibly with
+    highlight.status "pending" (e.g. to post it), before the highlight finishes."""
     item_dir, splat = resolve_item(Path(splat_path))
     item_id = item_dir.name
     inputs = item_input(item_dir)
     if seller_name is None:
         seller_name = inputs.get("seller_name")
+    asking = asking_price(asking_price_cad if asking_price_cad is not None else inputs.get("asking_price_cad"))
+    demo_env = os.environ.get("DEMO_MODE", "").strip().lower()
+    offline = demo_env == "offline" if demo_offline is None else demo_offline
     ctx = RunContext(
         item_id=item_id,
         item_dir=item_dir,
         run_dir=(runs_root or RUNS_ROOT) / item_id,
         cache_dir=cache_root or CACHE_ROOT,
-        demo_mode=os.environ.get("DEMO_MODE") == "1" if demo_mode is None else demo_mode,
+        demo_mode=offline or (demo_env in ("1", "offline") if demo_mode is None else demo_mode),
+        demo_offline=offline,
         manual_baseline=(
             os.environ.get("MANUAL_BASELINE") == "1" if manual_baseline is None else manual_baseline
         ),
@@ -119,18 +186,49 @@ async def run_pipeline(
     baseline = await run_stage(ctx, "baseline_lookup", Baseline, baseline_lookup, identity, seller_name)
     match = await run_stage(ctx, "match_gate", MatchCheck, match_gate, views, baseline)
 
-    result: Listing | Rejection
     if match.verdict == "mismatch":
-        result = Rejection(item_id=item_id, match_check=match)
-    else:
+        rejection = Rejection(item_id=item_id, match_check=match)
+        write_json(ctx.run_dir / "result.json", rejection)
+        await notify(on_listing, rejection)
+        return rejection
+
+    highlight_task: asyncio.Task[Highlight] | None = None
+
+    async def condition_then_start_highlight() -> Condition:
+        nonlocal highlight_task
+        cond = await run_stage(ctx, "condition", Condition, condition, views, baseline, identity)
+        highlight_task = asyncio.create_task(run_highlight(ctx, splat, views, baseline, identity, cond))
+        return cond
+
+    try:
         draft, reference, cond = await asyncio.gather(
             run_stage(ctx, "listing_text", ListingDraft, listing_text, identity),
             run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity, seller_name),
-            run_stage(ctx, "condition", Condition, condition, views, baseline),
+            condition_then_start_highlight(),
         )
-        result = await run_stage(ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond)
-
-    write_json(ctx.run_dir / "result.json", result)
+        deal = await run_stage(
+            ctx, "deal_rating", DealRating, deal_rating, reference, cond, match, baseline, asking, pure=True
+        )
+        await asyncio.wait([highlight_task], timeout=0)  # a cached highlight is ready after one turn
+        marked = highlight_task.result() if highlight_task.done() else PENDING
+        result = await run_stage(
+            ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond, deal, marked, pure=True
+        )
+        write_json(ctx.run_dir / "result.json", result)
+        if marked.status == "pending":
+            print("[result] written; the highlight is still running, result.json is rewritten when it's done",
+                  file=sys.stderr)
+        await notify(on_listing, result)
+        if marked.status == "pending":
+            marked = await highlight_task
+            result = await run_stage(
+                ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond, deal, marked,
+                pure=True,
+            )
+            write_json(ctx.run_dir / "result.json", result)
+    finally:
+        if highlight_task is not None and not highlight_task.done():
+            highlight_task.cancel()
     return result
 
 
@@ -150,10 +248,29 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="splat axis pointing up (default: input.json's up_axis, else +y)",
     )
+    parser.add_argument(
+        "--offline",
+        action="store_true",
+        default=None,
+        help="demo mode that never calls an API or a GPU: fails on a stage the demo cache doesn't have "
+        "(also DEMO_MODE=offline)",
+    )
+    parser.add_argument(
+        "--asking-price",
+        type=float,
+        default=None,
+        help="seller's asking price in CAD for the deal rating (default: input.json's asking_price_cad, "
+        "else Mint's suggested price is rated)",
+    )
     args = parser.parse_args(argv)
+    try:
+        asking_price(args.asking_price)
+    except ValueError as e:
+        parser.error(str(e))
 
     result = asyncio.run(
-        run_pipeline(args.item, args.seller_name, manual_baseline=args.manual_baseline, up_axis=args.up_axis)
+        run_pipeline(args.item, args.seller_name, manual_baseline=args.manual_baseline, up_axis=args.up_axis,
+                     asking_price_cad=args.asking_price, demo_offline=args.offline)
     )
     print(f"{type(result).__name__}:", file=sys.stderr)
     print(result.model_dump_json(indent=2))

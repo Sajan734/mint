@@ -1,6 +1,17 @@
 import pytest
 
-from contracts import Baseline, Condition, Defect, ListingDraft, MatchCheck, ReferencePrice, View, Views
+from contracts import (
+    Baseline,
+    Condition,
+    DealRating,
+    Defect,
+    Highlight,
+    ListingDraft,
+    MatchCheck,
+    ReferencePrice,
+    View,
+    Views,
+)
 from stages.finalize import (
     CONDITION_CHECK_REASON,
     NO_DEFECTS_NOTE,
@@ -8,6 +19,8 @@ from stages.finalize import (
     build_listing,
     build_notes,
     compute_price,
+    noted_defects,
+    price_factors,
 )
 
 
@@ -78,28 +91,60 @@ def test_notes_when_nothing_notable():
     assert build_notes([Defect(kind="dent", score=0.2, view_ids=["v01"])], make_views()) == [NO_DEFECTS_NOTE]
 
 
+@pytest.mark.parametrize("score, has_baseline, noted", [(0.60, True, True), (0.60, False, False),
+                                                        (0.74, False, False), (0.75, False, True)])
+def test_without_a_baseline_the_bar_is_higher(score, has_baseline, noted):
+    """The real mouse: its logo scored 0.60 as a scratch with no reference photo, and was noted and priced."""
+    scratch = Defect(kind="scratch", score=score, view_ids=["v05", "v11"])
+    assert bool(noted_defects([scratch], has_baseline)) is noted
+    factors = price_factors(make_condition(defects=[scratch]), has_baseline)
+    assert len(factors) == (2 if noted else 1)
+
+
+def test_listing_without_a_baseline_doesnt_price_a_borderline_scratch():
+    scratch = Defect(kind="scratch", score=0.60, view_ids=["v05"])
+    no_photo = Baseline(query="q", image_path=None, source="image_search")
+    listing = build_listing(make_views(), make_match("uncertain"), no_photo, DRAFT, REFERENCE,
+                            make_condition(defects=[scratch]), DEAL, MARKED)
+    assert listing.condition_notes == [NO_DEFECTS_NOTE]
+    assert listing.price_cad == compute_price(REFERENCE, make_condition())[0]  # same as with no scratch at all
+
+
+REFERENCE = ReferencePrice(amount_cad=100, basis="used_comps", note="n")
+DEAL = DealRating(rating="fair", explanation="Fair price.", asking_price_cad=65.0, asking_price_source="suggested",
+                  fair_price_cad=65, new_price_cad=100.0, ratio_to_fair=1.0, confidence="high")
+MARKED = Highlight(status="skipped", summary="No highlighted splat: test.")
+
+
+def listing_for(match=None, condition=None):
+    return build_listing(make_views(), match or make_match(), BASELINE, DRAFT, REFERENCE, condition or make_condition(),
+                         DEAL, MARKED)
+
+
 def test_match_listing_needs_no_check():
-    listing = build_listing(make_views(), make_match("match"), BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"), make_condition())
+    listing = listing_for(make_match("match"))
     assert listing.needs_seller_check is False
     assert listing.seller_check_reasons == []
 
 
 def test_uncertain_match_flags_seller_check():
     match = make_match("uncertain")
-    listing = build_listing(make_views(), match, BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"), make_condition())
+    listing = listing_for(match)
     assert listing.needs_seller_check is True
     assert listing.seller_check_reasons == [match.reason]
 
 
 def test_condition_flag_carries_through():
-    listing = build_listing(
-        make_views(), make_match(), BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"),
-        make_condition(needs_seller_check=True),
-    )
+    listing = listing_for(condition=make_condition(needs_seller_check=True))
     assert listing.needs_seller_check is True
     assert listing.seller_check_reasons == [CONDITION_CHECK_REASON]
 
 
 def test_previews_use_low_ring_views():
-    listing = build_listing(make_views(), make_match(), BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"), make_condition())
-    assert listing.preview_images == ["v00.png", "v02.png", "v04.png", "v06.png"]
+    assert listing_for().preview_images == ["v00.png", "v02.png", "v04.png", "v06.png"]
+
+
+def test_deal_rating_and_highlight_carry_through():
+    listing = listing_for()
+    assert listing.deal_rating == DEAL
+    assert listing.highlight == MARKED

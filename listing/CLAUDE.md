@@ -4,8 +4,8 @@ This folder is one lane of the Mint hackathon project. It turns a seller's train
 
 ## What the pipeline does
 
-Input: a trained gsplat of one item, plus an optional product name typed by the seller.
-Output: a `Listing`, or a `Rejection` if the scan doesn't match the looked-up product.
+Input: a trained gsplat of one item, plus an optional product name and asking price from the seller (`input.json` `seller_name` / `asking_price_cad`, or `--seller-name` / `--asking-price`).
+Output: a `Listing` (with a deal rating and a highlighted copy of the splat, when one could be made), or a `Rejection` if the scan doesn't match the looked-up product.
 
 Stages, in order:
 
@@ -15,8 +15,12 @@ Stages, in order:
 4. `match_gate`: views + baseline -> `MatchCheck` (Jev). On mismatch, return a `Rejection` and stop.
 5. In parallel with `asyncio.gather`:
    - `listing_text`: `Identity` -> `ListingDraft` (Gemini)
-   - `reference_price` + `condition`: `Identity` -> `ReferencePrice`, views + baseline -> `Condition` (Jev)
-6. `finalize`: everything -> `Listing`. The price is computed here in code.
+   - `reference_price`: `Identity` -> `ReferencePrice`
+   - `condition` (Jev): views + baseline + identity -> `Condition`. The Jev context names the printed text and colours `identify` read off the item (`jev_questions.design_note`), so lettering and logos aren't judged as scratches or stains.
+   - `highlight` starts as a background task as soon as `condition` is done: splat + views + baseline + identity + condition -> `Highlight` and `runs/<item>/splat_highlighted.<spz|ply>`, a byte copy of the seller's splat with the noted defects tinted red. One Gemini call boxes the marks in every view `condition` flagged, and the item's own printed text and logos; code drops marks that sit on that printing. `splat_render.lift_masks` (on `RENDER_BACKEND`, same cameras as `render`) finds the Gaussians that show inside each box and lie on the visible surface; code keeps boxes the other views confirm (without a baseline photo, every box needs a second view) and the Gaussians the views agree on, and skips the output (saying why) if the marks would cover too much of the item. Isolated: any error becomes status `failed` with the reason, never a failed listing. Check it by eye in `runs/<item>/highlight_sheet.png`; `scripts/try_highlight.py` reruns it alone on a finished run.
+6. `deal_rating`: the asking price (default: the suggested price) against `finalize`'s price for the item in its condition -> `DealRating` (pure code). Weak inputs (estimated new price, uncertain match, no baseline, seller check) widen the fair price into a range, and great/good or high/overpriced must hold across it.
+7. `finalize`: everything -> `Listing`. The price is computed here in code. Without a baseline photo a defect needs a score of 0.75 (not 0.60) to be noted, priced or highlighted.
+8. `result.json` is written (and `run_pipeline`'s `on_listing` hook called, e.g. to post the listing) as soon as the listing is ready. If the highlight is still running its status is `pending`; `finalize` reruns and `result.json` is rewritten when it finishes. `run_pipeline` returns the finished result.
 
 The 3D turntable viewer is out of scope for now. Don't build it unless asked.
 
@@ -28,8 +32,8 @@ listing/
   pipeline.py        # run_pipeline(splat_path, seller_name=None) -> Listing | Rejection
   stages/            # one file per stage, named as above
   cache.py           # cached stage outputs keyed by item id + stage
-  splat_render.py    # 3DGS .ply / .spz loading, floater-robust framing, PyTorch rasterizer
-  modal_render.py    # Modal app wrapping splat_render on a GPU (RENDER_BACKEND=modal)
+  splat_render.py    # 3DGS .ply / .spz loading, floater-robust framing, PyTorch rasterizer, mask lifting, tinting
+  modal_render.py    # Modal app wrapping splat_render on a GPU (RENDER_BACKEND=modal): render_splat, lift_splat_masks
   images.py          # fit images to Jev's limits
   samples/           # local sample splats (gitignored, never commit)
   fixtures/          # one folder per test item: views, baseline, expected JSON
@@ -46,6 +50,8 @@ modal deploy modal_render.py          # after any change to splat_render.py or m
 python pipeline.py fixtures/item01    # must print a valid Listing
 python pipeline.py fixtures/item02    # must print a Rejection
 python -m pytest
+python pipeline.py fixtures/item01 --asking-price 120          # deal rating for a seller's asking price
+python scripts/try_highlight.py samples/<scan_id> [--min-score 0.5]   # highlight alone on a finished run
 ```
 
 Run the two pipeline checks and the tests after every change. They must still pass before you say a task is done.
@@ -55,7 +61,8 @@ Run the two pipeline checks and the tests after every change. They must still pa
 - `contracts.py` is the source of truth. Don't add, remove or rename fields unless the task asks for it. If a stage needs a change, stop and say so.
 - Every stage is an async function: contract objects in, one contract object out. No global state.
 - Every stage writes its output as JSON to `runs/<item_id>/<stage>.json`. Jev stages also save raw per-view answers there.
-- If `DEMO_MODE=1`, every stage reads from `cache.py` first and only calls an API on a cache miss.
+- If `DEMO_MODE=1`, every stage reads from `cache.py` first and only runs on a cache miss. Cache entries are keyed by a hash of the stage's inputs (upstream outputs, seller name, asking price, up axis, manual-baseline flag), so a changed input is a miss, never a stale hit. The highlighted splat and debug sheet are cached with the highlight and put back if `runs/` was cleaned. A failed `highlight` is never cached.
+- `DEMO_MODE=offline` (or `--offline`) is a cache-only demo: a miss in a stage that calls an API or a GPU raises `DemoCacheMiss` naming the stage; pure-code stages (`deal_rating`, `finalize`) still run, so a new asking price works offline. Before a demo, run each item once with `DEMO_MODE=1`, then check with `--offline`.
 - `--manual-baseline` (or `MANUAL_BASELINE=1`) makes `baseline_lookup` use the item folder's `baseline.jpg/png` and never search, so demos don't depend on search. If no usable baseline is found, `Baseline.image_path` is null and `match_gate` returns `uncertain` (no Jev call), which flags a seller check. With no seller-typed name and a null `Identity.model`, `baseline_lookup` doesn't search at all (a generic query finds some other product). `condition` then runs the no-baseline questions on the views alone, so pricing still works.
 - Thresholds, weights and price factors live in a dict at the top of their stage file. Never inline magic numbers in logic.
 - Decisions are made in code from model outputs. Models supply probabilities or structured fields, never the final verdict or price.
@@ -88,8 +95,11 @@ Run the two pipeline checks and the tests after every change. They must still pa
 ## Gemini
 
 - Use the `google-genai` SDK.
+- Every Gemini call (identify, listing_text, reference_price, highlight) uses `GEMINI["model"]` in `stages/identify.py`, currently `gemini-3.5-flash-lite`, read through `gemini_model()`. That is the only setting: `GEMINI_MODEL` in the environment is ignored with a warning (it used to put local runs on gemini-3.8-flash while the Modal container ran gemini-3.5-flash).
+- Search grounding for `reference_price` is off (`GEMINI["search_grounding"]`): the free-tier project gets 0 grounding requests a day on Gemini 3 and newer, and the Gemini 2.5 models that have grounding return 404 for new projects. So every new price is a model estimate (basis `llm_estimate`), which the deal rating treats as lower confidence. Turn it on once billing is set up.
 - Always pass a response schema built from the matching model in `contracts.py`. Never parse free text.
-- `identify` sends all 12 views in one call.
+- `identify` sends all 12 views in one call; `highlight` sends every flagged view in one call too. Don't add per-view Gemini calls. A listing makes 3 Gemini calls (identify, listing_text, reference_price), plus 1 for the highlight when a defect is noted, plus 1 listing_text retry when its text fails the checks.
+- The key belongs to the AI Studio project htv11 (free tier). Its limits are per project (every key, the live scan pipeline in `gsplat/` and anyone else on it share them) and reset at midnight Pacific: gemini-3.5-flash-lite 15 requests/min, 250K input tokens/min, 500 requests/day, so about 125 listings a day at 4 calls each. Check usage at aistudio.google.com/rate-limit.
 - Never invent brand or model. If the images don't support it, return null. Brand must be backed by `visible_text`.
 - `listing_text` never mentions price or condition.
 

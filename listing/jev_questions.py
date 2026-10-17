@@ -10,6 +10,8 @@ from typing import Any
 
 from typesafe_sdk import Image, Noul, NoulCriteria, Score
 
+from contracts import Identity
+
 MODEL = "jev-latest"
 IMAGE_HEADERS = {"TypeSafe-Danger-Zone-Images": "true"}
 
@@ -181,6 +183,36 @@ _NO_BASELINE_SENTENCE = (
 if _WITH_BASELINE_SENTENCE not in CONDITION_CONTEXT:
     raise RuntimeError("CONDITION_CONTEXT changed: update CONDITION_CONTEXT_NO_BASELINE")
 CONDITION_CONTEXT_NO_BASELINE = CONDITION_CONTEXT.replace(_WITH_BASELINE_SENTENCE, _NO_BASELINE_SENTENCE)
+
+
+def design_features(identity: Identity | None) -> list[str]:
+    """What identify read off the item that belongs to its design: printed text and logos, and its colours."""
+    if identity is None:
+        return []
+    features = []
+    if identity.visible_text:
+        features.append(f"printed text or logos reading {', '.join(repr(t) for t in identity.visible_text)}")
+    colours = [f"{k.replace('_', ' ')} {v}" for k, v in identity.attributes.items() if "colour" in k or "color" in k]
+    if colours:
+        features.append(f"these colours: {'; '.join(colours)}")
+    return features
+
+
+def design_note(identity: Identity | None) -> str:
+    """A sentence telling the condition questions that the item's own printing and colours are not damage. Empty
+    when identify found neither."""
+    features = design_features(identity)
+    if not features:
+        return ""
+    return (
+        f" The product's own design includes {' and '.join(features)}. These are part of the design, not damage: "
+        "lettering and logos are not scratches, scuffs or stains, even where the scan makes them look streaky, "
+        "worn or blurry, and a part in one of these colours is not discolouration."
+    )
+
+
+def condition_context(has_baseline: bool, identity: Identity | None = None) -> str:
+    return (CONDITION_CONTEXT if has_baseline else CONDITION_CONTEXT_NO_BASELINE) + design_note(identity)
 
 CONDITION_QUESTIONS_NO_BASELINE = {
     **CONDITION_QUESTIONS,

@@ -1,8 +1,10 @@
-"""condition: views + baseline -> Condition (Jev, one request per view).
+"""condition: views + baseline (+ identity) -> Condition (Jev, one request per view).
 
 Fixture items that have stubs/condition.json stay offline. Otherwise every view goes to Jev concurrently.
 With a baseline photo the questions compare against it; with no baseline (image_path is None) the
-no-baseline questions run on the views alone, so pricing still works.
+no-baseline questions run on the views alone, so pricing still works. Either way the context names the printed
+text and colours identify read off the item, so lettering and logos aren't judged as scratches or stains.
+finalize is stricter about which defects it notes and prices when there was no baseline.
 Per question, answers are aggregated across usable views with the 2nd-highest value, so one noisy view
 can't decide a result. Code maps the aggregates to a grade, defects and the seller-check flag.
 """
@@ -21,16 +23,16 @@ from typing import Any
 from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient, Image, RetryPolicy, TypeSafeError
 
-from contracts import Baseline, Condition, Defect, RunContext, View, Views
+from contracts import Baseline, Condition, Defect, Identity, RunContext, View, Views
 from images import ImageProblem, fit_for_jev
 from jev_questions import (
-    CONDITION_CONTEXT,
-    CONDITION_CONTEXT_NO_BASELINE,
     CONDITION_QUESTIONS,
     CONDITION_QUESTIONS_NO_BASELINE,
     IMAGE_HEADERS,
     MODEL,
     WEAR_LEVELS,
+    condition_context,
+    design_note,
 )
 from stages._fixture import has_stub, load_stub
 from stages.identify import MissingKeyError
@@ -168,15 +170,13 @@ async def ask_view(
     )
 
 
-async def ask_views(views: Views, baseline_path: str | None) -> list[ViewAnswers]:
-    """One Jev request per view, all concurrent. The baseline goes into every request when there is one."""
+async def ask_views(views: Views, baseline_path: str | None, identity: Identity | None = None) -> list[ViewAnswers]:
+    """One Jev request per view, all concurrent. The baseline goes into every request when there is one, and the
+    context names the item's own printed text and colours (from identify) so they aren't judged as damage."""
     _jev_key()
     baseline_image = Image(fit_for_jev(resolve(baseline_path).read_bytes()).data) if baseline_path else None
-    context, questions = (
-        (CONDITION_CONTEXT, CONDITION_QUESTIONS)
-        if baseline_image is not None
-        else (CONDITION_CONTEXT_NO_BASELINE, CONDITION_QUESTIONS_NO_BASELINE)
-    )
+    context = condition_context(baseline_image is not None, identity)
+    questions = CONDITION_QUESTIONS if baseline_image is not None else CONDITION_QUESTIONS_NO_BASELINE
     async with AsyncTypeSafeClient(
         model=MODEL, timeout=JEV["timeout_s"], retry=RetryPolicy(max_retries=JEV["max_retries"])
     ) as jev:
@@ -184,16 +184,17 @@ async def ask_views(views: Views, baseline_path: str | None) -> list[ViewAnswers
     return list(answers)
 
 
-async def condition(ctx: RunContext, views: Views, baseline: Baseline) -> Condition:
+async def condition(ctx: RunContext, views: Views, baseline: Baseline, identity: Identity | None = None) -> Condition:
     if has_stub(ctx, "condition"):
         return load_stub(ctx, "condition", Condition)
-    answers = await ask_views(views, baseline.image_path)
+    answers = await ask_views(views, baseline.image_path, identity)
     result, reasons = build_condition(answers)
     ctx.run_dir.mkdir(parents=True, exist_ok=True)
     (ctx.run_dir / "condition_raw.json").write_text(
         json.dumps(
             {
                 "baseline_used": baseline.image_path is not None,
+                "design_note": design_note(identity),
                 "seller_check_reasons": reasons,
                 "views": [asdict(a) for a in answers],
             },
