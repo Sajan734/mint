@@ -1,0 +1,19 @@
+# dependencies
+/node_modules
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# env: the repo uses one .env in the root
+.env*
+
+# debug
+npm-debug.log*
+pnpm-debug.log*
+
+# misc
+.DS_Store
+.vercel
