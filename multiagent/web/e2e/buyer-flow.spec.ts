@@ -14,9 +14,15 @@ const cards = (page: Page) => page.locator("article");
 const listing = (page: Page) => page.goto("/listing/pots_i1");
 const reserve = (page: Page) => page.getByRole("button", { name: /^Reserve for/ }).first();
 
-test("home loads 40 cards; filter changes URL and count", async ({ page }) => {
+test("home shows 12 of 40, Show more reveals the rest; filter changes URL and count", async ({ page }) => {
   await page.goto("/");
-  await expect(cards(page)).toHaveCount(40);
+  await expect(page.getByRole("status")).toContainText("40 items");
+  await expect(cards(page)).toHaveCount(12);
+  for (const n of [24, 36, 40]) {
+    await page.getByRole("button", { name: /^Show \d+ more$/ }).click();
+    await expect(cards(page)).toHaveCount(n);
+  }
+  await expect(page.getByRole("button", { name: /^Show \d+ more$/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Garden & plants" }).click();
   await expect(page).toHaveURL(/cat=garden_plants/);
   await expect(page.getByRole("status")).toContainText("5 items");

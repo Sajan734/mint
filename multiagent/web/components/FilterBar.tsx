@@ -1,5 +1,4 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 const CATS: [string, string][] = [
@@ -9,15 +8,12 @@ const CATS: [string, string][] = [
 ];
 const CONDS: [string, string][] = [["like_new", "Like new"], ["light_wear", "Light wear"], ["moderate_wear", "Moderate wear"], ["heavy_wear", "Heavy wear"]];
 const SORTS: [string, string][] = [["newest", "Newest"], ["price_asc", "Price: low to high"], ["best_deal", "Best deal"]];
-const field = "h-11 rounded-md border border-line bg-surface px-3 text-ink";
+const field = "h-11 w-full rounded-md border border-line-strong bg-surface px-3 text-ink";
 
 export default function FilterBar() {
   const router = useRouter();
   const path = usePathname();
   const sp = useSearchParams();
-  const [q, setQ] = useState(sp.get("q") ?? "");
-  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  useEffect(() => () => clearTimeout(timer.current), []);
 
   const set = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(sp.toString());
@@ -28,20 +24,8 @@ export default function FilterBar() {
   const cat = sp.get("cat");
 
   return (
-    <form role="search" onSubmit={(e) => { e.preventDefault(); set({ q: q.trim() || null }); }} className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
-        <label className="min-w-48 flex-1">
-          <span className="sr-only">Search items</span>
-          <input
-            type="search" value={q} placeholder="Search items" className={`${field} w-full`}
-            onChange={(e) => {
-              setQ(e.target.value);
-              clearTimeout(timer.current);
-              const v = e.target.value.trim();
-              timer.current = setTimeout(() => set({ q: v || null }), 250);
-            }}
-          />
-        </label>
+    <form role="group" aria-label="Filters" onSubmit={(e) => e.preventDefault()} className="flex flex-col gap-3">
+      <div className="grid grid-cols-2 items-center gap-2 md:flex md:flex-wrap md:gap-3 [&_select]:md:w-auto">
         <label>
           <span className="sr-only">Condition</span>
           <select className={field} value={sp.get("cond") ?? ""} onChange={(e) => set({ cond: e.target.value || null })}>
@@ -56,14 +40,14 @@ export default function FilterBar() {
             <option value="shipping">Ships</option>
           </select>
         </label>
-        <label>
+        <label className="col-span-2 md:col-span-1">
           <span className="sr-only">Sort</span>
           <select className={field} value={sp.get("sort") ?? "newest"} onChange={(e) => set({ sort: e.target.value === "newest" ? null : e.target.value })}>
             {SORTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
         </label>
-        <label className="flex h-11 items-center gap-2">
-          <input type="checkbox" className="size-5" checked={sp.get("fair") === "1"} onChange={(e) => set({ fair: e.target.checked ? "1" : null })} />
+        <label className="col-span-2 flex h-11 items-center gap-2 text-sm md:col-span-1">
+          <input type="checkbox" className="size-5 accent-[var(--mint-ink)]" checked={sp.get("fair") === "1"} onChange={(e) => set({ fair: e.target.checked ? "1" : null })} />
           Fair price or better
         </label>
       </div>
@@ -71,7 +55,7 @@ export default function FilterBar() {
         {[["", "All"], ...CATS].map(([v, l]) => (
           <button
             key={v} type="button" aria-pressed={(cat ?? "") === v} onClick={() => set({ cat: v || null })}
-            className={`h-11 shrink-0 snap-start rounded-full border px-4 ${(cat ?? "") === v ? "border-ink bg-ink text-bg" : "border-line bg-surface"}`}
+            className={`h-11 shrink-0 snap-start rounded-full border px-4 text-sm font-medium transition-colors ${(cat ?? "") === v ? "border-transparent bg-btn-bg text-btn-fg" : "border-line-strong bg-surface hover:border-ink"}`}
           >
             {l}
           </button>

@@ -14,6 +14,10 @@
   --amber: #f5b53f;
   --coral: #ff6b5a;
   --slate: #8a9499;
+  --line-strong: #bdb6a8;
+  --btn-bg: var(--ink);
+  --btn-fg: var(--bg);
+  --pad: radial-gradient(ellipse 70% 22% at 50% 86%, oklch(0.2 0.02 85 / 0.08), transparent 70%);
 
   --t-xs: 0.75rem;
   --t-sm: 0.875rem;
@@ -59,6 +63,10 @@
     --focus: #7fb0f5;
     --shadow-hover: none;
     --shadow-sheet: none;
+    --line-strong: #4d5f59;
+    --btn-bg: #3ddc97;
+    --btn-fg: #0b0f0e;
+    --pad: radial-gradient(ellipse 70% 22% at 50% 86%, oklch(0 0 0 / 0.35), transparent 70%);
   }
 }
 
@@ -74,6 +82,10 @@
   --focus: #7fb0f5;
   --shadow-hover: none;
   --shadow-sheet: none;
+  --line-strong: #4d5f59;
+  --btn-bg: #3ddc97;
+  --btn-fg: #0b0f0e;
+  --pad: radial-gradient(ellipse 70% 22% at 50% 86%, oklch(0 0 0 / 0.35), transparent 70%);
 }
 
 @theme inline {
@@ -90,6 +102,9 @@
   --color-amber: var(--amber);
   --color-coral: var(--coral);
   --color-slate: var(--slate);
+  --color-line-strong: var(--line-strong);
+  --color-btn-bg: var(--btn-bg);
+  --color-btn-fg: var(--btn-fg);
   --font-display: var(--font-bricolage), system-ui, sans-serif;
   --font-sans: var(--font-figtree), system-ui, sans-serif;
   --font-mono: var(--font-dm-mono), ui-monospace, monospace;
@@ -106,12 +121,57 @@ body {
   line-height: 1.5;
 }
 
+html {
+  scroll-padding-top: 5rem;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
 h1,
 h2,
 h3 {
   font-family: var(--font-display);
   line-height: 1.15;
+  text-wrap: balance;
 }
+
+::selection {
+  background: var(--mint);
+  color: #0b0f0e;
+}
+
+/* Primary action: ink on paper, mint in dark (DESIGN.md). */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-weight: 600;
+  transition: opacity var(--dur-feedback) var(--ease), transform var(--dur-feedback) var(--ease);
+}
+.btn-primary:hover { opacity: 0.88; }
+.btn-primary:active { transform: translateY(1px); }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 var(--sp-5);
+  border-radius: var(--r-md);
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: 600;
+  transition: border-color var(--dur-feedback) var(--ease);
+}
+.btn-secondary:hover { border-color: var(--ink); }
+
+/* Turntable pad: soft ground shadow under every scanned object. */
+.pad { background-color: var(--surface-2); background-image: var(--pad); }
 
 :focus-visible {
   outline: 2px solid var(--focus);

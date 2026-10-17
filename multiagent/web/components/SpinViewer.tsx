@@ -205,25 +205,32 @@ const box: CSSProperties = {
   aspectRatio: "1 / 1",
   width: "100%",
   overflow: "hidden",
-  background: "var(--surface-2)",
+  backgroundColor: "var(--surface-2)",
+  backgroundImage: "var(--pad)",
   borderRadius: "var(--r-md)",
 };
-const tag: CSSProperties = {
+// Solid pills (surface + ink) keep contrast on cream frames in both themes.
+const pill: CSSProperties = {
   position: "absolute",
-  right: "var(--sp-2)",
-  bottom: "var(--sp-2)",
   fontSize: "var(--t-xs)",
-  fontFamily: "monospace",
-  color: "var(--ink-2)",
+  fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
+  fontWeight: 500,
+  lineHeight: 1,
+  color: "var(--ink)",
+  background: "var(--surface)",
+  border: "1px solid var(--line-strong)",
+  padding: "5px var(--sp-2)",
+  borderRadius: 999,
+  pointerEvents: "none",
 };
+const tag: CSSProperties = { ...pill, right: "var(--sp-2)", bottom: "var(--sp-2)" };
 const hint: CSSProperties = {
-  position: "absolute",
+  ...pill,
   left: "50%",
   bottom: "var(--sp-2)",
   transform: "translateX(-50%)",
-  fontSize: "var(--t-xs)",
-  color: "var(--ink-2)",
-  background: "var(--surface)",
-  padding: "2px var(--sp-2)",
-  borderRadius: "var(--r-sm)",
+  whiteSpace: "nowrap",
+  fontFamily: "var(--font-figtree), system-ui, sans-serif",
+  fontSize: "var(--t-sm)",
+  padding: "6px var(--sp-3)",
 };

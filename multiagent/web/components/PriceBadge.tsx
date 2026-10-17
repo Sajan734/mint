@@ -3,10 +3,10 @@ import { formatPrice } from "@/lib/format";
 
 const STYLE: Record<BadgeKind, string> = {
   great: "bg-mint-wash text-mint-ink border-transparent",
-  fair: "bg-surface text-ink border-mint-ink",
+  fair: "bg-surface text-ink border-mint-ink/60",
   high: "bg-amber/25 text-ink border-transparent",
   overpriced: "bg-coral/20 text-ink border-transparent",
-  unknown: "bg-surface-2 text-ink-2 border-dashed border-slate",
+  unknown: "bg-surface-2 text-ink-2 border-dashed border-line-strong",
 };
 // Never colour-only: each state has its own glyph.
 const ICON: Record<BadgeKind, string> = {
@@ -42,9 +42,9 @@ export default function PriceBadge({
             ? `Compared with ${formatPrice(reference)} typical resale in this condition.`
             : undefined
         }
-        className={`inline-flex h-6 items-center gap-1 rounded-sm border px-2 text-xs font-semibold ${STYLE[b.kind]}`}
+        className={`inline-flex h-6 shrink-0 items-center gap-1 whitespace-nowrap rounded-sm border px-1.5 text-xs font-semibold md:px-2 ${STYLE[b.kind]}`}
       >
-        <svg aria-hidden viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <svg aria-hidden viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <path d={ICON[b.kind]} />
         </svg>
         {b.label}
