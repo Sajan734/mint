@@ -3,13 +3,13 @@ from pathlib import Path
 
 import numpy as np
 
-from . import debug, frames as frames_mod, masks as masks_mod
+from . import debug, frames as frames_mod, masks as masks_mod, poses as poses_mod
 from .timing import Timer
 
 DEFAULTS = {
     "n_frames": 80,
     "box": None,  # [x0, y0, x1, y1] in pixels of the first picked frame; None = centre prompt
-    "stop_after": None,  # "masks" | None
+    "stop_after": None,  # "masks" | "poses" | None
 }
 
 
@@ -36,4 +36,19 @@ def run(models, video: bytes, cfg: dict) -> dict:
         out["timings"] = {**T.t, "total": T.total()}
         return out
 
-    raise NotImplementedError("poses / training land in the next milestones")
+    frames = [f for f, k in zip(frames, ok) if k]
+    masks = [m for m, k in zip(masks, ok) if k]
+
+    with T.stage("3_poses"):
+        c2w, K, init_pts, init_cols, pstats = poses_mod.estimate(models.vggt, frames, masks)
+    out["poses"] = pstats
+    print(f"poses: {pstats}", flush=True)
+    import cv2
+
+    out["files"]["poses.jpg"] = cv2.imencode(".jpg", cv2.cvtColor(poses_mod.preview(
+        c2w.cpu().numpy(), init_pts.cpu().numpy(), init_cols.cpu().numpy()), cv2.COLOR_RGB2BGR))[1].tobytes()
+    if cfg["stop_after"] == "poses":
+        out["timings"] = {**T.t, "total": T.total()}
+        return out
+
+    raise NotImplementedError("training lands in the next milestone")
