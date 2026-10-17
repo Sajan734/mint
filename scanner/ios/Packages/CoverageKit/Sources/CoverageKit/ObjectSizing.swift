@@ -93,6 +93,73 @@ public enum ObjectSizing {
         return ObjectEstimate(footprintCentre: centre, width: width, height: height, depth: width)
     }
 
+    /// Sizes an item from **measured** surface points (ARKit raycast hits inside its mask) plus its
+    /// silhouette rays and the table height. The hits fix the distance, so width and height are
+    /// real measurements rather than inferences.
+    /// - Parameters:
+    ///   - surfaceHits: world points where rays through the mask interior hit a surface.
+    ///   - silhouetteRays: rays through a sample of all mask pixels.
+    ///   - planeY: table height (must be below the item; see `tablePlane`).
+    public static func measure(
+        camera: SIMD3<Float>, surfaceHits: [SIMD3<Float>], silhouetteRays: [Ray], planeY: Float
+    ) -> ObjectEstimate? {
+        // Hits on the item: above the table, at a consistent distance (drops hits that slipped
+        // past the silhouette onto the wall or table behind).
+        let above = surfaceHits.filter { $0.y > planeY + 0.006 }
+        guard above.count >= 4 else { return nil }
+        let dists = above.map { simd_distance($0, camera) }
+        let dMed = median(dists)
+        let hits = above.filter { let d = simd_distance($0, camera); return d > dMed * 0.7 && d < dMed * 1.3 }
+        guard hits.count >= 4, silhouetteRays.count >= 10 else { return nil }
+
+        let up = SIMD3<Float>(0, 1, 0)
+        let a = SIMD3(median(hits.map(\.x)), median(hits.map(\.y)), median(hits.map(\.z)))
+        var view = a - camera
+        view.y = 0
+        guard simd_length(view) > 1e-3 else { return nil }
+        view = simd_normalize(view)
+        let lateral = simd_normalize(simd_cross(view, up))
+
+        func extents(through p: SIMD3<Float>) -> (lo: Float, hi: Float, top: Float)? {
+            let pts = silhouetteRays.compactMap { $0.hit(planeThrough: p, normal: view) }
+            guard pts.count >= 10 else { return nil }
+            let lat = pts.map { simd_dot($0 - p, lateral) }
+            return (percentile(lat, 0.03), percentile(lat, 0.97), percentile(pts.map(\.y), 0.98))
+        }
+
+        // Pass 1: width at the measured surface. The hits sit on the visible front/top, so the
+        // middle is about half a (square) footprint further back, less so when looking from above.
+        guard let e1 = extents(through: a) else { return nil }
+        var width = max(e1.hi - e1.lo, 0.02)
+        let horizontal = simd_length(SIMD2(a.x - camera.x, a.z - camera.z))
+        let cosEl = horizontal / max(simd_distance(a, camera), 1e-3)
+        var centre = a + lateral * ((e1.lo + e1.hi) / 2) + view * (width / 2 * cosEl)
+        centre.y = planeY
+
+        // Pass 2: re-measure on the vertical plane through the centre.
+        guard let e2 = extents(through: centre) else { return nil }
+        width = max(e2.hi - e2.lo, 0.02)
+        centre += lateral * ((e2.lo + e2.hi) / 2)
+
+        // Height: the silhouette's top edge is the item's *back* top edge when the camera is above
+        // the item and its *front* top edge when it's below, so measure it on that plane.
+        var top = e2.top
+        let half = width / 2
+        if let e3 = extents(through: centre + view * (camera.y > top ? half : -half)) { top = e3.top }
+        top = max(top, percentile(hits.map(\.y), 0.95))
+        let height = max(top - planeY, 0.02)
+
+        return ObjectEstimate(footprintCentre: centre, width: width, height: height, depth: width)
+    }
+
+    /// Picks the table under the item from candidate horizontal plane heights: the highest plane
+    /// clearly below the measured points. Planes ARKit found *on top of* the item are ignored.
+    public static func tablePlane(candidates: [Float], surfaceHits: [SIMD3<Float>]) -> Float? {
+        guard !surfaceHits.isEmpty else { return candidates.max() }
+        let mid = median(surfaceHits.map(\.y))
+        return candidates.filter { $0 < mid - 0.01 && $0 > mid - 1.0 }.max()
+    }
+
     static func median(_ v: [Float]) -> Float { percentile(v, 0.5) }
 
     static func percentile(_ v: [Float], _ p: Float) -> Float {

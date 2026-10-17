@@ -225,3 +225,41 @@ final class CaptureFilesTests: XCTestCase {
         XCTAssertFalse(line.contains("\"pose\""))  // absent while handling
     }
 }
+
+final class ObjectMeasureTests: XCTestCase {
+    /// Same 20 × 30 × 20 cm box at the origin. Hits = points on the faces the camera can see.
+    private func box(camera cam: SIMD3<Float>) -> (hits: [SIMD3<Float>], silhouette: [Ray]) {
+        let s = (0...10).map { Float($0) / 10 }
+        let front = s.flatMap { u in s.map { v in SIMD3<Float>(-0.1 + 0.2 * u, 0.3 * v, 0.1) } }
+        let top = s.flatMap { u in s.map { v in SIMD3<Float>(-0.1 + 0.2 * u, 0.3, 0.1 - 0.2 * v) } }
+        let silhouette = (front + top).map { Ray(origin: cam, direction: $0 - cam) }
+        let hits = stride(from: 0, to: front.count, by: 3).map { front[$0] } + stride(from: 0, to: top.count, by: 5).map { top[$0] }
+        return (hits, silhouette)
+    }
+
+    func testMeasuresBoxFromSideAndAbove() {
+        for cam in [SIMD3<Float>(0.05, 0.35, 0.8), SIMD3<Float>(-0.1, 0.7, 0.45)] {
+            let b = box(camera: cam)
+            let e = ObjectSizing.measure(camera: cam, surfaceHits: b.hits, silhouetteRays: b.silhouette, planeY: 0)!
+            XCTAssertEqual(e.width, 0.2, accuracy: 0.03, "camera \(cam)")
+            XCTAssertEqual(e.height, 0.3, accuracy: 0.02, "camera \(cam)")
+            XCTAssertEqual(e.footprintCentre.x, 0, accuracy: 0.03, "camera \(cam)")
+            XCTAssertEqual(e.footprintCentre.z, 0, accuracy: 0.04, "camera \(cam)")
+        }
+    }
+
+    func testIgnoresHitsOnTheWallBehind() {
+        let cam = SIMD3<Float>(0.05, 0.35, 0.8)
+        var b = box(camera: cam)
+        b.hits += [[0.3, 0.2, -1.5], [0.2, 0.25, -1.6], [-0.3, 0.1, -1.4]]  // slipped past the edge
+        let e = ObjectSizing.measure(camera: cam, surfaceHits: b.hits, silhouetteRays: b.silhouette, planeY: 0)!
+        XCTAssertEqual(e.footprintCentre.z, 0, accuracy: 0.04)
+    }
+
+    func testTablePlaneIgnoresPlaneOnTopOfTheItem() {
+        let hits: [SIMD3<Float>] = [[0, 0.05, 0], [0, 0.15, 0], [0, 0.29, 0], [0, 0.2, 0.1]]
+        // ARKit found the table (0), the box lid (0.3), and the floor (−0.75).
+        XCTAssertEqual(ObjectSizing.tablePlane(candidates: [0.3, 0, -0.75], surfaceHits: hits), 0)
+        XCTAssertNil(ObjectSizing.tablePlane(candidates: [0.3], surfaceHits: hits))
+    }
+}

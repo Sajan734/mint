@@ -79,8 +79,12 @@ struct ScanView: View {
             pill(Copy.finding, symbol: "viewfinder")
         case .aiming:
             if let found = session.found {
-                pill(found.estimate == nil ? Copy.findingTable : Copy.found(found.estimate!), symbol: "scope",
-                     tint: found.estimate == nil ? .white : .brandMint)
+                if let e = found.estimate {
+                    pill(Copy.found(e, locked: found.locked), symbol: found.locked ? "lock.fill" : "ruler",
+                         tint: found.locked ? .brandMint : .white)
+                } else {
+                    pill(found.planeY == nil ? Copy.findingTable : Copy.needMotion, symbol: "scope")
+                }
             } else {
                 pill(Copy.aim, symbol: "scope")
             }
@@ -164,7 +168,7 @@ private struct FoundBracket: View {
                 p.addLine(to: CGPoint(x: corner.x, y: corner.y + dy * len))
             }
         }
-        .stroke(found.estimate == nil ? Color.white : Color.brandMint, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+        .stroke(found.locked ? Color.brandMint : Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
         .shadow(color: .black.opacity(0.4), radius: 4)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: found.boundsInView)
     }

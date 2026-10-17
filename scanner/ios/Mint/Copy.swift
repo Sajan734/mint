@@ -5,12 +5,13 @@ enum Copy {
     static let aim = "Point at the item."
     static let finding = "Move the phone slowly so it can see the table."
     static let findingTable = "Found it. Finding the table under it…"
+    static let needMotion = "Found it. Move the phone a little to measure it."
     static let saving = "Saving…"
     static let complete = "Coverage verified. Nothing hidden."
 
-    /// "Found it · 18 × 24 cm" (width × height).
-    static func found(_ e: ObjectEstimate) -> String {
-        String(format: "Found it · %.0f × %.0f cm", e.width * 100, e.height * 100)
+    /// "Measuring · 18 × 24 cm" → "Locked · 18 × 24 cm" (width × height).
+    static func found(_ e: ObjectEstimate, locked: Bool) -> String {
+        String(format: "%@ · %.0f × %.0f cm", locked ? "Locked" : "Measuring", e.width * 100, e.height * 100)
     }
 
     static func issue(_ issue: CaptureIssue) -> String {

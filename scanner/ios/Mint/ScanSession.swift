@@ -5,8 +5,8 @@ import RealityKit
 import UIKit
 
 /// Owns the AR session and the scan state machine:
-/// starting (finding the table) → aiming (item found + sized) → scanning (dome filling, recording)
-/// → saving → done (files ready to share).
+/// starting (finding the table) → aiming (item found, measured, previewed) → scanning (dome filling,
+/// recording) → saving → done (files ready to share).
 @MainActor
 final class ScanSession: NSObject, ObservableObject {
     enum Phase: Equatable {
@@ -15,11 +15,13 @@ final class ScanSession: NSObject, ObservableObject {
         case failed(String)
     }
 
-    /// What the aiming bracket shows.
+    /// What the aiming UI shows.
     struct Found: Equatable {
         let boundsInView: CGRect
         let estimate: ObjectEstimate?
         let planeY: Float?
+        /// The measurement has held steady; Start is allowed.
+        let locked: Bool
     }
 
     @Published private(set) var phase: Phase = .starting
@@ -32,13 +34,14 @@ final class ScanSession: NSObject, ObservableObject {
     @Published private(set) var scanStart: Date?
 
     var coveragePct: Int { filled.count * 100 / Dome.segmentCount }
-    var isComplete: Bool { filled.count >= Dome.segmentsToComplete }
+    var canStart: Bool { phase == .aiming && found?.locked == true }
 
     let arView: ARView
     private let processor = FrameProcessor()
+    /// Preview while aiming, the scan dome while scanning.
     private var dome: DomeEntity?
     private var item: (estimate: ObjectEstimate, planeY: Float)?
-    private var smoother = EstimateSmoother()
+    private var locker = LockingEstimator()
     private var issueDebounce = IssueDebounce()
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let success = UINotificationFeedbackGenerator()
@@ -85,19 +88,16 @@ final class ScanSession: NSObject, ObservableObject {
         let toView = frame.displayTransform(for: .portrait, viewportSize: size)
         let sensor = CGPoint(x: point.x / size.width, y: point.y / size.height).applying(toView.inverted())
         processor.setPreferredPoint(CGPoint(x: 1 - sensor.y, y: sensor.x))  // sensor → upright
-        smoother = EstimateSmoother()
+        locker = LockingEstimator()
         tick.impactOccurred(intensity: 0.6)
     }
-
-    var canStart: Bool { phase == .aiming && found?.estimate != nil }
 
     func start() {
         guard canStart, let est = found?.estimate, let planeY = found?.planeY else { return }
         item = (est, planeY)
-        let dome = DomeEntity(at: est.centre)
-        dome.radius = est.domeRadius
-        arView.scene.addAnchor(dome.anchor)
-        self.dome = dome
+        let dome = self.dome ?? makeDome()
+        dome.place(centre: est.centre, radius: est.domeRadius, animated: false)
+        dome.beginScan()
 
         cameraLocked = CameraLock.lock()
         let recorder: Recorder?
@@ -118,7 +118,7 @@ final class ScanSession: NSObject, ObservableObject {
         tick.impactOccurred(intensity: 1)
     }
 
-    /// Finish now (auto at 90%, or the Finish button).
+    /// Finish now (auto at 90%, or the stop button).
     func finish() {
         guard phase == .scanning, let item else { return }
         phase = .saving
@@ -135,20 +135,18 @@ final class ScanSession: NSObject, ObservableObject {
                     CameraLock.unlock()
                     self.cameraLocked = false
                     switch result {
-                    case .success(let s):
-                        self.phase = .done(ScanSummary(s))
-                    case .failure(let e):
-                        self.phase = .failed("Couldn't save the scan: \(e.localizedDescription)")
+                    case .success(let s): self.phase = .done(ScanSummary(s))
+                    case .failure(let e): self.phase = .failed("Couldn't save the scan: \(e.localizedDescription)")
                     }
                 }
             }
         }
     }
 
-    /// Pinch to fit the dome around bigger or smaller items.
+    /// Pinch to adjust the dome if the measurement is off.
     func scaleDome(by factor: Float) {
         guard let dome else { return }
-        dome.radius = min(max(dome.radius * factor, 0.06), 1.5)
+        dome.setRadius(min(max(dome.radius * factor, 0.06), 1.5))
     }
 
     /// Back to aiming; drops any scan in progress.
@@ -165,51 +163,99 @@ final class ScanSession: NSObject, ObservableObject {
         issue = nil
         found = nil
         scanStart = nil
-        smoother = EstimateSmoother()
+        locker = LockingEstimator()
         if phase != .starting {
             phase = .aiming
             processor.startAiming()
         }
     }
 
+    private func makeDome() -> DomeEntity {
+        let d = DomeEntity()
+        arView.scene.addAnchor(d.anchor)
+        dome = d
+        return d
+    }
+
+    // MARK: - Aiming: measure the item
+
     private func applyDetection(_ result: ObjectDetector.Result?) {
         guard phase == .aiming else { return }
-        guard let result, result.areaFraction > 0.003,
-              let frame = arView.session.currentFrame else {
+        guard let result, result.areaFraction > 0.003, let frame = arView.session.currentFrame else {
             found = nil
+            dome?.showPoints([])
             return
         }
+        let rect = viewRect(result.boundsUpright, frame: frame)
+
+        // Measured points: where rays through the item's interior hit ARKit's surface estimate.
+        let hits = result.interiorRays.compactMap { r -> SIMD3<Float>? in
+            let q = ARRaycastQuery(origin: r.origin, direction: r.direction, allowing: .estimatedPlane, alignment: .any)
+            return arView.session.raycast(q).first?.worldTransform.translation
+        }
+        let planeY = tablePlaneY(hits: hits, result: result, frame: frame)
+
+        var estimate: ObjectEstimate?
+        if let planeY {
+            estimate = ObjectSizing.measure(camera: result.camera, surfaceHits: hits,
+                                            silhouetteRays: result.silhouetteRays, planeY: planeY)
+            if estimate == nil, hits.count < 4 {
+                // Too plain for ARKit to measure: fall back to the single-view estimate.
+                estimate = ObjectSizing.estimate(camera: result.camera, contactRays: result.contactRays,
+                                                 silhouetteRays: result.silhouetteRays, planeY: planeY)
+            }
+        }
+
+        guard let estimate, let planeY else {
+            found = Found(boundsInView: rect, estimate: nil, planeY: planeY, locked: false)
+            dome?.showPoints([])
+            return
+        }
+        let wasLocked = found?.locked ?? false
+        let steady = locker.feed(estimate)
+        found = Found(boundsInView: rect, estimate: steady.estimate, planeY: planeY, locked: steady.locked)
+        if steady.locked && !wasLocked { tick.impactOccurred(intensity: 0.8) }
+
+        let dome = self.dome ?? makeDome()
+        dome.place(centre: steady.estimate.centre, radius: steady.estimate.domeRadius, animated: true)
+        dome.showPoints(hits.filter { $0.y > planeY + 0.006 })
+    }
+
+    /// The table: the highest horizontal plane clearly below the measured points. Candidates are
+    /// ARKit's plane anchors plus whatever lies straight below the item; planes ARKit found on top
+    /// of the item are excluded (they made earlier sizes jump).
+    private func tablePlaneY(hits: [SIMD3<Float>], result: ObjectDetector.Result, frame: ARFrame) -> Float? {
+        var candidates = frame.anchors.compactMap { a -> Float? in
+            guard let p = a as? ARPlaneAnchor, p.alignment == .horizontal else { return nil }
+            return p.transform.translation.y
+        }
+        if !hits.isEmpty {
+            let ys = hits.map(\.y).sorted()
+            let probe = SIMD3(hits.map(\.x).sorted()[hits.count / 2], ys[ys.count / 2], hits.map(\.z).sorted()[hits.count / 2])
+            let q = ARRaycastQuery(origin: probe, direction: [0, -1, 0], allowing: .existingPlaneInfinite, alignment: .horizontal)
+            candidates += arView.session.raycast(q).map { $0.worldTransform.translation.y }
+            return ObjectSizing.tablePlane(candidates: candidates, surfaceHits: hits)
+        }
+        // No measured points: the plane whose *detected extent* is under the item's front edge.
+        guard !result.contactRays.isEmpty else { return nil }
+        let mid = result.contactRays[result.contactRays.count / 2]
+        let q = ARRaycastQuery(origin: mid.origin, direction: mid.direction, allowing: .existingPlaneGeometry, alignment: .horizontal)
+        return arView.session.raycast(q).first?.worldTransform.translation.y
+    }
+
+    private func viewRect(_ b: CGRect, frame: ARFrame) -> CGRect {
         let size = arView.bounds.size
         let toView = frame.displayTransform(for: .portrait, viewportSize: size)
-        let b = result.boundsUpright
         // Upright normalized → sensor normalized (u = v′, v = 1 − u′) → view.
         let corners = [CGPoint(x: b.minX, y: b.minY), CGPoint(x: b.maxX, y: b.minY),
                        CGPoint(x: b.minX, y: b.maxY), CGPoint(x: b.maxX, y: b.maxY)]
             .map { CGPoint(x: $0.y, y: 1 - $0.x).applying(toView) }
             .map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
         let xs = corners.map(\.x), ys = corners.map(\.y)
-        let rect = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
-
-        let planeY = tablePlaneY(below: result)
-        let raw = planeY.flatMap {
-            ObjectSizing.estimate(camera: result.camera, contactRays: result.contactRays,
-                                  silhouetteRays: result.silhouetteRays, planeY: $0)
-        }
-        found = Found(boundsInView: rect, estimate: raw.map { smoother.feed($0) }, planeY: planeY)
+        return CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
     }
 
-    /// The table: an ARKit plane hit along the middle contact ray (where the item touches the surface).
-    private func tablePlaneY(below result: ObjectDetector.Result) -> Float? {
-        guard !result.contactRays.isEmpty else { return nil }
-        let mid = result.contactRays[result.contactRays.count / 2]
-        for target in [ARRaycastQuery.Target.existingPlaneInfinite, .estimatedPlane] {
-            let q = ARRaycastQuery(origin: mid.origin, direction: mid.direction, allowing: target, alignment: .horizontal)
-            if let hit = arView.session.raycast(q).first {
-                return hit.worldTransform.translation.y
-            }
-        }
-        return nil
-    }
+    // MARK: - Scanning
 
     private func apply(_ u: FrameProcessor.Update) {
         guard phase == .scanning else { return }
@@ -253,24 +299,42 @@ struct ScanSummary: Equatable {
     }
 }
 
-/// Steadies the size readout while aiming: averages estimates of the same item, resets when it jumps.
-private struct EstimateSmoother {
-    private var current: ObjectEstimate?
-    private var n = 0
+/// Median of the last few measurements of the same item; "locked" once the last four agree
+/// (centre within 1.5 cm, size within 12%). Sticky: stays locked through small jitter.
+private struct LockingEstimator {
+    private var window: [ObjectEstimate] = []
+    private var locked = false
 
-    mutating func feed(_ e: ObjectEstimate) -> ObjectEstimate {
-        guard let c = current, simd_distance(c.footprintCentre, e.footprintCentre) < 0.05 else {
-            current = e
-            n = 1
-            return e
+    mutating func feed(_ e: ObjectEstimate) -> (estimate: ObjectEstimate, locked: Bool) {
+        if let m = median, simd_distance(m.footprintCentre, e.footprintCentre) > 0.08 {
+            window.removeAll()  // a different item (or a bad read): start over
+            locked = false
         }
-        n = min(n + 1, 8)
-        let a = 1 / Float(n)
-        func mix(_ x: Float, _ y: Float) -> Float { x + (y - x) * a }
-        let next = ObjectEstimate(footprintCentre: c.footprintCentre + (e.footprintCentre - c.footprintCentre) * a,
-                                  width: mix(c.width, e.width), height: mix(c.height, e.height), depth: mix(c.depth, e.depth))
-        current = next
-        return next
+        window.append(e)
+        if window.count > 7 { window.removeFirst() }
+        let m = median!
+
+        func agrees(_ x: ObjectEstimate, centreTol: Float, sizeTol: Float) -> Bool {
+            simd_distance(x.footprintCentre, m.footprintCentre) < centreTol
+                && abs(x.width - m.width) <= sizeTol * m.width
+                && abs(x.height - m.height) <= sizeTol * m.height
+        }
+        if locked {
+            locked = agrees(e, centreTol: 0.03, sizeTol: 0.25)
+        } else {
+            locked = window.count >= 4 && window.suffix(4).allSatisfy { agrees($0, centreTol: 0.015, sizeTol: 0.12) }
+        }
+        return (m, locked)
+    }
+
+    private var median: ObjectEstimate? {
+        guard !window.isEmpty else { return nil }
+        func med(_ v: [Float]) -> Float { v.sorted()[v.count / 2] }
+        return ObjectEstimate(
+            footprintCentre: SIMD3(med(window.map(\.footprintCentre.x)), med(window.map(\.footprintCentre.y)),
+                                   med(window.map(\.footprintCentre.z))),
+            width: med(window.map(\.width)), height: med(window.map(\.height)), depth: med(window.map(\.depth))
+        )
     }
 }
 

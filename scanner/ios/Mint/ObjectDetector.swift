@@ -20,6 +20,9 @@ final class ObjectDetector {
         let camera: SIMD3<Float>
         let contactRays: [Ray]
         let silhouetteRays: [Ray]
+        /// Rays through pixels well inside the mask (away from edges): raycast these against ARKit's
+        /// surface estimate to get measured points on the item.
+        let interiorRays: [Ray]
         /// Share of the image the item covers.
         let areaFraction: Double
     }
@@ -78,12 +81,28 @@ final class ObjectDetector {
         let contact = lowestInColumn.enumerated().compactMap { x, y in y >= 0 && x % 2 == 0 ? toRay(x, y) : nil }
         let silhouette = samples.map { toRay($0.0, $0.1) }
 
+        // Interior: grid points whose neighbours `r` pixels away (8 directions) are all on the item.
+        let r = max(4, min(maxX - minX, maxY - minY) / 10)
+        func on(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < mw && y < mh && px[y * bpr + x] == label }
+        let step = max(2, min(maxX - minX, maxY - minY) / 9)
+        var interior: [(Int, Int)] = []
+        for y in stride(from: minY, through: maxY, by: step) {
+            for x in stride(from: minX, through: maxX, by: step)
+            where on(x, y) && on(x - r, y) && on(x + r, y) && on(x, y - r) && on(x, y + r)
+                && on(x - r, y - r) && on(x + r, y - r) && on(x - r, y + r) && on(x + r, y + r) {
+                interior.append((x, y))
+            }
+        }
+        let keep = max(1, interior.count / 48 + (interior.count % 48 == 0 ? 0 : 1))
+        let interiorRays = stride(from: 0, to: interior.count, by: keep).map { toRay(interior[$0].0, interior[$0].1) }
+
         return Result(
             boundsUpright: CGRect(x: Double(minX) / Double(mw), y: Double(minY) / Double(mh),
                                   width: Double(maxX - minX + 1) / Double(mw), height: Double(maxY - minY + 1) / Double(mh)),
             camera: input.cameraTransform.translation,
             contactRays: contact,
             silhouetteRays: silhouette,
+            interiorRays: interiorRays,
             areaFraction: Double(count) / Double(mw * mh)
         )
     }
