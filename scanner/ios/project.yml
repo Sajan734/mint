@@ -26,6 +26,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: ca.htv11.mint.scanner
         CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: F977S4Y87X  # personal team; survives xcodegen regenerating the project
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
     info:
