@@ -17,8 +17,7 @@ const canPlay = () =>
   !!window.matchMedia?.("(hover: hover) and (pointer: fine)").matches &&
   !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-const PILL =
-  "pointer-events-none absolute bottom-2 left-2 rounded-full border border-line-strong bg-surface px-2 py-1 font-mono text-xs leading-none text-ink";
+const PILL = "pointer-events-none absolute bottom-2.5 left-2.5 rounded-full bg-raised px-2.5 py-1 text-[13px] font-semibold leading-none text-ink";
 
 export default function CardMedia({
   item,
@@ -31,7 +30,8 @@ export default function CardMedia({
 }) {
   const mock = useMockMode();
   const { listing: l } = item;
-  const still = l.preview_images[0] ?? item.frames[0];
+  // The first spin frame stands on the shelf (transparent background); preview renders can carry a flat grey backdrop.
+  const still = item.frames[0] ?? l.preview_images[0];
   const splat = item.splat_url ?? (mock ? sampleSplatFor(l.item_id) : null);
   const sample = !item.splat_url && !!splat;
   const canSpin = item.frames.length >= MIN_SPIN_FRAMES;
@@ -65,11 +65,11 @@ export default function CardMedia({
       onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) stop(); }}
     >
       <div
-        className={`relative aspect-square overflow-hidden bg-surface-2 [background-image:var(--pad)] ${item.status === "available" ? "" : "opacity-60"}`}
+        className={`relative aspect-square overflow-hidden rounded-[16px] bg-surface transition-colors duration-200 group-hover:bg-surface-2 ${item.status === "available" ? "" : "opacity-60"}`}
       >
         {still && (
           // eslint-disable-next-line @next/next/no-img-element -- scan frames come from storage or /public
-          <img src={still} alt="" draggable={false} className="h-full w-full object-contain" />
+          <img src={still} alt="" draggable={false} className="h-full w-full object-contain p-[6%] transition-transform duration-500 ease-[var(--ease)] group-hover:scale-[1.04] motion-reduce:group-hover:scale-100" />
         )}
         {showSplat && (
           <div className="absolute inset-0">
@@ -78,7 +78,7 @@ export default function CardMedia({
               label={sample ? `Sample 3D view, not ${l.title}` : `3D view of ${l.title}`}
               poster={still}
               autoRotate
-              className="[background-image:var(--pad)]"
+              className="bg-surface-2"
               onError={() => setFailed(true)}
             />
           </div>

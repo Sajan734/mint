@@ -8,9 +8,10 @@ test("demo walk-through: list an item, find it, contact the seller, check it", a
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message} @ ${page.url()}`));
 
   await page.goto("/?mock=1");
-  await expect(page.getByText("Demo data").first()).toBeVisible();
+  const header = page.getByRole("banner");
+  await expect(header.getByText("Demo data")).toBeVisible();
 
-  await page.getByRole("link", { name: "Sell an item" }).click();
+  await header.getByRole("link", { name: "Sell an item" }).click();
   await expect(page).toHaveURL(/\/sell$/);
   await expect(page.getByRole("heading", { name: "Your listings" })).toBeVisible();
 

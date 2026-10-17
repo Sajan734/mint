@@ -9,47 +9,60 @@ const links = [
   { href: "/about", label: "How it works" },
 ];
 
+/** The Mint seal: a pine disc with the scan ring in brand mint (docs/design/DESIGN.md). */
+export function MintMark({ size = 28 }: { size?: number }) {
+  return (
+    <svg aria-hidden viewBox="0 0 32 32" width={size} height={size} fill="none">
+      <circle cx="16" cy="16" r="16" fill="var(--pine)" />
+      <circle cx="16" cy="16" r="9.5" stroke="var(--spark)" strokeWidth="2.4" strokeDasharray="3.2 2.6" strokeLinecap="round" />
+      <circle cx="16" cy="16" r="3.2" fill="var(--spark)" />
+    </svg>
+  );
+}
+
 export default function SiteHeader() {
   const path = usePathname();
   const mock = useMockMode();
   // Row 1 on a phone: logo, demo pill, Sell. Row 2: search. Row 3: nav. From md up it is one row: logo, search, nav, Sell.
   return (
-    <header className="top-0 z-20 border-b border-line bg-bg md:sticky">
-      <div className="mx-auto flex min-h-14 w-full max-w-[1200px] flex-wrap items-center gap-x-2 gap-y-1 px-4 sm:gap-x-4 py-1 md:min-h-16 md:px-6 lg:px-8">
+    <header className="top-0 z-20 bg-bg md:sticky">
+      <div className="mx-auto flex min-h-16 w-full max-w-[1240px] flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 sm:gap-x-5 sm:px-6 md:min-h-20 lg:px-10">
         {/* aria-label keeps the accessible name "Home" now that Home is not in the nav */}
-        <Link href="/" aria-label="Home" className="order-1 flex min-h-11 items-center gap-2 font-display text-xl font-bold tracking-tight">
-          <svg aria-hidden viewBox="0 0 24 24" width="24" height="24" fill="none">
-            <circle cx="12" cy="12" r="10" fill="var(--mint)" />
-            <circle cx="12" cy="12" r="6.5" stroke="#0b0f0e" strokeWidth="1.5" strokeDasharray="2.2 1.8" />
-          </svg>
+        <Link href="/" aria-label="Home" className="order-1 flex min-h-11 items-center gap-2.5 font-display text-[1.75rem] leading-none">
+          <MintMark />
           mint
         </Link>
         {mock && (
-          <div className="order-2 flex items-center text-xs">
-            <span className="rounded-full bg-amber/30 px-2.5 py-1 font-semibold">Demo data</span>
-            <button type="button" onClick={() => setMockMode(false)} className="inline-flex min-h-11 items-center px-2 font-medium underline underline-offset-2">
+          <div className="order-2 flex items-center text-sm">
+            <span className="rounded-full bg-amber-wash px-3 py-1 font-semibold text-amber">Demo data</span>
+            <button type="button" onClick={() => setMockMode(false)} className="inline-flex min-h-11 items-center px-2 font-medium text-ink-2 underline underline-offset-2 hover:text-ink">
               Turn off
             </button>
           </div>
         )}
         {/* Different zone (the seller app): a plain <a>, never next/link, or the click silently does nothing. */}
-        <a href="/sell" className="btn-primary order-3 ml-auto text-sm md:order-5 md:ml-0">
-          Sell an item
+        <a href="/sell" aria-label="Sell an item" className="btn-primary order-3 ml-auto min-h-11 px-5 text-sm md:order-5 md:ml-0">
+          <span aria-hidden className="sm:hidden">Sell</span>
+          <span aria-hidden className="hidden sm:inline">Sell an item</span>
         </a>
-        <form role="search" action="/" className="order-4 min-w-full pb-1 md:order-3 md:min-w-40 md:max-w-sm md:flex-1 md:pb-0">
+        <form role="search" action="/" className="relative order-4 min-w-full pb-1 md:order-3 md:min-w-48 md:max-w-md md:flex-1 md:pb-0">
           <label htmlFor="site-search" className="sr-only">
             Search items
           </label>
+          <svg aria-hidden viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className="pointer-events-none absolute left-4 top-[22px] -translate-y-1/2 text-ink-2">
+            <circle cx="11" cy="11" r="6.5" />
+            <path d="m16 16 4 4" />
+          </svg>
           <input
             id="site-search"
             name="q"
             type="search"
-            placeholder="Search items"
-            className="min-h-11 w-full rounded-md border border-line-strong bg-surface px-3 text-sm placeholder:text-ink-2"
+            placeholder="Search your neighbours' things"
+            className="field min-h-11 rounded-full pl-11 pr-4 text-[15px]"
           />
         </form>
         <nav aria-label="Main" className="order-5 min-w-full md:order-4 md:ml-auto md:min-w-0">
-          <ul className="flex gap-x-5 text-sm font-medium">
+          <ul className="flex gap-x-6 text-[15px] font-medium">
             {links.map((l) => {
               const current = path?.startsWith(l.href);
               return (
@@ -57,7 +70,7 @@ export default function SiteHeader() {
                   <Link
                     href={l.href}
                     aria-current={current ? "page" : undefined}
-                    className={`inline-flex min-h-11 items-center border-b-2 transition-colors ${current ? "border-ink text-ink" : "border-transparent text-ink-2 hover:text-ink"}`}
+                    className={`inline-flex min-h-11 items-center underline-offset-[6px] transition-colors ${current ? "font-semibold text-ink underline decoration-2 decoration-leaf" : "text-ink-2 hover:text-ink"}`}
                   >
                     {l.label}
                   </Link>

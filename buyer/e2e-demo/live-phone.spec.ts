@@ -28,7 +28,7 @@ test("live listing scan: phone status, upload, processing, then the editor fills
   );
 
   await page.goto("/sell?mock=0");
-  await expect(page.getByText("Demo data")).toHaveCount(0);
+  await expect(page.getByRole("banner").getByText("Demo data")).toHaveCount(0);
   await page.getByRole("link", { name: "New listing" }).click();
   await expect(page).toHaveURL(/\/sell\/scan\/[0-9a-f-]{36}$/);
   const id = page.url().split("/").pop()!;
