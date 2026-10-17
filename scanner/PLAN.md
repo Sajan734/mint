@@ -14,7 +14,10 @@ Scope: the **iOS capture app** plus the handoff to reconstruction (A). Stage vie
 | Video | **960×720** H.264 MP4, sensor orientation, no B-frames, 8 Mbps | "720p" without cropping the 4:3 sensor, so K stays exact (×0.5); frame n ↔ pose line n |
 | Extra files | `poses.jsonl` (pose per video frame), best JPEG per segment, `manifest.json` (contract v3), `capture.json` | A gets metric poses for free; contract stays intact for the merge |
 | Transfer | AirDrop/Files now (`mint-{id}.zip`), then a Supabase Storage bucket via an Edge Function signer | No cloud needed tonight; no secrets in the app |
-| Find + size the item | Vision subject mask (upright) → camera rays → table plane → width, height, centre | No tap, no pinch; works for any size that fits in view |
+| Find + size the item | Vision subject mask → ARKit surface hits inside it → table = highest plane clearly *below* the hits → footprint + height. Lock once 3 reads agree, then **hold** | No tap, no pinch. No cm on screen (transparent/plain items can't be measured well, and a wrong number costs trust) |
+| Coverage rule | **One ring**: 12 sectors at any height 10–75°, done at 11/12 | Two rings forced two laps: real scan = 13 s for the top ring + 23 s crouching for the bottom |
+| AR visual | 12 arcs **on the table** around the item's base; your current arc lights up | The dome tiles washed over the item |
+| Performance | Sharpness/thumbnail via Accelerate; ⌘R runs Release | Plain-Swift pixel loops took ~47 ms/frame in Debug → video at 13.8 fps |
 | Turn the item by hand | **Still periods are exact; turns are re-measured** (§2) | Precise, with no drift and no props |
 | Vultr | Not now (see the old note in git history: only after the core works; check prize rules) | Focus |
 
@@ -40,7 +43,8 @@ The user can: scan a side → pick the item up or turn it → put it down → sc
 | 0 | Toolchain: Xcode, signing, Developer Mode | App runs on the iPhone 14 | ✅ |
 | 1 | AR session, exposure/focus/WB lock, coaching overlay | Tracking works on device | ✅ |
 | 2 | Dome + coverage engine + guidance + haptics | Walk around and it fills to 90% | ✅ tested on device |
-| 3 | **Auto-find + auto-size; recording; AirDrop export; `check_scan.py`** | Point → bracket → Start → MP4 + poses + keyframes → AirDrop; `check_scan.py` OK with crosshairs on the item | ✅ code, builds; **needs a device test** |
+| 3 | Auto-find + auto-size; recording; AirDrop export; `check_scan.py` | Point → bracket → Start → MP4 + poses + keyframes → AirDrop; `check_scan.py` OK with crosshairs on the item | ✅ first device scan `mint-30f063d2`: poses/K/orientation verified (crosshair on the item in every frame) |
+| 3b | Fixes from that scan: 30 fps, one ring, hold-lock, ring on the table | Video ≥ 28 fps; one lap ≤ 20 s; lock doesn't flicker | ✅ code; **needs a device test** |
 | 4 | Prototype re-finding offline on real "scan → turn → scan" recordings | ≥ 95% of turns re-found; reprojection < 2 px; numbers written down | next |
 | 5 | On-device: OpenCV, map building, hand detection, re-finding, dome follows the item | Turn the item mid-scan and the dome snaps to it; coverage stays right | |
 | 6 | Guidance for turning + demo polish (snap animation, found bracket, seal moment, 20 s timer) | A first-time user finishes in ≤ 20 s | |

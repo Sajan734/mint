@@ -13,3 +13,7 @@ DerivedData/
 .env.local
 tools/.venv/
 __pycache__/
+# Test captures and screenshots stay local (repo rule: no files > 5 MB)
+*.zip
+IMG_*.PNG
+IMG_*.png

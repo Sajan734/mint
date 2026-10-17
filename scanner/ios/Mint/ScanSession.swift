@@ -96,7 +96,7 @@ final class ScanSession: NSObject, ObservableObject {
         guard canStart, let est = found?.estimate, let planeY = found?.planeY else { return }
         item = (est, planeY)
         let dome = self.dome ?? makeDome()
-        dome.place(centre: est.centre, radius: est.domeRadius, animated: false)
+        dome.place(base: est.footprintCentre, radius: DomeEntity.radius(for: est), animated: false)
         dome.beginScan()
 
         cameraLocked = CameraLock.lock()
@@ -182,8 +182,11 @@ final class ScanSession: NSObject, ObservableObject {
     private func applyDetection(_ result: ObjectDetector.Result?) {
         guard phase == .aiming else { return }
         guard let result, result.areaFraction > 0.003, let frame = arView.session.currentFrame else {
-            found = nil
-            dome?.showPoints([])
+            // A missed read doesn't drop a lock straight away (Vision misses the odd frame).
+            if !locker.miss() {
+                found = nil
+                dome?.showPoints([])
+            }
             return
         }
         let rect = viewRect(result.boundsUpright, frame: frame)
@@ -207,18 +210,24 @@ final class ScanSession: NSObject, ObservableObject {
         }
 
         guard let estimate, let planeY else {
-            found = Found(boundsInView: rect, estimate: nil, planeY: planeY, locked: false)
-            dome?.showPoints([])
+            if !locker.miss() {
+                found = Found(boundsInView: rect, estimate: nil, planeY: planeY, locked: false)
+                dome?.showPoints([])
+            }
             return
         }
-        let wasLocked = found?.locked ?? false
+        let wasLocked = locker.isLocked
         let steady = locker.feed(estimate)
         found = Found(boundsInView: rect, estimate: steady.estimate, planeY: planeY, locked: steady.locked)
-        if steady.locked && !wasLocked { tick.impactOccurred(intensity: 0.8) }
+        if steady.locked && !wasLocked {
+            tick.impactOccurred(intensity: 0.8)
+            dome?.showPoints([])
+        } else if !steady.locked {
+            dome?.showPoints(hits.filter { $0.y > planeY + 0.006 })
+        }
 
         let dome = self.dome ?? makeDome()
-        dome.place(centre: steady.estimate.centre, radius: steady.estimate.domeRadius, animated: true)
-        dome.showPoints(hits.filter { $0.y > planeY + 0.006 })
+        dome.place(base: steady.estimate.footprintCentre, radius: DomeEntity.radius(for: steady.estimate), animated: true)
     }
 
     /// The table: the highest horizontal plane clearly below the measured points. Candidates are
@@ -268,7 +277,7 @@ final class ScanSession: NSObject, ObservableObject {
             tick.impactOccurred()
         }
         filled = u.filled
-        dome?.update(filled: u.filled, cameraAzimuthDeg: u.decision.position.azimuthDeg)
+        dome?.update(filled: u.filled, current: u.decision.segment)
 
         if u.isComplete {
             issue = nil
@@ -299,32 +308,54 @@ struct ScanSummary: Equatable {
     }
 }
 
-/// Median of the last few measurements of the same item; "locked" once the last four agree
-/// (centre within 1.5 cm, size within 12%). Sticky: stays locked through small jitter.
+/// Acquire, then hold. Until locked: the median of recent reads, locking once the last three agree
+/// (centre within 3 cm, size within 25%). Once locked, the estimate is **frozen** so the ring stays
+/// put; only losing the item (6 missed reads ≈ 1.5 s, or 3 reads somewhere else) releases it.
+/// The old version re-checked every read and kept dropping the lock after a second.
 private struct LockingEstimator {
     private var window: [ObjectEstimate] = []
-    private var locked = false
+    private var held: ObjectEstimate?
+    private var misses = 0
+    private var strays = 0
+
+    var isLocked: Bool { held != nil }
 
     mutating func feed(_ e: ObjectEstimate) -> (estimate: ObjectEstimate, locked: Bool) {
+        misses = 0
+        if let h = held {
+            if simd_distance(h.footprintCentre, e.footprintCentre) < 0.08 {
+                strays = 0
+                return (h, true)
+            }
+            strays += 1
+            if strays < 3 { return (h, true) }
+            held = nil  // the item moved or we're looking at something else
+            window.removeAll()
+        }
+        strays = 0
         if let m = median, simd_distance(m.footprintCentre, e.footprintCentre) > 0.08 {
-            window.removeAll()  // a different item (or a bad read): start over
-            locked = false
+            window.removeAll()
         }
         window.append(e)
         if window.count > 7 { window.removeFirst() }
         let m = median!
+        let agree = window.count >= 3 && window.suffix(3).allSatisfy {
+            simd_distance($0.footprintCentre, m.footprintCentre) < 0.03
+                && abs($0.width - m.width) <= 0.25 * m.width
+                && abs($0.height - m.height) <= 0.25 * m.height
+        }
+        if agree { held = m }
+        return (m, agree)
+    }
 
-        func agrees(_ x: ObjectEstimate, centreTol: Float, sizeTol: Float) -> Bool {
-            simd_distance(x.footprintCentre, m.footprintCentre) < centreTol
-                && abs(x.width - m.width) <= sizeTol * m.width
-                && abs(x.height - m.height) <= sizeTol * m.height
+    /// A read that found nothing. Returns whether the lock still holds.
+    mutating func miss() -> Bool {
+        misses += 1
+        if misses >= 6 {
+            held = nil
+            window.removeAll()
         }
-        if locked {
-            locked = agrees(e, centreTol: 0.03, sizeTol: 0.25)
-        } else {
-            locked = window.count >= 4 && window.suffix(4).allSatisfy { agrees($0, centreTol: 0.015, sizeTol: 0.12) }
-        }
-        return (m, locked)
+        return held != nil
     }
 
     private var median: ObjectEstimate? {

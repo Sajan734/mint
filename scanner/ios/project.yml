@@ -47,6 +47,8 @@ schemes:
     build:
       targets:
         Mint: all
+    run:
+      config: Release   # ⌘R builds optimised: the capture loop needs it for a steady 30 fps
     test:
       targets:
         - package: CoverageKit/CoverageKitTests

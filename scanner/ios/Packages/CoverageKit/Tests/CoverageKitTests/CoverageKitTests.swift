@@ -17,26 +17,25 @@ private func obs(_ m: simd_float4x4, t: Double, sharp: Double = 100, luma: Doubl
 final class DomeTests: XCTestCase {
     func testSegmentNames() {
         let cases: [(SegmentID, String)] = [
-            (SegmentID(az: 0, el: 0), "az000_el20"),
-            (SegmentID(az: 3, el: 0), "az090_el20"),
-            (SegmentID(az: 11, el: 1), "az330_el50"),
+            (SegmentID(az: 0, el: 0), "az000_el40"),
+            (SegmentID(az: 3, el: 0), "az090_el40"),
+            (SegmentID(az: 11, el: 0), "az330_el40"),
         ]
         for (seg, name) in cases { XCTAssertEqual(seg.name, name) }
-        XCTAssertEqual(Dome.segmentCount, 24)
-        XCTAssertEqual(Dome.segmentsToComplete, 22)
-        XCTAssertEqual(Set(Dome.allSegments.map(\.name)).count, 24)
+        XCTAssertEqual(Dome.segmentCount, 12)
+        XCTAssertEqual(Dome.segmentsToComplete, 11)
+        XCTAssertEqual(Set(Dome.allSegments.map(\.name)).count, 12)
     }
 
     func testPositionToSegment() {
         let cases: [(SIMD3<Float>, SegmentID?)] = [
-            ([0, 0.1, 1], SegmentID(az: 0, el: 0)),       // +Z, low
-            ([1, 0.1, 0], SegmentID(az: 3, el: 0)),       // +X = 90°
-            ([0, 0.1, -1], SegmentID(az: 6, el: 0)),      // 180°
-            ([-1, 0.1, 0], SegmentID(az: 9, el: 0)),      // 270°
-            ([-0.001, 0.1, 1], SegmentID(az: 11, el: 0)), // just under 360°
-            ([0, 1.2, 1], SegmentID(az: 0, el: 1)),       // ~50°
-            ([0, 5, 1], nil),                             // ~79°, above the top ring
-            ([0, 0.01, 1], nil),                          // ~0.6°, below the low ring
+            ([0, 0.2, 1], SegmentID(az: 0, el: 0)),       // +Z, ~11°
+            ([1, 0.5, 0], SegmentID(az: 3, el: 0)),       // +X = 90°, ~27°
+            ([0, 1.2, -1], SegmentID(az: 6, el: 0)),      // 180°, ~50°
+            ([-1, 3, 0], SegmentID(az: 9, el: 0)),        // 270°, ~72°
+            ([-0.001, 0.5, 1], SegmentID(az: 11, el: 0)), // just under 360°
+            ([0, 5, 1], nil),                             // ~79°, too high
+            ([0, 0.1, 1], nil),                           // ~6°, too low
         ]
         let anchor: SIMD3<Float> = [0.2, 0.3, -0.1]
         for (cam, expected) in cases {
@@ -126,20 +125,20 @@ final class TrackerTests: XCTestCase {
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 1, yawDeg: 90), t: 2.5)).issue, .tooLow)
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.0, luma: 10)).issue, .tooDark)
         XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.5, tracking: false)).issue, .trackingLimited)
-        XCTAssertEqual(t.coveragePct, 4)  // 1 of 24
+        XCTAssertEqual(t.coveragePct, 8)  // 1 of 12
     }
 
-    func testCompletesAt22Segments() {
+    func testCompletesAt11Segments() {
         var t = CoverageTracker(anchor: .zero)
         var time = 0.0
-        for seg in Dome.allSegments.prefix(21) {
+        for seg in Dome.allSegments.prefix(10) {
             time += 1
             let az = Float(seg.az * Dome.azimuthStepDeg) + 15
-            _ = t.observe(obs(cameraPose(azDeg: az, elDeg: Float(Dome.bands[seg.el].centreDeg)), t: time))
+            _ = t.observe(obs(cameraPose(azDeg: az, elDeg: 30 + Float(seg.az)), t: time))  // any height in the band
         }
-        XCTAssertEqual(t.filled.count, 21)
+        XCTAssertEqual(t.filled.count, 10)
         XCTAssertFalse(t.isComplete)
-        _ = t.observe(obs(cameraPose(azDeg: 15 + 30 * 9, elDeg: 50), t: time + 1))
+        _ = t.observe(obs(cameraPose(azDeg: 15 + 30 * 10, elDeg: 60), t: time + 1))
         XCTAssertTrue(t.isComplete)
         XCTAssertEqual(t.coveragePct, 91)
     }
@@ -151,20 +150,17 @@ final class GuidanceTests: XCTestCase {
     }
 
     func testHints() {
-        let lowRing = Set((0..<12).map { SegmentID(az: $0, el: 0) })
-        let highRing = Set((0..<12).map { SegmentID(az: $0, el: 1) })
-        let lowMissing2And9 = lowRing.subtracting([SegmentID(az: 2, el: 0), SegmentID(az: 9, el: 0)])
+        let ring = Set((0..<12).map { SegmentID(az: $0, el: 0) })
+        let missing2And9 = ring.subtracting([SegmentID(az: 2, el: 0), SegmentID(az: 9, el: 0)])
         let cases: [(DomePosition, Set<SegmentID>, Hint)] = [
-            (at(15, 20), [], .holdHere),
-            (at(15, 20), [SegmentID(az: 0, el: 0)], .walkRight(segments: 1)),  // tie between bins 11 and 1 → right
-            (at(15, 20), lowMissing2And9, .walkRight(segments: 2)),
-            (at(255, 20), lowMissing2And9, .walkRight(segments: 1)),           // bin 8 → bin 9
-            (at(345, 20), lowMissing2And9, .walkLeft(segments: 2)),            // bin 11: bin 9 is 2 left, bin 2 is 3 right
-            (at(15, 20), lowRing, .raise),
-            (at(15, 50), highRing, .lower),
-            (at(15, 2), [], .raise),
+            (at(15, 30), [], .holdHere),
+            (at(15, 30), [SegmentID(az: 0, el: 0)], .walkRight(segments: 1)),  // tie between bins 11 and 1 → right
+            (at(15, 30), missing2And9, .walkRight(segments: 2)),
+            (at(255, 30), missing2And9, .walkRight(segments: 1)),           // bin 8 → bin 9
+            (at(345, 30), missing2And9, .walkLeft(segments: 2)),            // bin 11: bin 9 is 2 left, bin 2 is 3 right
+            (at(15, 5), [], .raise),
             (at(15, 80), [], .lower),
-            (at(15, 20), Set(Dome.allSegments.prefix(22)), .done),
+            (at(15, 30), Set(Dome.allSegments.prefix(11)), .done),
         ]
         for (i, (p, filled, expected)) in cases.enumerated() {
             XCTAssertEqual(Guidance.hint(position: p, filled: filled), expected, "case \(i)")
@@ -261,5 +257,33 @@ final class ObjectMeasureTests: XCTestCase {
         // ARKit found the table (0), the box lid (0.3), and the floor (−0.75).
         XCTAssertEqual(ObjectSizing.tablePlane(candidates: [0.3, 0, -0.75], surfaceHits: hits), 0)
         XCTAssertNil(ObjectSizing.tablePlane(candidates: [0.3], surfaceHits: hits))
+    }
+}
+
+final class FastSharpnessTests: XCTestCase {
+    /// The Accelerate path must agree with the plain-Swift reference definition.
+    func testMatchesReference() {
+        var seed: UInt32 = 12345
+        let noisy = GrayImage(width: 64, height: 48, pixels: (0..<(64 * 48)).map { i in
+            seed = seed &* 1_103_515_245 &+ 12345
+            return UInt8(truncatingIfNeeded: (i % 64) * 3 + Int(seed >> 26))
+        })
+        let checker = GrayImage(width: 16, height: 16, pixels: (0..<256).map { ($0 % 16 + $0 / 16) % 2 == 0 ? 0 : 255 })
+        for img in [noisy, checker] {
+            let fast = FastSharpness.measure(img)!
+            XCTAssertEqual(fast.sharpness, Sharpness.laplacianVariance(img), accuracy: 1e-3 * max(1, Sharpness.laplacianVariance(img)))
+            XCTAssertEqual(fast.meanLuma, Sharpness.meanLuma(img), accuracy: 1e-3)
+        }
+    }
+
+    func testScalesAPaddedPlane() {
+        // 8×4 plane with 4 bytes of row padding, scaled to 4×2: sharpness of a flat image is 0.
+        var bytes = [UInt8](repeating: 0, count: 12 * 4)
+        for y in 0..<4 { for x in 0..<8 { bytes[y * 12 + x] = 100 } }
+        let r = bytes.withUnsafeMutableBytes {
+            FastSharpness.measure(base: $0.baseAddress!, width: 8, height: 4, bytesPerRow: 12, thumbWidth: 4, thumbHeight: 3)
+        }!
+        XCTAssertEqual(r.sharpness, 0, accuracy: 1e-6)
+        XCTAssertEqual(r.meanLuma, 100, accuracy: 0.5)
     }
 }

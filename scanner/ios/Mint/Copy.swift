@@ -9,9 +9,9 @@ enum Copy {
     static let saving = "Saving…"
     static let complete = "Coverage verified. Nothing hidden."
 
-    /// "Measuring · 18 × 24 cm" → "Locked · 18 × 24 cm" (width × height).
-    static func found(_ e: ObjectEstimate, locked: Bool) -> String {
-        String(format: "%@ · %.0f × %.0f cm", locked ? "Locked" : "Measuring", e.width * 100, e.height * 100)
+    /// No centimetres on screen: the capture doesn't need them, and a wrong number costs trust.
+    static func found(locked: Bool) -> String {
+        locked ? "Locked on. Tap Start." : "Measuring… hold steady."
     }
 
     static func issue(_ issue: CaptureIssue) -> String {
@@ -33,8 +33,8 @@ enum Copy {
         case .holdHere: return ("Hold here a moment.", "hand.raised.fill")
         case .walkRight: return ("Keep walking right.", "arrow.right")
         case .walkLeft: return ("Walk back to the left.", "arrow.left")
-        case .raise: return ("Now raise the phone and look down at it.", "arrow.up")
-        case .lower: return ("Now lower the phone to the item's level.", "arrow.down")
+        case .raise: return ("Raise the phone a little.", "arrow.up")
+        case .lower: return ("Lower the phone a little.", "arrow.down")
         }
     }
 }

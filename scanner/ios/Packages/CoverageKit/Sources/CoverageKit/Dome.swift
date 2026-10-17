@@ -37,17 +37,18 @@ public enum Dome {
 
     public static let azimuthCount = 12
     public static let azimuthStepDeg = 360 / azimuthCount
-    /// Two heights (ARCHITECTURE.md §3 step 1): low ring ~20°, high ring ~50°.
+    /// One ring at any comfortable height. Two rings (20° and 50°) forced two full laps: a real
+    /// scan finished the top ring in 13 s and needed 23 s more crouching for the bottom one.
+    /// Natural up/down motion during one lap still gives the splat varied heights.
     public static let bands: [Band] = [
-        Band(minDeg: 5, maxDeg: 35, centreDeg: 20),
-        Band(minDeg: 35, maxDeg: 70, centreDeg: 50),
+        Band(minDeg: 10, maxDeg: 75, centreDeg: 40),
     ]
     public static var segmentCount: Int { azimuthCount * bands.count }
     public static var allSegments: [SegmentID] {
         bands.indices.flatMap { el in (0..<azimuthCount).map { SegmentID(az: $0, el: el) } }
     }
 
-    /// ≥ 90% coverage finishes the scan: 22 of 24 segments.
+    /// ≥ 90% coverage finishes the scan: 11 of 12 segments.
     public static let completeFraction: Double = 0.9
     public static var segmentsToComplete: Int { Int((Double(segmentCount) * completeFraction).rounded(.up)) }
 

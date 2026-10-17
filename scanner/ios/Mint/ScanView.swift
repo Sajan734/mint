@@ -79,8 +79,8 @@ struct ScanView: View {
             pill(Copy.finding, symbol: "viewfinder")
         case .aiming:
             if let found = session.found {
-                if let e = found.estimate {
-                    pill(Copy.found(e, locked: found.locked), symbol: found.locked ? "lock.fill" : "ruler",
+                if found.estimate != nil {
+                    pill(Copy.found(locked: found.locked), symbol: found.locked ? "lock.fill" : "scope",
                          tint: found.locked ? .brandMint : .white)
                 } else {
                     pill(found.planeY == nil ? Copy.findingTable : Copy.needMotion, symbol: "scope")

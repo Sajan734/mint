@@ -30,7 +30,6 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
     private var lastDetect: TimeInterval = 0
     private var sensorSize = CGSize(width: 1920, height: 1440)
 
-    private static let thumbnailFactor = 4         // 1920×1440 → 480×360 for sharpness
     private static let scanInterval = 1.0 / 30     // video + coverage at 30 fps
     private static let detectInterval = 0.25       // item detection at ~4 Hz
 
@@ -116,21 +115,21 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
         guard var tracker, frame.timestamp - lastProcessed >= Self.scanInterval - 0.004 else { return }
         lastProcessed = frame.timestamp
 
-        let thumb = Self.thumbnail(frame.capturedImage)
+        let measured = Self.measure(frame.capturedImage)
         let tracking: String
         switch frame.camera.trackingState {
         case .normal: tracking = "normal"
         case .limited: tracking = "limited"
         case .notAvailable: tracking = "not_available"
         }
-        let sharpness = thumb.map(Sharpness.laplacianVariance) ?? 0
+        let sharpness = measured?.sharpness ?? 0
 
         let decision = tracker.observe(FrameObservation(
             cameraTransform: frame.camera.transform,
             timestamp: frame.timestamp,
             trackingNormal: tracking == "normal",
             sharpness: sharpness,
-            meanLuma: thumb.map(Sharpness.meanLuma) ?? 0
+            meanLuma: measured?.meanLuma ?? 0
         ))
         self.tracker = tracker
 
@@ -155,18 +154,18 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
         DispatchQueue.main.async { MainActor.assumeIsolated { self.onUpdate?(update) } }
     }
 
-    /// Downsampled luma (Y plane of the bi-planar YCbCr capturedImage).
-    private static func thumbnail(_ buffer: CVPixelBuffer) -> GrayImage? {
+    /// Sharpness + brightness of the luma (Y) plane, via Accelerate (~1 ms; the plain-Swift version
+    /// took ~50 ms in Debug builds and capped capture at ~14 fps).
+    private static func measure(_ buffer: CVPixelBuffer) -> FastSharpness.Result? {
         CVPixelBufferLockBaseAddress(buffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
         guard CVPixelBufferGetPlaneCount(buffer) >= 1,
               let base = CVPixelBufferGetBaseAddressOfPlane(buffer, 0) else { return nil }
-        return Sharpness.downsample(
-            base: base.assumingMemoryBound(to: UInt8.self),
+        return FastSharpness.measure(
+            base: base,
             width: CVPixelBufferGetWidthOfPlane(buffer, 0),
             height: CVPixelBufferGetHeightOfPlane(buffer, 0),
-            bytesPerRow: CVPixelBufferGetBytesPerRowOfPlane(buffer, 0),
-            factor: thumbnailFactor
+            bytesPerRow: CVPixelBufferGetBytesPerRowOfPlane(buffer, 0)
         )
     }
 }

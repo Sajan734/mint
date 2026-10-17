@@ -40,6 +40,6 @@ Checks the schema, frame counts, hashes, and that the item centre projects onto 
 
 ```json
 {"counted":true,"frame":12,"intrinsics":[[...3×3...]],"pose":[[...4×4...]],"pose_world":[[...4×4...]],
- "segment":"az090_el20","sharpness":143.2,"state":"scanning","t_ms":400,"tracking":"normal"}
+ "segment":"az090_el40","sharpness":143.2,"state":"scanning","t_ms":400,"tracking":"normal"}
 ```
 `counted` = this frame filled or improved a dome segment (a good keyframe candidate). `tracking` ≠ `normal` means ARKit was unsure, so treat that pose with suspicion.

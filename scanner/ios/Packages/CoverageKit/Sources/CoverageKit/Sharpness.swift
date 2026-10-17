@@ -1,4 +1,62 @@
+import Accelerate
 import Foundation
+
+/// Fast path for the live loop: Accelerate (vImage/vDSP) is quick even in Debug builds, where the
+/// plain-Swift pixel loops below were slow enough to drop the capture to ~14 fps.
+public enum FastSharpness {
+    public struct Result: Sendable {
+        public let sharpness: Double  // variance of the Laplacian on the thumbnail
+        public let meanLuma: Double   // 0–255
+    }
+
+    /// Scales the luma plane to `width × height` (Lanczos), then measures it.
+    public static func measure(
+        base: UnsafeMutableRawPointer, width: Int, height: Int, bytesPerRow: Int,
+        thumbWidth: Int = 480, thumbHeight: Int = 360
+    ) -> Result? {
+        var src = vImage_Buffer(data: base, height: vImagePixelCount(height), width: vImagePixelCount(width), rowBytes: bytesPerRow)
+        var small = [UInt8](repeating: 0, count: thumbWidth * thumbHeight)
+        let ok = small.withUnsafeMutableBytes { p -> Bool in
+            var dst = vImage_Buffer(data: p.baseAddress, height: vImagePixelCount(thumbHeight),
+                                    width: vImagePixelCount(thumbWidth), rowBytes: thumbWidth)
+            return vImageScale_Planar8(&src, &dst, nil, vImage_Flags(kvImageNoFlags)) == kvImageNoError
+        }
+        guard ok else { return nil }
+        return measure(GrayImage(width: thumbWidth, height: thumbHeight, pixels: small))
+    }
+
+    /// Laplacian variance + mean luma of a small image, over the interior (same definition as
+    /// `Sharpness.laplacianVariance`).
+    public static func measure(_ img: GrayImage) -> Result? {
+        let w = img.width, h = img.height
+        guard w >= 3, h >= 3 else { return nil }
+        var f = [Float](repeating: 0, count: w * h)
+        vDSP.convertElements(of: img.pixels, to: &f)
+        var mean: Float = 0
+        vDSP_meanv(f, 1, &mean, vDSP_Length(f.count))
+
+        // Laplacian on the interior: up + down + left + right − 4·centre, row by row with vDSP.
+        let iw = w - 2, ih = h - 2
+        var lap = [Float](repeating: 0, count: iw * ih)
+        f.withUnsafeBufferPointer { fp in
+            lap.withUnsafeMutableBufferPointer { lp in
+                for y in 1..<(h - 1) {
+                    let c = fp.baseAddress! + y * w + 1
+                    let o = lp.baseAddress! + (y - 1) * iw
+                    vDSP_vadd(c - w, 1, c + w, 1, o, 1, vDSP_Length(iw))   // up + down
+                    vDSP_vadd(o, 1, c - 1, 1, o, 1, vDSP_Length(iw))       // + left
+                    vDSP_vadd(o, 1, c + 1, 1, o, 1, vDSP_Length(iw))       // + right
+                    var minus4: Float = -4
+                    vDSP_vsma(c, 1, &minus4, o, 1, o, 1, vDSP_Length(iw)) // − 4·centre
+                }
+            }
+        }
+        var lm: Float = 0, lms: Float = 0
+        vDSP_meanv(lap, 1, &lm, vDSP_Length(lap.count))
+        vDSP_measqv(lap, 1, &lms, vDSP_Length(lap.count))
+        return Result(sharpness: Double(lms - lm * lm), meanLuma: Double(mean))
+    }
+}
 
 /// A small 8-bit grayscale image (row-major, tightly packed).
 public struct GrayImage: Sendable {
