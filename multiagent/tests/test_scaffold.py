@@ -21,5 +21,5 @@ def test_network_guard_blocks_socket_connect():
 
 def test_gitignore_has_runs_data_venv():
     lines = (REPO_ROOT / ".gitignore").read_text(encoding="utf-8").splitlines()
-    for entry in (".venv/", "runs/", "data/"):
+    for entry in (".venv/", "runs/", "/data/"):
         assert entry in lines
