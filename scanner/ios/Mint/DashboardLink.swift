@@ -70,18 +70,28 @@ struct DashboardLink {
     /// `mintscan://` scheme), from a tapped link or a QR code's text. nil if it isn't one of ours.
     static func parse(_ text: String) -> Link? {
         guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
-              url.scheme == "mint" || url.scheme == "mintscan" else { return nil }
+              let scheme = url.scheme?.lowercased(), scheme == "mint" || scheme == "mintscan" else { return nil }
         let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func value(_ names: [String]) -> String? {
+            names.lazy.compactMap { n in q.first(where: { $0.name == n })?.value?.trimmingCharacters(in: .whitespaces) }.first
+        }
+        // The scan id names the Storage folder, so it must be a UUID (the website makes one per scan).
         func uuid(_ names: String...) -> String? {
-            let v = names.lazy.compactMap { n in q.first(where: { $0.name == n })?.value?.lowercased() }.first
-            guard let v, v.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", options: .regularExpression) != nil else { return nil }
+            guard let v = value(names)?.lowercased(),
+                  v.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", options: .regularExpression) != nil else { return nil }
             return v
         }
-        switch url.host {
+        // The listing is only written into rescan.capture.json: any plain id the website uses (a scan's UUID, or a
+        // listing id such as a demo listing's), so a verify QR is never ignored for its format.
+        func listingID(_ names: String...) -> String? {
+            guard let v = value(names), v.range(of: "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$", options: .regularExpression) != nil else { return nil }
+            return v.range(of: "^[0-9A-Fa-f-]{36}$", options: .regularExpression) != nil ? v.lowercased() : v
+        }
+        switch url.host?.lowercased() {
         case "scan":
             return uuid("id", "scan_id").map { Link(scanID: $0, listingID: nil) }
         case "verify":
-            guard let id = uuid("id", "scan_id"), let listing = uuid("listing", "listing_scan_id"), id != listing else { return nil }
+            guard let id = uuid("id", "scan_id"), let listing = listingID("listing", "listing_scan_id"), id != listing else { return nil }
             return Link(scanID: id, listingID: listing)
         default:
             return nil

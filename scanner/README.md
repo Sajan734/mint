@@ -6,7 +6,7 @@ The iOS app that captures a full-coverage scan of an item. The plan, decisions a
 scanner/
   ios/
     project.yml                  XcodeGen config → Mint.xcodeproj (generated, not committed)
-    Mint/                        the app: camera, live outline + scan overlay, recorder, uploader
+    Mint/                        the app: camera, coverage ring, tap to focus, recorder, uploader
     Packages/CoverageKit/        pure, unit-tested pieces (pose maths, file formats, fast sharpness, and the
                                  measured-but-shelved tracking work: hull, paper tracker)
   supabase/                      Edge Function (signed uploads) + bucket SQL + setup guide
@@ -25,7 +25,7 @@ Tests: **⌘U** in Xcode (runs `CoverageKitTests`), or `cd ios/Packages/Coverage
 
 ## Using it (the demo)
 
-Put the item on a sheet of paper and point the phone at it: a glowing outline locks onto the item. Tap **Scan** → 3·2·1 → 20 s of recording: **lap 1** turn the paper slowly; at 10 s (haptic bump) **lap 2**, raise the phone and keep turning. It stops by itself, seals the capture, and uploads to Supabase with a live progress bar (setup: [supabase/README.md](supabase/README.md)). **Share** on the card AirDrops a zip as a fallback.
+Open the scanner from the website's QR code (the app's own waiting screen reads it, or the iPhone Camera app). Put the item on a sheet of paper (the coverage ring measures how far the paper has turned; the app never mentions it), line it up, **tap the item to focus** if it looks soft, and tap **Scan**. Turn the paper slowly clockwise while the ring fills (tap to refocus at any time: focus runs once there and holds; exposure stays locked), then tap to stop. **Scan again** for another pass (flipped over), or **Done** to upload every pass to Supabase with a live progress bar (setup: [supabase/README.md](supabase/README.md)). If sending fails, **Share the files** AirDrops a zip.
 
 ## Getting a scan off the phone
 
