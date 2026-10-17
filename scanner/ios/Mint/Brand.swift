@@ -27,4 +27,6 @@ extension Color {
     static let brandStageBg = Color(Brand.stageBg)
     static let brandAmber = Color(Brand.amber)
     static let brandSlate = Color(Brand.slate)
+    static let brandRed = Color(Brand.red)
+    static let brandPaper = Color(Brand.paper)
 }

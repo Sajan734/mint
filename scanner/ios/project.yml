@@ -29,6 +29,8 @@ targets:
         DEVELOPMENT_TEAM: F977S4Y87X  # personal team; survives xcodegen regenerating the project
         # e.g. https://<project-ref>.supabase.co/functions/v1/scan-upload (empty = save + share only)
         MINT_UPLOAD_URL: "https://jpanyhsifoxxiizkgjno.supabase.co/functions/v1/scan-upload"
+        # The dashboard hand-off (scanner/supabase/functions/scan-session, see scanner/DASHBOARD.md)
+        MINT_SESSION_URL: "https://jpanyhsifoxxiizkgjno.supabase.co/functions/v1/scan-session"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
     info:
@@ -46,6 +48,11 @@ targets:
         LSSupportsOpeningDocumentsInPlace: true
         # Supabase Edge Function that hands out signed upload URLs (see scanner/supabase/README.md).
         MintUploadURL: $(MINT_UPLOAD_URL)
+        MintSessionURL: $(MINT_SESSION_URL)
+        # mintscan://scan?scan_id=<uuid>: the QR code on the dashboard's "check your phone" page opens the scanner.
+        CFBundleURLTypes:
+          - CFBundleURLName: ca.htv11.mint.scanner
+            CFBundleURLSchemes: [mintscan]
 schemes:
   Mint:
     build:

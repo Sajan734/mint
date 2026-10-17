@@ -4,67 +4,77 @@ import CoverageKit
 import RealityKit
 import UIKit
 
-/// One item = one scan = one or more passes (recordings of it): a lap, then maybe the item flipped
-/// over for another, as many as the demonstrator wants.
-/// ready → 3·2·1 → recording (until the ring is tapped) → saving → review
-/// review: Scan again (→ ready, the next pass) · Done (sends every pass) · discard the last pass.
-/// The ring shows how much of one lap has been seen; it's a guide and never ends a pass.
+/// The app, start to finish, for one product at a time:
+///
+///   waiting  ── "New product" on the seller's dashboard (or its QR link, or "scan without the dashboard")
+///      ↓
+///   ready → recording (until the stop button) → saving → review ─┬─ Scan again → ready (the next pass)
+///                                                                ├─ Discard the last pass
+///                                                                └─ Done → sending → finished ("look at your computer")
+///                                                                                       ↓ (next request, or Next product)
+///                                                                                    waiting
+///
+/// One product = one scan_id = one or more passes (a lap, then maybe flipped over, …). The ring shows
+/// how much of one lap has been seen, measured from the paper's turn; it's a guide and never ends a pass.
 @MainActor
 final class CaptureSession: NSObject, ObservableObject {
     enum Phase: Equatable {
+        case waiting
         case ready
-        case countdown(Int)
         case recording
         case saving
         case review
+        case sending(Double)
+        case finished
         case failed(String)
     }
 
-    enum Upload: Equatable {
-        case idle
-        case notConfigured
-        case sending(Double)
-        case sent(String)
-        case failed(String)
+    /// The product being scanned.
+    struct Job: Equatable {
+        let scanID: String
+        let fromDashboard: Bool
+        let title: String?
     }
+
+    /// Whether the dashboard can be reached (shown on the waiting screen).
+    enum Link: Equatable { case notSetUp, connecting, online, offline }
 
     /// A pass stops by itself only here: Storage takes 50 MB per file and the video is ~1 MB/s.
     static let maxPassSeconds: TimeInterval = 45
-    static let segments = 12
-    static let tintSamples = 25
+    /// Ticks round the ring: 5° each, clockwise from the top, like the item's sides seen from above.
+    static let tickCount = 72
 
-    @Published private(set) var phase: Phase = .ready
+    @Published private(set) var phase: Phase = .waiting
+    @Published private(set) var job: Job?
+    @Published private(set) var link: Link = DashboardLink.url == nil ? .notSetUp : .connecting
     @Published private(set) var recordStart: Date?
-    /// The item being scanned: every pass is stored under this id.
-    @Published private(set) var scanID = UUID().uuidString.lowercased()
     @Published private(set) var passes: [VideoRecorder.Summary] = []
     /// How much of one lap has been seen (`TurnCoverage`): measured from the paper's turn, nothing scripted.
     @Published private(set) var percent = 0
-    /// The ring's arcs, 0…1: slices of the item's sides, lit as they've been seen head-on.
-    @Published private(set) var ring: [Double] = Array(repeating: 0, count: segments)
-    /// How well each side of the item has been seen, sampled across its silhouette from one edge to the
-    /// other along `tintAxis` (view space): the overlay paints the item mintier where it's been seen.
-    @Published private(set) var tint: [Double] = []
-    @Published private(set) var tintAxis = CGVector(dx: 1, dy: 0)
+    /// ticks[i], 0…1: how well the side at tick i (clockwise from the top) has been seen head-on.
+    @Published private(set) var ticks: [Double] = Array(repeating: 0, count: tickCount)
+    /// Where the camera is looking round the item now, as a ring angle (radians, clockwise from the top).
+    @Published private(set) var facingAngle: Double = 0
+    @Published private(set) var lapCompletedAt: Date?
     /// The sheet's edges were read in the last moment (false: no paper, or hands covering it).
     @Published private(set) var paperSeen = false
-    @Published private(set) var outline: [CGPoint] = []      // view points, smoothed
-    @Published private(set) var sparkles: [CGPoint] = []     // ARKit feature points on/near the item, view points
-    @Published private(set) var upload: Upload = .idle
 
     var isRecording: Bool { phase == .recording }
+    var inScanner: Bool { ([.ready, .recording, .saving, .review] as [Phase]).contains(phase) }
     var nextPass: Int { passes.count + 1 }
 
     let arView: ARView
     private let loop = CaptureLoop()
-    private var smoother = OutlineSmoother()
-    private var lastOutlineAt = Date.distantPast
     private var ticker: Timer?
+    private var poller: Task<Void, Never>?
+    private var handled: Set<String> = []
+    private var linkFailures = 0
     private var turn = PaperTurn()
     private var coverage = TurnCoverage()
     private var lastObservation: TimeInterval?
     private var lastPaperAt = Date.distantPast
-    private var fullArcs: Set<Int> = []
+    private var fullSlices = 0
+    private var reportedTenth = -1
     private var exposureLocked = false
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let bump = UIImpactFeedbackGenerator(style: .heavy)
@@ -80,6 +90,8 @@ final class CaptureSession: NSObject, ObservableObject {
         loop.onSight = { [weak self] in self?.apply($0) }
     }
 
+    // MARK: - Lifecycle
+
     func run() {
         let config = ARWorldTrackingConfiguration()
         // Full 4:3 sensor frames: ARKit's K refers to exactly these pixels (the poses stay exact).
@@ -93,81 +105,133 @@ final class CaptureSession: NSObject, ObservableObject {
         ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.onTick() }
         }
+        startPolling()
+        #if DEBUG
+        if let screen = UserDefaults.standard.string(forKey: "MintPreview") { preview(screen) }
+        #endif
     }
 
     func pause() {
-        if phase == .recording || phase.isCountdown { cancel() }
+        if phase == .recording { cancelPass() }
         arView.session.pause()
         ticker?.invalidate()
+        poller?.cancel()
+        poller = nil
     }
 
-    /// The big button: start a pass (with a countdown), or finish it.
+    // MARK: - Getting a product to scan
+
+    /// While waiting (or showing "done"), ask the dashboard for the next "New product" every 1.5 s.
+    private func startPolling() {
+        poller?.cancel()
+        guard DashboardLink.url != nil else { link = .notSetUp; return }
+        poller = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                if self.phase == .waiting || self.phase == .finished {
+                    do {
+                        let request = try await DashboardLink.next()
+                        self.linkFailures = 0
+                        self.link = .online
+                        if let request, !self.handled.contains(request.scan_id),
+                           self.phase == .waiting || self.phase == .finished {
+                            self.begin(Job(scanID: request.scan_id, fromDashboard: true, title: request.title))
+                        }
+                    } catch {
+                        self.linkFailures += 1
+                        if self.linkFailures >= 2 { self.link = .offline }
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+            }
+        }
+    }
+
+    /// The dashboard's QR link (`mintscan://scan?scan_id=…`) opened the app.
+    func open(_ url: URL) {
+        guard let id = DashboardLink.scanID(from: url), !inScanner, !isSending, !handled.contains(id) else { return }
+        begin(Job(scanID: id, fromDashboard: true, title: nil))
+    }
+
+    /// No dashboard: scan anyway (the product gets its own scan_id).
+    func scanWithoutDashboard() {
+        begin(Job(scanID: UUID().uuidString.lowercased(), fromDashboard: false, title: nil))
+    }
+
+    private func begin(_ job: Job) {
+        handled.insert(job.scanID)
+        self.job = job
+        passes = []
+        resetCoverage()
+        phase = .ready
+        success.notificationOccurred(.success)
+        DashboardLink.report(.scanning, scanID: job.scanID, passes: 0)
+    }
+
+    /// Give up on this product (from the scanner, before sending): its passes are deleted.
+    func cancelJob() {
+        guard let job, phase == .ready || phase == .review else { return }
+        try? FileManager.default.removeItem(at: VideoRecorder.folder(scanID: job.scanID))
+        DashboardLink.report(.cancelled, scanID: job.scanID, passes: 0)
+        backToWaiting()
+    }
+
+    func backToWaiting() {
+        job = nil
+        passes = []
+        recordStart = nil
+        resetCoverage()
+        phase = .waiting
+    }
+
+    // MARK: - Passes
+
+    /// The big button: start a pass, or finish it.
     func primaryAction() {
         switch phase {
-        case .ready: Task { await countdownAndRecord() }
-        case .recording: stop()
+        case .ready: startPass()
+        case .recording: stopPass()
         default: break
         }
     }
 
-    /// Another pass of the same item (flipped over, another height, touch-ups).
+    /// Another pass of the same product (flipped over, another height, touch-ups).
     func scanAgain() {
-        guard phase == .review, upload == .idle else { return }
+        guard phase == .review else { return }
         resetCoverage()
         phase = .ready
     }
 
     /// Throws away the most recent pass.
     func discardLastPass() {
-        guard phase == .review, upload == .idle, let last = passes.popLast() else { return }
+        guard phase == .review, let job, let last = passes.popLast() else { return }
         try? FileManager.default.removeItem(at: last.directory)
+        DashboardLink.report(.scanning, scanID: job.scanID, passes: passes.count)
         if passes.isEmpty {
             resetCoverage()
             phase = .ready
         }
     }
 
-    /// Done with this item: send every pass.
-    func finish() {
-        guard phase == .review, !passes.isEmpty else { return }
-        send()
-    }
-
-    func retryUpload() { send() }
-
-    /// Start over with a new item.
-    func newItem() {
-        scanID = UUID().uuidString.lowercased()
-        passes = []
-        upload = .idle
-        recordStart = nil
-        resetCoverage()
-        phase = .ready
-    }
-
     private func resetCoverage() {
         coverage = TurnCoverage()
         lastObservation = nil
-        fullArcs = []
-        tint = []
+        fullSlices = 0
+        lapCompletedAt = nil
+        facingAngle = 0
         publishCoverage()
     }
 
-    private func countdownAndRecord() async {
-        tick.prepare(); bump.prepare(); success.prepare()
-        for n in [3, 2, 1] {
-            phase = .countdown(n)
-            tick.impactOccurred(intensity: 0.7)
-            try? await Task.sleep(nanoseconds: 650_000_000)
-            guard phase == .countdown(n) else { return }  // cancelled
-        }
+    private func startPass() {
+        guard let job else { return }
         let recorder: VideoRecorder
         do {
-            recorder = try VideoRecorder(scanID: scanID, pass: nextPass)
+            recorder = try VideoRecorder(scanID: job.scanID, pass: nextPass)
         } catch {
             phase = .failed("Couldn't start recording: \(error.localizedDescription)")
             return
         }
+        tick.prepare(); bump.prepare(); success.prepare()
         exposureLocked = CameraLock.lock()
         turn.restart()
         resetCoverage()
@@ -177,10 +241,10 @@ final class CaptureSession: NSObject, ObservableObject {
         loop.startRecording(recorder)
     }
 
-    private func stop() {
+    private func stopPass() {
         guard phase == .recording else { return }
         phase = .saving
-        success.notificationOccurred(.success)
+        bump.impactOccurred()
         let locked = exposureLocked
         let pct = percent
         loop.stopRecording { recorder, sensorSize in
@@ -195,6 +259,7 @@ final class CaptureSession: NSObject, ObservableObject {
                     case .success(let s):
                         self.passes.append(s)
                         self.phase = .review
+                        if let job = self.job { DashboardLink.report(.scanning, scanID: job.scanID, passes: self.passes.count) }
                     case .failure(let e):
                         self.phase = .failed("Couldn't save: \(e.localizedDescription)")
                     }
@@ -203,183 +268,120 @@ final class CaptureSession: NSObject, ObservableObject {
         }
     }
 
-    private func cancel() {
+    private func cancelPass() {
         loop.cancel()
         CameraLock.unlock()
         phase = passes.isEmpty ? .ready : .review
         recordStart = nil
     }
 
-    private func send() {
-        guard SupabaseUploader.functionURL != nil else {
-            upload = .notConfigured
-            return
-        }
-        upload = .sending(0)
-        let id = scanID, list = passes.map { (directory: $0.directory, pass: $0.pass) }
+    // MARK: - Sending
+
+    var isSending: Bool {
+        if case .sending = phase { return true }
+        return false
+    }
+
+    /// Done with this product: send every pass, then tell the seller to look at their computer.
+    func finish() {
+        guard phase == .review, let job, !passes.isEmpty else { return }
+        send(job)
+    }
+
+    func retrySend() {
+        guard case .failed = phase, let job, !passes.isEmpty else { return }
+        send(job)
+    }
+
+    private func send(_ job: Job) {
+        phase = .sending(0)
+        reportedTenth = -1
+        let count = passes.count
+        let list = passes.map { (directory: $0.directory, pass: $0.pass) }
+        DashboardLink.report(.uploading, scanID: job.scanID, passes: count, progress: 0)
         Task {
             do {
-                let folder = try await SupabaseUploader.upload(scanID: id, passes: list) { p in
-                    if case .sending = self.upload { self.upload = .sending(p) }
+                _ = try await SupabaseUploader.upload(scanID: job.scanID, passes: list) { p in
+                    guard self.isSending else { return }
+                    self.phase = .sending(p)
+                    let tenth = Int(p * 10)
+                    if tenth != self.reportedTenth {
+                        self.reportedTenth = tenth
+                        DashboardLink.report(.uploading, scanID: job.scanID, passes: count, progress: p)
+                    }
                 }
-                upload = .sent(folder)
+                DashboardLink.report(.uploaded, scanID: job.scanID, passes: count, progress: 1)
                 success.notificationOccurred(.success)
+                phase = .finished
             } catch {
-                upload = .failed(error.localizedDescription)
+                phase = .failed(error.localizedDescription)
             }
         }
     }
 
-    /// 15 Hz: the size limit on a pass, sparkles, and whether the paper is in view.
+    // MARK: - Measuring
+
+    /// 15 Hz: the size limit on a pass, and whether the paper is in view.
     private func onTick() {
-        if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.maxPassSeconds { stop() }
+        if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.maxPassSeconds { stopPass() }
         let seen = Date().timeIntervalSince(lastPaperAt) < 0.6
         if seen != paperSeen { paperSeen = seen }
-        updateSparkles()
-        // The outline fades if the item hasn't been seen for a moment.
-        if !outline.isEmpty && Date().timeIntervalSince(lastOutlineAt) > 0.8 {
-            outline = []
-            smoother = OutlineSmoother()
-        }
     }
 
-    /// A new reading of the frame: the outline, and (on paper) how far it has turned, which while
-    /// recording is what fills the coverage.
-    private func apply(_ sight: SubjectOutliner.Sight) {
-        if let reading = sight.paper, turn.update(reading, time: sight.timestamp) {
-            lastPaperAt = Date()
-            if phase == .recording, let elevation = sight.elevation {
-                coverage.observe(turned: turn.turned, elevation: elevation, dt: lastObservation.map { sight.timestamp - $0 } ?? 0)
-                lastObservation = sight.timestamp
-                publishCoverage()
-            }
-        }
-        applyOutline(sight.outline)
-        if phase == .recording || phase.isFinished { updateTint() }
+    /// A new reading of the frame: how far the paper has turned, which while recording fills the coverage.
+    private func apply(_ sight: PaperReader.Sight) {
+        guard let reading = sight.paper, turn.update(reading, time: sight.timestamp) else { return }
+        lastPaperAt = Date()
+        guard phase == .recording, let elevation = sight.elevation else { return }
+        coverage.observe(turned: turn.turned, elevation: elevation, dt: lastObservation.map { sight.timestamp - $0 } ?? 0)
+        lastObservation = sight.timestamp
+        publishCoverage()
     }
 
     private func publishCoverage() {
         percent = coverage.percent
-        ring = coverage.arcs(band: 0, count: Self.segments).map(Double.init)
-        // A tick for every arc that fills, a thump when the lap is done (the pass carries on).
-        for (k, f) in ring.enumerated() where f >= 0.98 && !fullArcs.contains(k) {
-            fullArcs.insert(k)
-            tick.impactOccurred(intensity: 0.5)
-            if ring.allSatisfy({ $0 >= 0.98 }) { bump.impactOccurred() }
+        // Tick i sits at i × 5° clockwise from the top and shows the side that faces the camera when the
+        // paper has turned that far clockwise (`TurnCoverage.facing` = −turned), so turning the paper
+        // clockwise lights the ring clockwise.
+        ticks = (0..<Self.tickCount).map { i in
+            Double(coverage.level(side: -Float(i) / Float(Self.tickCount) * 2 * .pi))
+        }
+        facingAngle = Double(-coverage.facing)
+        // A tick of the phone for every 10° slice that fills, a big one when the lap is done (the pass carries on).
+        let full = coverage.fill[0].filter { $0 >= 0.98 }.count
+        if full > fullSlices && phase == .recording { tick.impactOccurred(intensity: 0.45) }
+        fullSlices = full
+        if percent >= 100, lapCompletedAt == nil, phase == .recording {
+            lapCompletedAt = Date()
+            success.notificationOccurred(.success)
         }
     }
 
-    /// Samples how well each side has been seen across the silhouette as it faces the camera now,
-    /// and which way the item's sides run across the screen (the camera's horizontal right).
-    private func updateTint() {
-        guard let frame = arView.session.currentFrame else { return }
-        let t = frame.camera.transform
-        let r = simd_float3x3(SIMD3(t.columns.0.x, t.columns.0.y, t.columns.0.z), SIMD3(t.columns.1.x, t.columns.1.y, t.columns.1.z),
-                              SIMD3(t.columns.2.x, t.columns.2.y, t.columns.2.z))
-        guard let heading = SheetAngle.HeadingFrame(cameraRotation: r) else { return }
-        let size = arView.bounds.size
-        let position = SIMD3(t.columns.3.x, t.columns.3.y, t.columns.3.z)
-        let ahead = position + r * SIMD3<Float>(0, 0, -0.3)
-        let a = frame.camera.projectPoint(ahead, orientation: .portrait, viewportSize: size)
-        let b = frame.camera.projectPoint(ahead + 0.02 * heading.right, orientation: .portrait, viewportSize: size)
-        let len = hypot(b.x - a.x, b.y - a.y)
-        if len > 0.5 { tintAxis = CGVector(dx: (b.x - a.x) / len, dy: (b.y - a.y) / len) }
-        tint = (0..<Self.tintSamples).map { i in
-            let s = Float(i) / Float(Self.tintSamples - 1) * 2 - 1
-            return Double(coverage.level(side: coverage.side(atOffset: s)))
+    #if DEBUG
+    /// Design check only (Debug builds, Simulator): `-MintPreview ready|recording|full|review|sending|finished|failed`
+    /// puts the app on that screen with made-up coverage so the layout can be screenshotted without ARKit.
+    /// Never in a Release build, never on stage.
+    private func preview(_ screen: String) {
+        poller?.cancel()
+        job = Job(scanID: UUID().uuidString.lowercased(), fromDashboard: true, title: "Logitech M325 mouse")
+        let fake = VideoRecorder.Summary(directory: URL(fileURLWithPath: "/nonexistent"), scanID: job!.scanID, pass: 1,
+                                         seconds: 23, frames: 690, megabytes: 23)
+        lastPaperAt = .distantFuture
+        let fill = { (deg: Double) in
+            self.ticks = (0..<Self.tickCount).map { i in Double(i) * 5 < deg ? 1 : (Double(i) * 5 < deg + 25 ? 0.4 : 0) }
+            self.facingAngle = deg * .pi / 180
+            self.percent = Int(min(100, deg / 3.15))
+        }
+        switch screen {
+        case "ready": phase = .ready
+        case "recording": recordStart = Date().addingTimeInterval(-9); fill(205); phase = .recording
+        case "full": recordStart = Date().addingTimeInterval(-17); fill(360); lapCompletedAt = Date(); phase = .recording
+        case "review": fill(360); passes = [fake]; phase = .review
+        case "sending": passes = [fake, fake]; phase = .sending(0.62)
+        case "finished": passes = [fake]; phase = .finished
+        case "failed": passes = [fake]; phase = .failed("Couldn't get upload links: {\"code\":\"NOT_FOUND\"}")
+        default: link = .online
         }
     }
-
-    private func applyOutline(_ sensorPoints: SubjectOutliner.Outline?) {
-        guard let sensorPoints, let frame = arView.session.currentFrame else { return }
-        let size = arView.bounds.size
-        guard size.width > 0 else { return }
-        let toView = frame.displayTransform(for: .portrait, viewportSize: size)
-        let pts = sensorPoints.map { p -> CGPoint in
-            let v = p.applying(toView)
-            return CGPoint(x: v.x * size.width, y: v.y * size.height)
-        }
-        outline = smoother.feed(pts)
-        lastOutlineAt = Date()
-    }
-
-    /// ARKit's tracked feature points inside the item's outline box: real measured points, drawn as glints.
-    private func updateSparkles() {
-        guard outline.count > 8, let frame = arView.session.currentFrame, let cloud = frame.rawFeaturePoints else {
-            if !sparkles.isEmpty { sparkles = [] }
-            return
-        }
-        let size = arView.bounds.size
-        let box = OutlineSmoother.bounds(outline).insetBy(dx: -12, dy: -12)
-        var pts: [CGPoint] = []
-        for p in cloud.points {
-            let v = frame.camera.projectPoint(p, orientation: .portrait, viewportSize: size)
-            if box.contains(v) { pts.append(v) }
-            if pts.count >= 90 { break }
-        }
-        sparkles = pts
-    }
-}
-
-extension CaptureSession.Phase {
-    var isCountdown: Bool {
-        if case .countdown = self { return true }
-        return false
-    }
-
-    /// Saving or reviewing: the pass is over and its coverage stays on screen.
-    var isFinished: Bool { self == .saving || self == .review }
-}
-
-/// Steadies the outline: resample to a fixed number of points by arc length, keep the start point
-/// consistent between updates, and ease towards each new outline (Vision updates ~8 Hz).
-struct OutlineSmoother {
-    static let count = 96
-    private var points: [CGPoint] = []
-
-    mutating func feed(_ raw: [CGPoint]) -> [CGPoint] {
-        var next = Self.resample(raw, count: Self.count)
-        guard next.count == Self.count else { return points }
-        guard points.count == Self.count,
-              hypot(Self.centroid(points).x - Self.centroid(next).x, Self.centroid(points).y - Self.centroid(next).y) < 90 else {
-            points = next
-            return next
-        }
-        // Rotate so the start lines up with the previous outline's start.
-        let k = next.indices.min { hypot(next[$0].x - points[0].x, next[$0].y - points[0].y) < hypot(next[$1].x - points[0].x, next[$1].y - points[0].y) }!
-        next = Array(next[k...] + next[..<k])
-        points = zip(points, next).map { CGPoint(x: $0.x + ($1.x - $0.x) * 0.55, y: $0.y + ($1.y - $0.y) * 0.55) }
-        return points
-    }
-
-    static func resample(_ pts: [CGPoint], count: Int) -> [CGPoint] {
-        guard pts.count >= 3 else { return [] }
-        let closed = pts + [pts[0]]
-        var lengths: [CGFloat] = [0]
-        for i in 1..<closed.count { lengths.append(lengths[i - 1] + hypot(closed[i].x - closed[i - 1].x, closed[i].y - closed[i - 1].y)) }
-        let total = lengths.last!
-        guard total > 0 else { return [] }
-        var out: [CGPoint] = []
-        var j = 1
-        for i in 0..<count {
-            let d = total * CGFloat(i) / CGFloat(count)
-            while j < lengths.count - 1 && lengths[j] < d { j += 1 }
-            let seg = lengths[j] - lengths[j - 1]
-            let f = seg > 0 ? (d - lengths[j - 1]) / seg : 0
-            out.append(CGPoint(x: closed[j - 1].x + (closed[j].x - closed[j - 1].x) * f,
-                               y: closed[j - 1].y + (closed[j].y - closed[j - 1].y) * f))
-        }
-        return out
-    }
-
-    static func centroid(_ pts: [CGPoint]) -> CGPoint {
-        let n = CGFloat(max(pts.count, 1))
-        return CGPoint(x: pts.reduce(0) { $0 + $1.x } / n, y: pts.reduce(0) { $0 + $1.y } / n)
-    }
-
-    static func bounds(_ pts: [CGPoint]) -> CGRect {
-        guard let x0 = pts.map(\.x).min(), let x1 = pts.map(\.x).max(),
-              let y0 = pts.map(\.y).min(), let y1 = pts.map(\.y).max() else { return .zero }
-        return CGRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
-    }
+    #endif
 }

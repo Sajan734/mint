@@ -1,23 +1,22 @@
 import ARKit
 import CoverageKit
 
-/// The ARSession delegate, on its own serial queue: keeps the item's outline and the paper's angle
-/// fresh for the overlay (~8 Hz) and, while recording, hands every frame (30 fps) to the recorder.
-/// Never holds an ARFrame.
+/// The ARSession delegate, on its own serial queue: keeps the paper's angle fresh for the coverage
+/// ring (~8 Hz) and, while recording, hands every frame (30 fps) to the recorder. Never holds an ARFrame.
 final class CaptureLoop: NSObject, ARSessionDelegate {
     let queue = DispatchQueue(label: "mint.capture", qos: .userInteractive)
     /// Set once before the session runs; called on the main actor.
-    var onSight: (@MainActor (SubjectOutliner.Sight) -> Void)?
+    var onSight: (@MainActor (PaperReader.Sight) -> Void)?
 
     // Touched only on `queue`.
     private var recorder: VideoRecorder?
-    private let outliner = SubjectOutliner()
+    private let reader = PaperReader()
     private var lastRecorded: TimeInterval = 0
-    private var lastOutline: TimeInterval = 0
+    private var lastRead: TimeInterval = 0
     private var sensorSize = CGSize(width: 1920, height: 1440)
 
     private static let recordInterval = 1.0 / 30
-    private static let outlineInterval = 0.12
+    private static let readInterval = 0.12
 
     func startRecording(_ recorder: VideoRecorder) {
         queue.async {
@@ -44,18 +43,18 @@ final class CaptureLoop: NSObject, ARSessionDelegate {
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
         sensorSize = frame.camera.imageResolution
-        if frame.timestamp - lastOutline >= Self.outlineInterval {
-            lastOutline = frame.timestamp
+        if frame.timestamp - lastRead >= Self.readInterval {
+            lastRead = frame.timestamp
             let t = frame.camera.transform
-            let camera = SubjectOutliner.Camera(
+            let camera = PaperReader.Camera(
                 rotation: simd_float3x3(SIMD3(t.columns.0.x, t.columns.0.y, t.columns.0.z),
                                         SIMD3(t.columns.1.x, t.columns.1.y, t.columns.1.z),
                                         SIMD3(t.columns.2.x, t.columns.2.y, t.columns.2.z)),
                 intrinsics: frame.camera.intrinsics,
                 timestamp: frame.timestamp)
-            outliner.process(frame.capturedImage, camera: camera) { sight in
+            reader.process(frame.capturedImage, camera: camera) { sight in
                 MainActor.assumeIsolated { self.onSight?(sight) }
-                self.queue.async { self.outliner.markIdle() }
+                self.queue.async { self.reader.markIdle() }
             }
         }
         guard let recorder, frame.timestamp - lastRecorded >= Self.recordInterval - 0.004 else { return }
