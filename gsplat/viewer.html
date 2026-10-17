@@ -1,0 +1,82 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mint splat viewer</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #0B0F0E; color: #eee; font: 14px system-ui, sans-serif; overflow: hidden; }
+  #bar { position: fixed; top: 10px; left: 10px; z-index: 2; display: flex; gap: 8px; align-items: center; background: #000a; padding: 8px 10px; border-radius: 8px; }
+  button, input { font: inherit; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "@sparkjsdev/spark": "https://sparkjs.dev/releases/spark/2.1.0/spark.module.js"
+} }
+</script>
+</head>
+<body>
+<div id="bar">
+  <input type="file" id="file" accept=".ply,.spz,.splat,.ksplat">
+  <span id="msg">Pick out/&lt;name&gt;/splat.ply (or serve this folder and open viewer.html?url=out/orbit/splat.ply)</span>
+</div>
+<script type="module">
+// Splats from app.py are already in the scan frame (+Y up, origin on the support plane under
+// the object), so no flip is applied here.
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { SparkRenderer, SplatMesh } from "@sparkjsdev/spark";
+
+const renderer = new THREE.WebGLRenderer({ antialias: false });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(50, innerWidth / innerHeight, 0.001, 100);
+scene.add(new SparkRenderer({ renderer }));
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+scene.add(new THREE.GridHelper(2, 20, 0x2a3a35, 0x1a2420));
+
+let splat = null;
+const msg = document.getElementById("msg");
+
+function frame(obj) {
+  let box = null;
+  try { box = obj.getBoundingBox?.() ?? new THREE.Box3().setFromObject(obj); } catch (e) { box = null; }
+  const ok = box && !box.isEmpty() && isFinite(box.min.x);
+  const c = ok ? box.getCenter(new THREE.Vector3()) : new THREE.Vector3(0, 0.1, 0);
+  const r = ok ? box.getSize(new THREE.Vector3()).length() / 2 : 0.5;
+  controls.target.copy(c);
+  camera.position.copy(c).add(new THREE.Vector3(0, r * 1.2, r * 2.2));
+  camera.near = r / 100; camera.far = r * 100; camera.updateProjectionMatrix();
+}
+
+function load(url, type) {
+  if (splat) { scene.remove(splat); splat.dispose?.(); }
+  msg.textContent = "Loading...";
+  splat = new SplatMesh({ url, fileType: type });
+  scene.add(splat);
+  splat.initialized.then(() => {
+    frame(splat);
+    msg.textContent = "Loaded. Drag to orbit, scroll to zoom.";
+  }).catch(e => { msg.textContent = "Failed: " + e; });
+}
+
+document.getElementById("file").onchange = e => {
+  const f = e.target.files[0];
+  if (f) load(URL.createObjectURL(f), f.name.split(".").pop().toLowerCase());
+};
+const q = new URLSearchParams(location.search).get("url");
+if (q) load(q, q.split(".").pop().toLowerCase());
+
+addEventListener("resize", () => {
+  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+});
+renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+</script>
+</body>
+</html>

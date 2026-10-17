@@ -1,0 +1,5 @@
+.venv/
+out/
+*.ply
+*.spz
+*.mp4
