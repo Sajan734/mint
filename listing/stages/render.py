@@ -89,7 +89,7 @@ def render_pngs(ply: bytes, up_axis: str, angles: list[tuple[int, int]]) -> list
 
 def render_views(splat_path: Path, item_id: str, up_axis: str, out_dir: Path) -> Views:
     if not splat_path.is_file():
-        raise FileNotFoundError(f"no splat at {splat_path}; pass the item folder (with splat.ply) or the .ply itself")
+        raise FileNotFoundError(f"no splat at {splat_path}; pass the item folder (with splat.spz or splat.ply) or the splat file itself")
     angles = [(azimuth, elevation) for elevation, azimuths in RENDER["rings"] for azimuth in azimuths]
     pngs = render_pngs(splat_path.read_bytes(), up_axis, angles)
     out_dir.mkdir(parents=True, exist_ok=True)
