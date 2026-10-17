@@ -264,7 +264,7 @@ private struct CaptureRing: View {
 
     private var progress: Double {
         switch session.phase {
-        case .recording: return min(1, (session.recordStart.map { now.timeIntervalSince($0) } ?? 0) / CaptureSession.duration)
+        case .recording: return Double(session.shownPercent) / 100
         case .saving, .done: return 1
         default: return 0
         }

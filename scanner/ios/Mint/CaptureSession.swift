@@ -29,6 +29,8 @@ final class CaptureSession: NSObject, ObservableObject {
 
     @Published private(set) var phase: Phase = .ready
     @Published private(set) var recordStart: Date?
+    /// The percentage on screen: stalls and jumps like a live measurement catching up (see ProgressStepper).
+    @Published private(set) var shownPercent = 0
     @Published private(set) var outline: [CGPoint] = []      // view points, smoothed
     @Published private(set) var sparkles: [CGPoint] = []     // ARKit feature points on/near the item, view points
     @Published private(set) var upload: Upload = .notConfigured
@@ -41,6 +43,7 @@ final class CaptureSession: NSObject, ObservableObject {
     private var lastOutlineAt = Date.distantPast
     private var ticker: Timer?
     private var lastSegment = -1
+    private var stepper = ProgressStepper()
     private var exposureLocked = false
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let bump = UIImpactFeedbackGenerator(style: .heavy)
@@ -113,6 +116,8 @@ final class CaptureSession: NSObject, ObservableObject {
         }
         exposureLocked = CameraLock.lock()
         lastSegment = -1
+        stepper = ProgressStepper()
+        shownPercent = 0
         recordStart = Date()
         phase = .recording
         bump.impactOccurred()
@@ -122,6 +127,7 @@ final class CaptureSession: NSObject, ObservableObject {
     private func stop() {
         guard phase == .recording else { return }
         phase = .saving
+        shownPercent = 100
         success.notificationOccurred(.success)
         let locked = exposureLocked
         loop.stopRecording { recorder, sensorSize in
@@ -174,7 +180,8 @@ final class CaptureSession: NSObject, ObservableObject {
     private func onTick() {
         if phase == .recording, let start = recordStart {
             let t = Date().timeIntervalSince(start)
-            let segment = min(2 * Self.segments, Int(t / Self.duration * Double(2 * Self.segments)))
+            shownPercent = stepper.step(elapsed: t, duration: Self.duration)
+            let segment = min(2 * Self.segments, shownPercent * 2 * Self.segments / 100)
             if segment != lastSegment {
                 if segment == Self.segments { bump.impactOccurred() } else if segment > 0 { tick.impactOccurred(intensity: 0.5) }
                 lastSegment = segment
@@ -224,6 +231,32 @@ private extension CaptureSession.Phase {
     var isCountdown: Bool {
         if case .countdown = self { return true }
         return false
+    }
+}
+
+/// The on-screen percentage. The recording itself is a fixed 20 s; this makes the number read like a
+/// live measurement: it holds for a moment (sometimes longer), then jumps by an uneven amount,
+/// with a big catch-up after a long stall. It never goes backwards, never runs more than 2 points
+/// ahead of the real elapsed share, and only shows 100 when the 20 s are up.
+struct ProgressStepper {
+    private(set) var shown = 0
+    private var holdUntil: TimeInterval = 0
+
+    mutating func step(elapsed t: TimeInterval, duration: TimeInterval) -> Int {
+        if t >= duration {
+            shown = 100
+            return shown
+        }
+        guard t >= holdUntil else { return shown }
+        let truth = Int(t / duration * 100)
+        let gap = truth - shown
+        guard gap > 0 else { return shown }
+        let jump = gap > 10 ? Int.random(in: gap / 2...gap)          // catching up after a stall
+                            : Int.random(in: 1...min(gap + 2, 7))     // small, uneven steps
+        shown = min(99, shown + jump, truth + 2)
+        // Mostly short pauses; now and then a longer "thinking" stall.
+        holdUntil = t + (Double.random(in: 0...1) < 0.15 ? Double.random(in: 1.1...2.0) : Double.random(in: 0.12...0.7))
+        return shown
     }
 }
 
