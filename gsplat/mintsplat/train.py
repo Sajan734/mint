@@ -29,6 +29,7 @@ DEFAULTS = {
     "pose_lr": 1e-4,
     "appearance_lr": 0.0,  # >0 enables per-view colour correction (slightly smoother, ~+4 s)
     "appearance_reg": 0.1,
+    "session_split": None,  # views >= this index come from a 2nd video: learn one gain/offset for them
     "pose_start": 100,
     "init_scale": 0.5,
     "train_scale": 0.75,  # training resolution relative to the video frames
@@ -199,6 +200,12 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     cam_opt = torch.optim.Adam([{"params": [cam_delta], "lr": cfg["pose_lr"] * B ** 0.5},
                                 {"params": [app_A, app_b], "lr": cfg["appearance_lr"] * B ** 0.5}])
     use_app = cfg["appearance_lr"] > 0
+    # 2nd video was lit differently (object flipped, phone re-exposed): one per-channel gain + offset
+    # for all of its views, the 1st video is the colour reference
+    split = cfg["session_split"]
+    sess_gain = torch.nn.Parameter(torch.zeros(3, device="cuda"))
+    sess_bias = torch.nn.Parameter(torch.zeros(3, device="cuda"))
+    sess_opt = torch.optim.Adam([sess_gain, sess_bias], lr=2e-3 * B ** 0.5)
     zero_bg = torch.zeros(B, 3, device="cuda")
 
     win = _ssim_window("cuda")
@@ -216,6 +223,9 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         a3 = alpha[..., None]
         if use_app:
             rgb = torch.einsum("bij,bhwj->bhwi", app_A[v], rgb) + app_b[v][:, None, None] * a3
+        if split is not None:
+            sb = (v >= split).float()[:, None, None, None]
+            rgb = rgb * (1 + sb * sess_gain) + sb * sess_bias * a3
         rgb = rgb + bg[:, None, None] * (1 - a3)
 
         m, w = views["mask"][v][..., None], views["weight"][v][..., None]
@@ -240,6 +250,9 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         if step >= cfg["pose_start"]:
             cam_opt.step()
         cam_opt.zero_grad(set_to_none=True)
+        if split is not None:
+            sess_opt.step()
+            sess_opt.zero_grad(set_to_none=True)
         means_sched.step()
         strategy.step_post_backward(params, optimizers, state, step, info, lr=means_sched.get_last_lr()[0])
         if step % 200 == 0 or step == iters - 1:
@@ -248,6 +261,8 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     with torch.no_grad():
         refined = c2w.clone()
         refined[train_ids] = c2w[train_ids] @ se3_exp(cam_delta[train_ids])
+        if split is not None:
+            print(f"  2nd-video colour gain {(1 + sess_gain).tolist()} offset {sess_bias.tolist()}", flush=True)
     return params, refined, views, train_ids, test_ids
 
 

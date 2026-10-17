@@ -2,6 +2,7 @@
 
     python client.py warm                       # keep 1 GPU container loaded (billed while on)
     python client.py run orbit.mp4 [--name x]   # mp4 -> out/<name>/splat.ply on the warm container
+    python client.py run orbit.mp4 orbit_reverse.mp4 --name merged   # top + flipped-over bottom
     python client.py cold                       # back to scale-to-zero after the demo
 
 `modal run app.py` starts a fresh app every time (always cold); this script reuses the deployed one.
@@ -33,6 +34,7 @@ def main():
     sub.add_parser("cold")
     r = sub.add_parser("run")
     r.add_argument("video")
+    r.add_argument("video2", nargs="?", help="same object flipped over; merged into one splat")
     r.add_argument("--name", default="")
     r.add_argument("--debug", action="store_true", help="also produce eval sheets + turntable")
     args = ap.parse_args()
@@ -47,7 +49,8 @@ def main():
     else:
         src = Path(args.video)
         t0 = time.perf_counter()
-        res = splatter.run.remote(src.read_bytes(), {"debug": args.debug})
+        payload = [src.read_bytes(), Path(args.video2).read_bytes()] if args.video2 else src.read_bytes()
+        res = splatter.run.remote(payload, {"debug": args.debug})
         save(res, Path("out") / (args.name or src.stem), time.perf_counter() - t0)
 
 

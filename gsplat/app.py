@@ -2,6 +2,7 @@
 
     modal run app.py --video orbit.mp4                      # full run (~28 s warm) -> out/<video stem>/
     modal run app.py --video orbit.mp4 --stop-after masks   # iterate on one stage
+    modal run app.py --video orbit.mp4 --video2 orbit_reverse.mp4 --name merged   # top + flipped bottom
 
 For the demo use the deployed app instead (no cold start): see client.py.
 
@@ -64,14 +65,15 @@ class Splatter:
         print(f"[time] model_load: {time.time() - t0:.1f}s (cold start only)", flush=True)
 
     @modal.method()
-    def run(self, video: bytes, cfg: dict) -> dict:
+    def run(self, video: bytes | list[bytes], cfg: dict) -> dict:
+        """One mp4, or [upright orbit, flipped-over orbit] to merge into one splat."""
         from mintsplat.pipeline import run
 
         return run(self, video, cfg)
 
 
 @app.local_entrypoint()
-def main(video: str, name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 1000,
+def main(video: str, video2: str = "", name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 1000,
          batch: int = 4, cap: int = 200_000, scale: float = 0.75,
          debug: bool = True, app_lr: float = 0.0, sh: int = 3, train_json: str = ""):
     src = Path(video)
@@ -81,7 +83,8 @@ def main(video: str, name: str = "", n_frames: int = 80, stop_after: str = "", i
                      "appearance_lr": app_lr, "sh_degree": sh, **json.loads(train_json or "{}")}}
 
     t0 = time.perf_counter()
-    res = Splatter().run.remote(src.read_bytes(), cfg)
+    payload = [src.read_bytes(), Path(video2).read_bytes()] if video2 else src.read_bytes()
+    res = Splatter().run.remote(payload, cfg)
     from client import save
 
     save(res, out_dir, time.perf_counter() - t0)
