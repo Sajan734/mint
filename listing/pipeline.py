@@ -93,6 +93,7 @@ async def run_pipeline(
     runs_root: Path | None = None,
     cache_root: Path | None = None,
     demo_mode: bool | None = None,
+    manual_baseline: bool | None = None,
 ) -> Listing | Rejection:
     item_dir, splat = resolve_item(Path(splat_path))
     item_id = item_dir.name
@@ -104,6 +105,9 @@ async def run_pipeline(
         run_dir=(runs_root or RUNS_ROOT) / item_id,
         cache_dir=cache_root or CACHE_ROOT,
         demo_mode=os.environ.get("DEMO_MODE") == "1" if demo_mode is None else demo_mode,
+        manual_baseline=(
+            os.environ.get("MANUAL_BASELINE") == "1" if manual_baseline is None else manual_baseline
+        ),
     )
 
     views = await run_stage(ctx, "render", Views, render, splat)
@@ -130,9 +134,15 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Turn a trained splat into a Listing or a Rejection.")
     parser.add_argument("item", type=Path, help="item folder (e.g. fixtures/item01) or a splat file")
     parser.add_argument("--seller-name", default=None, help="product name typed by the seller")
+    parser.add_argument(
+        "--manual-baseline",
+        action="store_true",
+        default=None,
+        help="use the item folder's baseline.jpg/png and never search (also MANUAL_BASELINE=1)",
+    )
     args = parser.parse_args(argv)
 
-    result = asyncio.run(run_pipeline(args.item, args.seller_name))
+    result = asyncio.run(run_pipeline(args.item, args.seller_name, manual_baseline=args.manual_baseline))
     print(f"{type(result).__name__}:", file=sys.stderr)
     print(result.model_dump_json(indent=2))
     return 0

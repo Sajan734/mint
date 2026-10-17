@@ -39,6 +39,7 @@ class RunContext(Contract):
     run_dir: Path
     cache_dir: Path
     demo_mode: bool = False
+    manual_baseline: bool = False  # use fixtures/<item>/baseline.* and never search
 
 
 class View(Contract):
@@ -74,14 +75,15 @@ class Identity(Contract):
 
 class Baseline(Contract):
     query: str
-    image_path: str
+    image_path: str | None  # None: nothing usable was found
     source_url: str | None = None
     source: Literal["image_search", "manual"]
+    note: str | None = None
 
 
 class MatchCheck(Contract):
-    same_category: Prob
-    same_product: Prob
+    same_category: Prob | None  # None when there was no baseline to compare against
+    same_product: Prob | None
     verdict: Verdict
     reason: str  # shown to the seller
 

@@ -37,6 +37,13 @@ def test_null_brand_needs_no_visible_text():
     assert identity(brand=None, visible_text=[]).brand is None
 
 
+def test_not_found_baseline_and_unscored_match_are_valid():
+    from contracts import MatchCheck
+
+    Baseline(query="q", image_path=None, source="image_search", note="nothing found")
+    MatchCheck(same_category=None, same_product=None, verdict="uncertain", reason="r")
+
+
 def test_extra_fields_are_rejected():
     with pytest.raises(ValidationError):
         Baseline(query="q", image_path="x.png", source="manual", surprise=1)

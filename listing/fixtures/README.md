@@ -8,8 +8,11 @@ itemNN/
   expected.json    the outcome the pipeline should reach
   stubs/<stage>.json
   views/           real renders go here (not yet captured)
-  baseline.png     real baseline photo goes here (not yet captured)
+  baseline.jpg     optional manual baseline photo (.jpg, .jpeg or .png)
+  baseline.json    {"source_url": "..."} for the manual baseline
 ```
+
+**Manual baseline for demos:** put a real, sourced product photo in the item folder as `baseline.jpg` (or `.png`) with its `source_url` in `baseline.json`, then run with `--manual-baseline` or `MANUAL_BASELINE=1`. In that mode `baseline_lookup` never searches. If the photo is too large it is shrunk into `runs/` to fit Jev's limits; if it is missing or unusable the match is treated as uncertain. item01 and item02 have no manual baseline yet.
 
 **The `stubs/` data is hand-written placeholder data, not real model output.** Each stubbed stage loads `stubs/<stage>.json` instead of calling Gemini or Jev. Replace a stub with recorded real output once that stage is implemented. The prices are not real comps and have no source URL. The image paths point to files that don't exist yet.
 

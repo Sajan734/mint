@@ -53,6 +53,7 @@ Run the two pipeline checks and the tests after every change. They must still pa
 - Every stage is an async function: contract objects in, one contract object out. No global state.
 - Every stage writes its output as JSON to `runs/<item_id>/<stage>.json`. Jev stages also save raw per-view answers there.
 - If `DEMO_MODE=1`, every stage reads from `cache.py` first and only calls an API on a cache miss.
+- `--manual-baseline` (or `MANUAL_BASELINE=1`) makes `baseline_lookup` use the item folder's `baseline.jpg/png` and never search, so demos don't depend on search. If no usable baseline is found, `Baseline.image_path` is null and `match_gate` returns `uncertain` (no Jev call), which flags a seller check. With no seller-typed name and a null `Identity.model`, `baseline_lookup` doesn't search at all (a generic query finds some other product). `condition` then runs the no-baseline questions on the views alone, so pricing still works.
 - Thresholds, weights and price factors live in a dict at the top of their stage file. Never inline magic numbers in logic.
 - Decisions are made in code from model outputs. Models supply probabilities or structured fields, never the final verdict or price.
 - Unit-test decision rules and the price formula with fake inputs. Tests never call a real API.
@@ -61,7 +62,7 @@ Run the two pipeline checks and the tests after every change. They must still pa
 
 ## Keys and secrets
 
-- Keys come from `listing/.env` via `python-dotenv`: `TYPESAFE_API_KEY`, `GEMINI_API_KEY`.
+- Keys come from `listing/.env` via `python-dotenv`: `TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY` (image search for `baseline_lookup`).
 - Fail early with a clear message if a key is missing.
 - Never print, log, commit or hardcode a key. Never put a key in a fixture or in `runs/`.
 

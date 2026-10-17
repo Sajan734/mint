@@ -170,6 +170,103 @@ CONDITION_QUESTIONS = {
     ),
 }
 
+# Condition without a baseline (no reference photo found): same artifact guidance, judged against what an
+# intact product of this kind normally looks like. No question refers to `baseline`.
+_WITH_BASELINE_SENTENCE = (
+    "`baseline` shows the product new, from a different angle; use it to know what the intact product looks like."
+)
+_NO_BASELINE_SENTENCE = (
+    "No reference photo is available; judge against what an intact product of this kind normally looks like."
+)
+if _WITH_BASELINE_SENTENCE not in CONDITION_CONTEXT:
+    raise RuntimeError("CONDITION_CONTEXT changed: update CONDITION_CONTEXT_NO_BASELINE")
+CONDITION_CONTEXT_NO_BASELINE = CONDITION_CONTEXT.replace(_WITH_BASELINE_SENTENCE, _NO_BASELINE_SENTENCE)
+
+CONDITION_QUESTIONS_NO_BASELINE = {
+    **CONDITION_QUESTIONS,
+    "stains_discolouration": Noul(
+        instructions=(
+            "Following `context`: does the item in `item` have any stains or discolouration that isn't part "
+            "of the product's design?"
+        ),
+        criteria=NoulCriteria(
+            true=(
+                "A spot, patch or area has a colour that doesn't look like part of the design and isn't a "
+                "printed pattern, logo, lighting or reflection: a stain, yellowing, fading or a dirt mark."
+            ),
+            false=(
+                "The colours look like the product's intended design apart from lighting, exposure and "
+                "reflections."
+            ),
+        ),
+    ),
+    "missing_broken": Noul(
+        instructions="Following `context`: is any piece of the item in `item` broken or missing?",
+        criteria=NoulCriteria(
+            true=(
+                "A part an intact product of this kind would have, such as a button, cap, cushion, cover, strap "
+                "or tip, is absent, snapped off or clearly broken, and the area around it is solidly scanned."
+            ),
+            false=(
+                "Every part that can be seen from this angle is present and intact. Parts hidden by the angle "
+                "and areas the scan never covered do not count as missing."
+            ),
+        ),
+    ),
+}
+
+BASELINE_CONTEXT = (
+    "`photo` is an image search result being considered as a clean reference photo of the product described "
+    "in `query`. A good reference shows that one product on its own, like a manufacturer or shop product shot."
+)
+
+BASELINE_QUESTIONS = {
+    "single_product": Noul(
+        instructions="Following `context`: does `photo` show exactly one product as its subject?",
+        criteria=NoulCriteria(
+            true=(
+                "One product is the clear subject. A set sold and shown together, such as a pair of earbuds, "
+                "or headphones with their cable, counts as one product."
+            ),
+            false="Several products, several copies of the product, or no clear single product are shown.",
+        ),
+    ),
+    "plain_background": Noul(
+        instructions="Following `context`: is the background of `photo` plain?",
+        criteria=NoulCriteria(
+            true="A flat or softly graded single colour, such as white or light grey, with nothing else in it.",
+            false="A room, table, outdoor scene, pattern, furniture, or other objects behind or around the product.",
+        ),
+    ),
+    "people_or_packaging": Noul(
+        instructions="Following `context`: does `photo` show any person or any packaging?",
+        criteria=NoulCriteria(
+            true="Any person, face, hand or other body part, or any box, bag, blister pack or retail packaging.",
+            false="Only the product itself, with no people, hands or packaging anywhere in the image.",
+        ),
+    ),
+    "overlay_or_collage": Noul(
+        instructions="Following `context`: is `photo` a collage or covered by added graphics?",
+        criteria=NoulCriteria(
+            true=(
+                "A collage or grid of several pictures, or large added text, badges, prices, arrows or "
+                "watermarks over the image."
+            ),
+            false="A single photo with no added text or graphics, apart from what is printed on the product.",
+        ),
+    ),
+    "matches_query": Noul(
+        instructions="Following `context`: is the product in `photo` the product described by `query`?",
+        criteria=NoulCriteria(
+            true=(
+                "Same kind of product, and the same brand and model wherever `query` names them. A different "
+                "colour counts as a match only if `query` doesn't name a colour."
+            ),
+            false="A different kind of product, a different brand or model, an accessory, or a part of the product.",
+        ),
+    ),
+}
+
 TASKS: dict[str, tuple[str, dict[str, Any]]] = {
     "gate": (GATE_CONTEXT, GATE_QUESTIONS),
     "condition": (CONDITION_CONTEXT, CONDITION_QUESTIONS),
