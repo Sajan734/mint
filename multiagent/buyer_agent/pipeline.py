@@ -11,9 +11,16 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from buyer_agent import sources
-from buyer_agent.advisor import draft
+from buyer_agent.advisor import draft, template_step
 from buyer_agent.aggregate import DENT_CAVEAT, aggregate
-from buyer_agent.claims import ClaimsProvider, apply_claims, check_claims, resolve_claims
+from buyer_agent.claims import (
+    MIN_USABLE_VIEWS,
+    ClaimsProvider,
+    apply_claims,
+    check_claims,
+    resolve_claims,
+    usable_labels,
+)
 from buyer_agent.config import Settings
 from buyer_agent.errors import AgentError, ErrorCode, user_message
 from buyer_agent.groq_client import GroqAnswer, GroqClient
@@ -37,6 +44,8 @@ log = logging.getLogger(__name__)
 UNVALIDATED_CAVEAT = "Rendered with an unvalidated renderer; treat this result as a preview."
 NO_CLAIMS_CAVEAT = "No listing details were available, so the item was not checked against them."
 CLAIMS_FAILED_CAVEAT = "The listing details could not be checked."
+FEW_VIEWS_CAVEAT = "Too few clear views to check the listing details."
+REJECTED_REASON = "The listing's scan does not match the product it describes."
 
 
 @dataclass(frozen=True)
@@ -121,7 +130,10 @@ async def _judge(ctx: _Ctx, pairs: list[ViewPair]) -> tuple[list[JevViewScores],
 
 
 async def _claims(
-    ctx: _Ctx, claims: ListingClaims | None, pairs: list[ViewPair]
+    ctx: _Ctx,
+    claims: ListingClaims | None,
+    pairs: list[ViewPair],
+    usable: list[str] | None = None,
 ) -> tuple[list[ClaimsFinding], bool, str | None]:
     """(findings, claims_available, caveat)."""
     if claims is None:
@@ -129,7 +141,9 @@ async def _claims(
     if not pairs:
         return [], False, None
     try:
-        return await check_claims(ctx.deps.jev, claims, pairs, ctx.deps.settings), True, None
+        found = await check_claims(ctx.deps.jev, claims, pairs, ctx.deps.settings, usable)
+        few = usable is not None and len(usable) < MIN_USABLE_VIEWS
+        return found, True, FEW_VIEWS_CAVEAT if few else None
     except Exception as exc:  # noqa: BLE001 claims are optional; never fail the comparison
         log.warning("claims stage failed: %s", safe_exc(exc))
         return [], False, CLAIMS_FAILED_CAVEAT
@@ -147,9 +161,25 @@ async def _verdict(ctx: _Ctx, resolved: sources.Resolved) -> tuple[Verdict, list
     return verdict, scores
 
 
+def _rejected(ctx: _Ctx) -> CompareResponse:
+    """Teammate's match gate said `mismatch`: no resolve, no Jev, no claims (R8 escalate)."""
+    verdict = _quality_verdict(()).model_copy(
+        update={"label": "listing_rejected", "reason": REJECTED_REASON, "caveats": []}
+    )
+    step = template_step(plan(verdict, [], ctx.req.attempt))
+    ctx.lap("total", ctx.t0)
+    return CompareResponse(
+        comparison_id=ctx.req.comparison_id, status="done", verdict=verdict,
+        claims_available=False, claims_findings=[], next_step=step, error=None,
+        model_ids={}, timings_ms=ctx.timings, run_id=str(ctx.req.comparison_id),
+    )  # fmt: skip
+
+
 async def _compare(ctx: _Ctx) -> CompareResponse:
     req, deps = ctx.req, ctx.deps
     ctx.run.save_json("request.json", req)
+    if req.listing_match_check is not None and req.listing_match_check.verdict == "mismatch":
+        return _rejected(ctx)
     start = deps.clock()
     resolved = await asyncio.to_thread(deps.resolver, req, deps.settings, deps.renderer)
     ctx.lap("resolve", start)
@@ -158,7 +188,9 @@ async def _compare(ctx: _Ctx) -> CompareResponse:
 
     start = deps.clock()
     claims = resolve_claims(req.claims, deps.claims_provider, req.listing_id)
-    findings, available, claims_caveat = await _claims(ctx, claims, resolved.pairs)
+    findings, available, claims_caveat = await _claims(
+        ctx, claims, resolved.pairs, usable_labels(scores)
+    )
     ctx.lap("claims", start)
 
     next_plan = plan(pre, findings, req.attempt)  # PRE-claims verdict (AM-08)

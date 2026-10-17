@@ -11,7 +11,9 @@ from buyer_agent.errors import AgentError, ErrorCode
 Prob = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 Num = Annotated[float, Field(allow_inf_nan=False)]
 Label = Annotated[str, Field(min_length=1, max_length=80)]
-VerdictLabel = Literal["same", "different", "uncertain", "alignment_failed", "scan_quality_poor"]
+VerdictLabel = Literal[
+    "same", "different", "uncertain", "alignment_failed", "scan_quality_poor", "listing_rejected"
+]
 Category = Literal["shape_diff", "part_diff", "color_diff", "any_diff"]
 ActionCategory = Literal[
     "none", "request_more_photos", "message_seller", "request_refund", "escalate"
@@ -63,6 +65,13 @@ class ListingClaims(BaseModel):
     price: Price | None = None
 
 
+class ListingMatchCheck(Strict):
+    """Mirrors the teammate's `MatchCheck` (verdict + reason); `mismatch` = listing rejected."""
+
+    verdict: Literal["match", "mismatch", "uncertain"]
+    reason: Annotated[str, Field(max_length=300)]
+
+
 class CompareRequest(Strict):
     comparison_id: UUID  # idempotency key, set by caller
     listing_id: Annotated[str, Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")]
@@ -70,6 +79,7 @@ class CompareRequest(Strict):
     buyer_splat: SplatRef | None = None
     view_pairs: ViewPairsRef | None = None
     claims: ListingClaims | None = None
+    listing_match_check: ListingMatchCheck | None = None
     attempt: Annotated[int, Field(ge=1, le=5)] = 1
 
     @model_validator(mode="after")

@@ -28,6 +28,8 @@ def plan(verdict: Verdict, findings: list[ClaimsFinding], attempt: int) -> Plan:
     """
     label = verdict.label
     views = _verdict_views(verdict)
+    if label == "listing_rejected":  # R8: the listing itself failed the product match
+        return Plan(category="escalate", audience="support", reason_code="R8", cited_views=[])
     if attempt >= 2 and label in ESCALATING:
         return Plan(category="escalate", audience="support", reason_code="R0", cited_views=views)
     if label in ("scan_quality_poor", "alignment_failed"):

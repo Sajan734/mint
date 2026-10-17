@@ -5,18 +5,20 @@ import json
 import logging
 import re
 import secrets
+from collections.abc import Collection
 from pathlib import Path
 from typing import Protocol
 
 from pydantic import ValidationError
 from typesafe_sdk import Image
 
+from buyer_agent.aggregate import Thresholds
 from buyer_agent.config import Settings
 from buyer_agent.images import normalise_png
 from buyer_agent.jev_client import JevClient
 from buyer_agent.jev_prompts import CLAIM_VIEW_KEYS, claim_label, claim_question
 from buyer_agent.listing_adapter import parse_claims
-from buyer_agent.models import ClaimsFinding, ListingClaims, Verdict, ViewPair
+from buyer_agent.models import ClaimsFinding, JevViewScores, ListingClaims, Verdict, ViewPair
 
 log = logging.getLogger(__name__)
 SUPPORTED_MIN = 0.7
@@ -127,13 +129,35 @@ async def _check_one(
     return _finding(text, source, status, p, labels if status != "unverifiable" else [])
 
 
+MIN_USABLE_VIEWS = 2
+
+
+def usable_labels(scores: list[JevViewScores], th: Thresholds | None = None) -> list[str] | None:
+    """Labels the judge found usable (quality and viewpoint); None when nothing was judged."""
+    th = th or Thresholds()
+    if not scores:
+        return None
+    return [
+        s.view
+        for s in scores
+        if s.scan_quality_ok >= th.quality_min and s.viewpoint_match >= th.viewpoint_min
+    ]
+
+
 async def check_claims(
-    client: JevClient, claims: ListingClaims, pairs: list[ViewPair], settings: Settings
+    client: JevClient,
+    claims: ListingClaims,
+    pairs: list[ViewPair],
+    settings: Settings,
+    usable: Collection[str] | None = None,
 ) -> list[ClaimsFinding]:
+    """`usable` = view labels usable in the judge pass. Fewer than 2 -> nothing is sent to Jev."""
     items = [(t, "accessory") for t in claims.accessories_included]
     items += [(t, "condition_note") for t in claims.condition_notes]
     items = items[:MAX_CLAIMS]
-    views = pick_claim_views(pairs)
+    if usable is not None:
+        pairs = [p for p in pairs if p.label in usable]
+    views = pick_claim_views(pairs) if usable is None or len(pairs) >= MIN_USABLE_VIEWS else []
     state: dict = {}
     labels: list[str] = []
     for pair, k in zip(views, CLAIM_VIEW_KEYS, strict=False):

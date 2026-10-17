@@ -86,3 +86,8 @@ def test_same_inputs_same_output_100_times():
     first = plan(v, [finding()], 1)
     assert first.cited_views == ["a", "b"]
     assert all(plan(v, [finding()], 1) == first for _ in range(100))
+
+
+def test_r8_listing_rejected_escalates_on_any_attempt():
+    v = verdict("listing_rejected")
+    assert got(v) == got(v, attempt=3) == ("R8", "escalate", "support")

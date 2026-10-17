@@ -32,6 +32,10 @@ _SPLIT_RE = re.compile(r",|;|\band\b|\+", re.IGNORECASE)
 _ARTICLE_RE = re.compile(r"^(?:a|an|the|one|some)\s+", re.IGNORECASE)
 # finalize.py's filler note; it says nothing checkable, so it is never sent as a claim.
 _FILLER_NOTES = ("no defects stood out",)
+# Render-view labels in their notes ("front, 10° above", "(azimuth 90°)", "v02") are not claims.
+_PAREN_RE = re.compile(r"\s*\([^)]*(?:°|azimuth)[^)]*\)", re.IGNORECASE)
+_VIEW_ID_RE = re.compile(r"\b(?:view_?|v)\d+\b", re.IGNORECASE)
+_DEGREE_RE = re.compile(r"\d+\s*°\s*(?:above|below)?|°", re.IGNORECASE)
 LISTING_KEYS = {"price_cad", "attributes", "preview_images", "item_id", "description", "tags"}
 
 
@@ -60,6 +64,16 @@ def _clean(items: list[str]) -> list[str]:
     return out
 
 
+def clean_note(note: str) -> str:
+    """Drop render-view labels, keep the human wording ("2 views show a scuff: right, 10° above;
+    back-right, 10° above." -> "2 views show a scuff.") so it passes the claim-label allowlist."""
+    text = _PAREN_RE.sub("", note.strip())
+    if "°" in text and ":" in text:  # "<claim>: <view list>"
+        text = text.split(":", 1)[0] + "."
+    text = _DEGREE_RE.sub("", _VIEW_ID_RE.sub("", text))
+    return re.sub(r"\s+([.,;])", r"\1", re.sub(r"\s{2,}", " ", text)).strip()
+
+
 def stated_accessories(listing: _Listing) -> list[str]:
     """Accessories the seller explicitly states: attribute keys or 'includes X' sentences."""
     found: list[str] = []
@@ -78,7 +92,9 @@ def claims_from_listing(listing: dict[str, Any] | str | _Listing) -> ListingClai
     item = listing if isinstance(listing, _Listing) else _Listing.model_validate(listing)
     attrs = item.attributes
     notes = [
-        n[:200] for n in item.condition_notes if not any(f in n.lower() for f in _FILLER_NOTES)
+        clean_note(n)[:200]
+        for n in item.condition_notes
+        if not any(f in n.lower() for f in _FILLER_NOTES)
     ]
     return ListingClaims(
         title=item.title[:200],

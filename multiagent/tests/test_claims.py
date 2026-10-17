@@ -23,8 +23,8 @@ def views(n=12, azimuths=True):
     ]
 
 
-def check(jev, claims, pairs=None, st=None):
-    return run(check_claims(jev, claims, pairs or views(), st or settings()))
+def check(jev, claims, pairs=None, st=None, usable=None):
+    return run(check_claims(jev, claims, pairs or views(), st or settings(), usable))
 
 
 def test_provider_missing_or_invalid_returns_none_and_warns(tmp_path, caplog):
@@ -139,3 +139,19 @@ def test_same_contradicted_x08_and_no_bump_for_different():
     assert apply_claims(verdict("same", 0.9), [finding("supported")]).evidence_score == 0.9
     d = verdict("different", 0.6)
     assert apply_claims(d, [finding("contradicted")]).evidence_score == 0.6
+
+
+def test_claim_views_only_from_usable_labels():
+    jev = FakeJev([answer(claim=0.9)])
+    claims = ListingClaims(title="t", accessories_included=["lid"])
+    usable = ["v1", "v2", "v4", "v5", "v7"]
+    check(jev, claims, views(12), usable=usable)
+    sent = {k for k in jev.calls[0][0] if k.startswith("view_")}
+    assert len(sent) == 4  # four of the five usable views, none of the others
+
+
+def test_fewer_than_two_usable_views_means_unverifiable_and_no_jev_call():
+    jev = FakeJev([])
+    claims = ListingClaims(title="t", accessories_included=["lid"], condition_notes=["a scuff."])
+    out = check(jev, claims, views(12), usable=["v3"])
+    assert [f.status for f in out] == ["unverifiable", "unverifiable"] and jev.calls == []

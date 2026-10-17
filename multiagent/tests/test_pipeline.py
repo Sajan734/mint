@@ -142,3 +142,28 @@ def test_end_to_end_views_mode_with_generated_pngs(tmp_path):
     assert out.verdict.evidence.alignment_mode == "skipped_view_pairs"
     assert out.next_step.category == "none" and len(groq.calls) >= 1
     assert RunLog(tmp_path / "runs", ID).load_response().status == "done"
+
+
+def test_listing_mismatch_is_rejected_without_jev_or_claims(tmp_path):
+    jev = FakeJev([])
+    claims = ListingClaims(title="Lamp", accessories_included=["charger"])
+    check = {"verdict": "mismatch", "reason": "Different product."}
+    out = go(tmp_path, jev, req(claims=claims, listing_match_check=check))
+    assert out.status == "done" and out.verdict.label == "listing_rejected"
+    assert out.next_step.reason_code == "R8" and out.next_step.category == "escalate"
+    assert jev.calls == [] and out.claims_findings == [] and not out.claims_available
+
+
+def test_listing_match_or_uncertain_check_runs_normally(tmp_path):
+    check = {"verdict": "uncertain", "reason": "Unsure."}
+    out = go(tmp_path, FakeJev(views()), req(listing_match_check=check))
+    assert out.verdict.label == "same"
+
+
+def test_claims_skip_views_the_judge_found_unusable(tmp_path):
+    claims = ListingClaims(title="Lamp", accessories_included=["charger"])
+    bad = {**GOOD, "viewpoint_match": 0.1}
+    jev = FakeJev([*views(bad, 5), *views(GOOD, 7), answer(claim=0.9)])
+    out = go(tmp_path, jev, req(claims=claims))
+    shown = out.claims_findings[0].views
+    assert len(shown) == 4 and not {"v0", "v1", "v2", "v3", "v4"} & set(shown)

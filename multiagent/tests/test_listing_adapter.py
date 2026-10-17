@@ -94,3 +94,20 @@ def test_detect_and_parse_both_formats():
 def test_file_provider_reads_listing_format(tmp_path):
     (tmp_path / "hp.json").write_text(json.dumps(HEADPHONES), encoding="utf-8")
     assert FileClaimsProvider(tmp_path).get("hp").model == "WH-1000XM4"
+
+
+def test_view_labels_stripped_from_notes_and_pass_allowlist():
+    from buyer_agent.jev_prompts import claim_label
+    from buyer_agent.listing_adapter import clean_note
+
+    c = claims_from_listing(HEADPHONES)
+    assert c.condition_notes == ["2 views show a scuff.", "3 views show signs of wear."]
+    pots = load_listing_claims(MOCK / "listings" / "pots_listing.json")
+    assert pots.condition_notes == [
+        "2 views show scratches or scuffs.",
+        "The back view shows stains or discolouration.",
+    ]
+    assert all(claim_label(n) for n in c.condition_notes + pots.condition_notes)
+    assert clean_note("Scuff near the hinge (azimuth 90°) in v02 and view_03") == (
+        "Scuff near the hinge in and"
+    )
