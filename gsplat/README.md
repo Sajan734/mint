@@ -77,9 +77,12 @@ Measured on 2026-10-17, `orbit.mp4` + `orbit_reverse.mp4` (43 MB), H100:
 
 The listing step is 15-35 s of that: listing/'s render (~3-7.5 s) and Gemini identify (~5-19 s, varies).
 
-**Gemini quota:** a free-tier Gemini key allows 20 requests a day; each listing makes ~3 (identify, title/text,
-price), so ~6 listings a day, then `429 RESOURCE_EXHAUSTED` and the listing is published as `failed` (the splat
-is fine). Enable billing on the key for the demo; `python client.py relist <scan_id>` redoes a failed listing.
+**Gemini model and quota:** each listing makes ~3 Gemini requests (identify, title/text, price). On the free tier
+the Flash models allow 20 a day (~6 listings), then `429 RESOURCE_EXHAUSTED` and the listing is published as `failed`
+(the splat is fine). So development runs on `GEMINI_MODEL=gemini-3.5-flash-lite` (500 a day, ~160 listings; tested:
+listed in 19 s, but it reads less off the item, e.g. no brand from the ThinkPad logo, so the seller's product title
+matters more). **Demo day:** set `GEMINI_MODEL=gemini-3.5-flash` in the root `.env` (or enable billing), then
+`python push_secrets.py && modal deploy app.py`. `python client.py relist <scan_id>` redoes a failed listing.
 
 ### Demo (no cold start)
 
