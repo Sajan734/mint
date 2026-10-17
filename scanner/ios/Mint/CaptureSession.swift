@@ -4,9 +4,11 @@ import CoverageKit
 import RealityKit
 import UIKit
 
-/// The whole capture, start to finish:
-/// ready → 3·2·1 → recording (20 s: lap 1, then lap 2 with the phone raised) → saving → done
-/// (uploading to Supabase in the background of the done card).
+/// One item = one scan = one or more passes (recordings of it): a lap, then maybe the item flipped
+/// over for another, as many as the demonstrator wants.
+/// ready → 3·2·1 → recording (until the ring is tapped) → saving → review
+/// review: Scan again (→ ready, the next pass) · Done (sends every pass) · discard the last pass.
+/// The ring shows how much of one lap has been seen; it's a guide and never ends a pass.
 @MainActor
 final class CaptureSession: NSObject, ObservableObject {
     enum Phase: Equatable {
@@ -14,28 +16,32 @@ final class CaptureSession: NSObject, ObservableObject {
         case countdown(Int)
         case recording
         case saving
-        case done(VideoRecorder.Summary)
+        case review
         case failed(String)
     }
 
     enum Upload: Equatable {
+        case idle
         case notConfigured
         case sending(Double)
         case sent(String)
         case failed(String)
     }
 
-    static let duration: TimeInterval = 20
-    static let segments = 12   // per height ring
+    /// A pass stops by itself only here: Storage takes 50 MB per file and the video is ~1 MB/s.
+    static let maxPassSeconds: TimeInterval = 45
+    static let segments = 12
     static let tintSamples = 25
 
     @Published private(set) var phase: Phase = .ready
     @Published private(set) var recordStart: Date?
-    /// How much of the item has been seen (`TurnCoverage`): measured from the paper's turn and the
-    /// camera's height, nothing scripted.
+    /// The item being scanned: every pass is stored under this id.
+    @Published private(set) var scanID = UUID().uuidString.lowercased()
+    @Published private(set) var passes: [VideoRecorder.Summary] = []
+    /// How much of one lap has been seen (`TurnCoverage`): measured from the paper's turn, nothing scripted.
     @Published private(set) var percent = 0
-    /// rings[height][arc], 0…1: the first height's ring, then the other height's.
-    @Published private(set) var rings: [[Double]] = Array(repeating: Array(repeating: 0, count: segments), count: 2)
+    /// The ring's arcs, 0…1: slices of the item's sides, lit as they've been seen head-on.
+    @Published private(set) var ring: [Double] = Array(repeating: 0, count: segments)
     /// How well each side of the item has been seen, sampled across its silhouette from one edge to the
     /// other along `tintAxis` (view space): the overlay paints the item mintier where it's been seen.
     @Published private(set) var tint: [Double] = []
@@ -44,9 +50,10 @@ final class CaptureSession: NSObject, ObservableObject {
     @Published private(set) var paperSeen = false
     @Published private(set) var outline: [CGPoint] = []      // view points, smoothed
     @Published private(set) var sparkles: [CGPoint] = []     // ARKit feature points on/near the item, view points
-    @Published private(set) var upload: Upload = .notConfigured
+    @Published private(set) var upload: Upload = .idle
 
     var isRecording: Bool { phase == .recording }
+    var nextPass: Int { passes.count + 1 }
 
     let arView: ARView
     private let loop = CaptureLoop()
@@ -94,7 +101,7 @@ final class CaptureSession: NSObject, ObservableObject {
         ticker?.invalidate()
     }
 
-    /// The big button: start (with a countdown), or finish early.
+    /// The big button: start a pass (with a countdown), or finish it.
     func primaryAction() {
         switch phase {
         case .ready: Task { await countdownAndRecord() }
@@ -103,17 +110,47 @@ final class CaptureSession: NSObject, ObservableObject {
         }
     }
 
-    func newScan() {
+    /// Another pass of the same item (flipped over, another height, touch-ups).
+    func scanAgain() {
+        guard phase == .review, upload == .idle else { return }
+        resetCoverage()
         phase = .ready
-        recordStart = nil
-        upload = .notConfigured
-        coverage = TurnCoverage()
-        tint = []
-        publishCoverage()
     }
 
-    func retryUpload() {
-        if case .done(let s) = phase { send(s) }
+    /// Throws away the most recent pass.
+    func discardLastPass() {
+        guard phase == .review, upload == .idle, let last = passes.popLast() else { return }
+        try? FileManager.default.removeItem(at: last.directory)
+        if passes.isEmpty {
+            resetCoverage()
+            phase = .ready
+        }
+    }
+
+    /// Done with this item: send every pass.
+    func finish() {
+        guard phase == .review, !passes.isEmpty else { return }
+        send()
+    }
+
+    func retryUpload() { send() }
+
+    /// Start over with a new item.
+    func newItem() {
+        scanID = UUID().uuidString.lowercased()
+        passes = []
+        upload = .idle
+        recordStart = nil
+        resetCoverage()
+        phase = .ready
+    }
+
+    private func resetCoverage() {
+        coverage = TurnCoverage()
+        lastObservation = nil
+        fullArcs = []
+        tint = []
+        publishCoverage()
     }
 
     private func countdownAndRecord() async {
@@ -126,17 +163,14 @@ final class CaptureSession: NSObject, ObservableObject {
         }
         let recorder: VideoRecorder
         do {
-            recorder = try VideoRecorder()
+            recorder = try VideoRecorder(scanID: scanID, pass: nextPass)
         } catch {
             phase = .failed("Couldn't start recording: \(error.localizedDescription)")
             return
         }
         exposureLocked = CameraLock.lock()
         turn.restart()
-        coverage = TurnCoverage()
-        lastObservation = nil
-        fullArcs = []
-        publishCoverage()
+        resetCoverage()
         recordStart = Date()
         phase = .recording
         bump.impactOccurred()
@@ -148,18 +182,19 @@ final class CaptureSession: NSObject, ObservableObject {
         phase = .saving
         success.notificationOccurred(.success)
         let locked = exposureLocked
+        let pct = percent
         loop.stopRecording { recorder, sensorSize in
             guard let recorder else {
                 DispatchQueue.main.async { MainActor.assumeIsolated { self.phase = .failed("Nothing was recorded.") } }
                 return
             }
-            recorder.finish(sensorSize: sensorSize, exposureLocked: locked) { result in
+            recorder.finish(sensorSize: sensorSize, exposureLocked: locked, coveragePct: pct) { result in
                 MainActor.assumeIsolated {
                     CameraLock.unlock()
                     switch result {
                     case .success(let s):
-                        self.phase = .done(s)
-                        self.send(s)
+                        self.passes.append(s)
+                        self.phase = .review
                     case .failure(let e):
                         self.phase = .failed("Couldn't save: \(e.localizedDescription)")
                     }
@@ -171,22 +206,23 @@ final class CaptureSession: NSObject, ObservableObject {
     private func cancel() {
         loop.cancel()
         CameraLock.unlock()
-        phase = .ready
+        phase = passes.isEmpty ? .ready : .review
         recordStart = nil
     }
 
-    private func send(_ s: VideoRecorder.Summary) {
+    private func send() {
         guard SupabaseUploader.functionURL != nil else {
             upload = .notConfigured
             return
         }
         upload = .sending(0)
+        let id = scanID, list = passes.map { (directory: $0.directory, pass: $0.pass) }
         Task {
             do {
-                let path = try await SupabaseUploader.upload(directory: s.directory, scanID: s.scanID) { p in
+                let folder = try await SupabaseUploader.upload(scanID: id, passes: list) { p in
                     if case .sending = self.upload { self.upload = .sending(p) }
                 }
-                upload = .sent(path)
+                upload = .sent(folder)
                 success.notificationOccurred(.success)
             } catch {
                 upload = .failed(error.localizedDescription)
@@ -194,9 +230,9 @@ final class CaptureSession: NSObject, ObservableObject {
         }
     }
 
-    /// 15 Hz: recording clock (auto-stop at 20 s), sparkles, and whether the paper is in view.
+    /// 15 Hz: the size limit on a pass, sparkles, and whether the paper is in view.
     private func onTick() {
-        if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.duration { stop() }
+        if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.maxPassSeconds { stop() }
         let seen = Date().timeIntervalSince(lastPaperAt) < 0.6
         if seen != paperSeen { paperSeen = seen }
         updateSparkles()
@@ -224,14 +260,12 @@ final class CaptureSession: NSObject, ObservableObject {
 
     private func publishCoverage() {
         percent = coverage.percent
-        rings = (0..<TurnCoverage.bands).map { b in coverage.arcs(band: b, count: Self.segments).map(Double.init) }
-        // A tick for every arc that fills, a thump when a whole height is done.
-        for b in 0..<TurnCoverage.bands {
-            for (k, f) in rings[b].enumerated() where f >= 0.98 && !fullArcs.contains(b * Self.segments + k) {
-                fullArcs.insert(b * Self.segments + k)
-                tick.impactOccurred(intensity: 0.5)
-                if rings[b].allSatisfy({ $0 >= 0.98 }) { bump.impactOccurred() }
-            }
+        ring = coverage.arcs(band: 0, count: Self.segments).map(Double.init)
+        // A tick for every arc that fills, a thump when the lap is done (the pass carries on).
+        for (k, f) in ring.enumerated() where f >= 0.98 && !fullArcs.contains(k) {
+            fullArcs.insert(k)
+            tick.impactOccurred(intensity: 0.5)
+            if ring.allSatisfy({ $0 >= 0.98 }) { bump.impactOccurred() }
         }
     }
 
@@ -293,11 +327,8 @@ extension CaptureSession.Phase {
         return false
     }
 
-    /// Saving or done: the scan is over and its coverage stays on screen.
-    var isFinished: Bool {
-        if case .done = self { return true }
-        return self == .saving
-    }
+    /// Saving or reviewing: the pass is over and its coverage stays on screen.
+    var isFinished: Bool { self == .saving || self == .review }
 }
 
 /// Steadies the outline: resample to a fixed number of points by arc length, keep the start point

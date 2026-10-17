@@ -28,7 +28,7 @@ targets:
         CODE_SIGN_STYLE: Automatic
         DEVELOPMENT_TEAM: F977S4Y87X  # personal team; survives xcodegen regenerating the project
         # e.g. https://<project-ref>.supabase.co/functions/v1/scan-upload (empty = save + share only)
-        MINT_UPLOAD_URL: ""
+        MINT_UPLOAD_URL: "https://jpanyhsifoxxiizkgjno.supabase.co/functions/v1/scan-upload"
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: NO
     info:

@@ -1,16 +1,23 @@
 # Scan handoff (scanner → gsplat)
 
-What the Mint scanner hands to reconstruction (Role A): one folder per scan in Supabase Storage, **`scans/{scan_id}/`** (download: `python3 tools/fetch_scan.py latest`, see [supabase/README.md](supabase/README.md)). AirDrop zip as a fallback.
+What the Mint scanner hands to reconstruction (Role A): one folder per item in Supabase Storage, **`scans/{scan_id}/`** (download: `python3 tools/fetch_scan.py latest`, see [supabase/README.md](supabase/README.md)). AirDrop zip as a fallback.
+
+An item can have **several passes** (recordings): the main lap, then usually the item flipped over, as many as the demonstrator wants. They share the `scan_id` and are named the way gsplat's `fetch_inputs` reads them:
 
 ```
 {scan_id}/
-  video.mp4       960×720 H.264, 20 s at ~30 fps (real capture timestamps), no B-frames
-  poses.jsonl     one JSON line per video frame, in order: line n = decoded frame n
-  capture.json    session info: device, duration, frame count, sizes, exposure lock
-  thumb.jpg       first frame, upright
+  video.mp4              pass 1: 960×720 H.264, ~30 fps (real capture timestamps), no B-frames; as long as the
+                         demonstrator wants (they tap to finish), capped at 45 s (Storage: 50 MB per file)
+  poses.jsonl            pass 1: one JSON line per video frame, in order: line n = decoded frame n
+  capture.json           pass 1: session info: device, duration, frame count, sizes, exposure lock, pass, coverage_pct
+  thumb.jpg              pass 1: first frame, upright
+  bottom.mp4             pass 2 (if any; usually flipped over), + bottom.poses.jsonl, bottom.capture.json
+  pass3.mp4              pass 3+ (if any), + pass3.poses.jsonl, pass3.capture.json. gsplat uses only the first two today
 ```
 
-**How scans are taken (current app):** the item sits on a sheet of paper; the phone stays still; the paper is turned through two laps (lap 2 with the phone raised). The app records only; it doesn't track the turn, so `pose` = `pose_world` = the raw ARKit camera pose. **Relative to the item the camera orbits, but in ARKit's world the camera barely moves and the item turns**, so: mask the item (SAM 2) and get item-relative poses from VGGT on the masked frames, as in the hand-held-video fallback. ARKit poses still give metric scale and the (static) camera height. Older scans in `tools/` notes had manifests/keyframes; current ones don't.
+**Upload order:** every later pass first, `video.mp4` last. Its arrival is what the Storage webhook (`on_upload`) starts the pipeline on, so `bottom.mp4` is already there when the job starts.
+
+**How scans are taken (current app):** the item sits on a sheet of paper; the phone stays still; the paper is turned through a lap, with touch-ups from other heights as needed; the demonstrator taps to finish. Then optionally another pass (item flipped over). The app records only; it doesn't track the turn, so `pose` = `pose_world` = the raw ARKit camera pose. **Relative to the item the camera orbits, but in ARKit's world the camera barely moves and the item turns**, so: mask the item (SAM 2) and get item-relative poses from VGGT on the masked frames, as in the hand-held-video fallback. ARKit poses still give metric scale and the (static) camera height. Older scans in `tools/` notes had manifests/keyframes; current ones don't.
 
 ## Conventions (CLAUDE.md §6.2, D2/D3)
 

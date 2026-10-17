@@ -51,10 +51,10 @@ struct CaptureView: View {
                     .allowsHitTesting(false)
             }
 
-            if case .done(let summary) = session.phase {
+            if session.phase == .review {
                 VStack {
                     Spacer()
-                    DoneCard(summary: summary, upload: session.upload, retry: session.retryUpload, newScan: session.newScan)
+                    ReviewCard(session: session)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 8)
                 }
@@ -106,8 +106,12 @@ private struct TopBar: View {
                 HStack(spacing: 8) {
                     Circle().fill(Color.red).frame(width: 9, height: 9)
                         .opacity(Int(t * 2) % 2 == 0 ? 1 : 0.35)
-                    Text(String(format: "REC  0:%02d", min(Int(CaptureSession.duration), Int(t))))
+                    Text(String(format: "REC  %d:%02d", Int(t) / 60, Int(t) % 60))
                         .font(.system(.subheadline, design: .monospaced).weight(.semibold))
+                    if session.nextPass > 1 {
+                        Text("PASS \(session.nextPass)").font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
+                            .foregroundStyle(Color.brandMint)
+                    }
                 }
                 .chip()
             }
@@ -116,10 +120,14 @@ private struct TopBar: View {
                 Circle().fill(session.outline.isEmpty ? Color.white.opacity(0.5) : Color.brandMint).frame(width: 8, height: 8)
                 Text(session.outline.isEmpty ? "LOOKING" : "ITEM FOUND")
                     .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
+                if session.nextPass > 1 {
+                    Text("· PASS \(session.nextPass)").font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
+                        .foregroundStyle(Color.brandMint)
+                }
             }
             .chip()
-        case .saving, .done:
-            Label("CAPTURED", systemImage: "checkmark.seal.fill")
+        case .saving, .review:
+            Label(session.passes.count > 1 ? "\(session.passes.count) PASSES" : "CAPTURED", systemImage: "checkmark.seal.fill")
                 .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
                 .foregroundStyle(Color.brandMint)
                 .chip()
@@ -158,17 +166,20 @@ private struct Caption: View {
 
     private func content(_ now: Date) -> (String, String) {
         switch session.phase {
-        case .ready: return ("Put it on a sheet of paper. Tap Scan.", "viewfinder")
+        case .ready:
+            return session.passes.isEmpty
+                ? ("Put it on a sheet of paper. Tap Scan.", "viewfinder")
+                : ("Pass \(session.nextPass) · flip it or try another angle", "arrow.uturn.down")
         case .countdown: return ("Get ready to turn the paper", "arrow.triangle.2.circlepath")
         case .recording:
-            // Follows the measurement: first height's ring, then the other height's.
-            if session.percent >= 100 { return ("Every side covered", "checkmark.seal") }
+            let t = session.recordStart.map { now.timeIntervalSince($0) } ?? 0
+            let left = Int((CaptureSession.maxPassSeconds - t).rounded(.up))
+            if left <= 8 { return ("Wrapping up in \(left) s", "timer") }
+            if session.percent >= 100 { return ("Lap covered · touch up, then tap to finish", "checkmark.seal") }
             if !session.paperSeen { return ("Keep the sheet in view", "viewfinder") }
-            return session.rings[0].allSatisfy({ $0 >= 0.9 })
-                ? ("Now lower the phone · keep turning", "arrow.down.circle")
-                : ("Turn the paper slowly", "arrow.triangle.2.circlepath")
-        case .saving: return ("Sealing the capture…", "seal")
-        case .done: return ("", "")
+            return ("Turn the paper · tap the ring when done", "arrow.triangle.2.circlepath")
+        case .saving: return ("Saving pass \(session.nextPass)…", "seal")
+        case .review: return ("", "")
         case .failed(let message): return (message, "exclamationmark.triangle")
         }
     }
@@ -291,7 +302,7 @@ extension Path {
     }
 }
 
-// MARK: - The ring: the item's sides at the two heights, with the percentage
+// MARK: - The ring: one lap of the item's sides, with the percentage (a guide; tap to finish)
 
 private struct CaptureRing: View {
     @ObservedObject var session: CaptureSession
@@ -303,26 +314,24 @@ private struct CaptureRing: View {
                 let c = CGPoint(x: size.width / 2, y: size.height / 2)
                 let mint = Color.brandMint
                 let n = CaptureSession.segments
-                // Outer ring: the first height. Inner ring: the other height. Each arc is a slice of the
-                // item's sides, lit as brightly as that slice has been seen.
-                for band in 0..<2 {
-                    let radius = (band == 0 ? 0.47 : 0.38) * min(size.width, size.height)
-                    for k in 0..<n {
-                        let a0 = -90 + Double(k) * 360 / Double(n) + 2.2
-                        let a1 = -90 + Double(k + 1) * 360 / Double(n) - 2.2
-                        var arc = Path()
-                        arc.addArc(center: c, radius: radius, startAngle: .degrees(a0), endAngle: .degrees(a1), clockwise: false)
-                        ctx.stroke(arc, with: .color(.white.opacity(0.16)), style: StrokeStyle(lineWidth: 11, lineCap: .round))
-                        let f = session.rings[band][k]
-                        guard f > 0.02 else { continue }
-                        if f >= 0.98 {
-                            ctx.drawLayer { l in
-                                l.addFilter(.blur(radius: 5))
-                                l.stroke(arc, with: .color(mint.opacity(0.8)), style: StrokeStyle(lineWidth: 13, lineCap: .round))
-                            }
+                let radius = 0.45 * min(size.width, size.height)
+                let showing = session.isRecording || session.phase.isFinished
+                // Each arc is a slice of the item's sides, lit as brightly as it's been seen head-on.
+                for k in 0..<n {
+                    let a0 = -90 + Double(k) * 360 / Double(n) + 2.2
+                    let a1 = -90 + Double(k + 1) * 360 / Double(n) - 2.2
+                    var arc = Path()
+                    arc.addArc(center: c, radius: radius, startAngle: .degrees(a0), endAngle: .degrees(a1), clockwise: false)
+                    ctx.stroke(arc, with: .color(.white.opacity(0.16)), style: StrokeStyle(lineWidth: 12, lineCap: .round))
+                    let f = showing ? session.ring[k] : 0
+                    guard f > 0.02 else { continue }
+                    if f >= 0.98 {
+                        ctx.drawLayer { l in
+                            l.addFilter(.blur(radius: 5))
+                            l.stroke(arc, with: .color(mint.opacity(0.8)), style: StrokeStyle(lineWidth: 14, lineCap: .round))
                         }
-                        ctx.stroke(arc, with: .color(mint.opacity(0.2 + 0.8 * f)), style: StrokeStyle(lineWidth: 11, lineCap: .round))
                     }
+                    ctx.stroke(arc, with: .color(mint.opacity(0.2 + 0.8 * f)), style: StrokeStyle(lineWidth: 12, lineCap: .round))
                 }
             }
             center
@@ -338,87 +347,128 @@ private struct CaptureRing: View {
                 Text("\(session.percent)")
                     .font(.system(size: 46, weight: .heavy, design: .rounded)).monospacedDigit()
                     + Text("%").font(.system(size: 22, weight: .bold, design: .rounded))
-                Text("COVERED")
+                Text(session.percent >= 100 ? "LAP DONE" : "OF A LAP")
                     .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.5)
                     .foregroundStyle(Color.brandMint)
+                Text("TAP TO FINISH")
+                    .font(.system(.caption2, design: .rounded).weight(.semibold)).tracking(1.2)
+                    .foregroundStyle(.white.opacity(0.55))
+                    .padding(.top, 3)
             }
             .foregroundStyle(.white)
             .contentTransition(.numericText(value: Double(session.percent)))
             .animation(.snappy(duration: 0.2), value: session.percent)
-        case .saving, .done:
-            VStack(spacing: 2) {
-                Image(systemName: "checkmark.seal.fill")
-                    .font(.system(size: 46, weight: .bold))
-                    .foregroundStyle(Color.brandMint)
-                    .shadow(color: .brandMint.opacity(0.8), radius: 16)
-                Text("\(session.percent)% COVERED")
-                    .font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.2)
-                    .foregroundStyle(.white)
-            }
+        case .saving, .review:
+            Image(systemName: "checkmark.seal.fill")
+                .font(.system(size: 54, weight: .bold))
+                .foregroundStyle(Color.brandMint)
+                .shadow(color: .brandMint.opacity(0.8), radius: 16)
         default:
             ZStack {
                 Circle().fill(.white).frame(width: 112, height: 112)
-                Text("Scan").font(.system(size: 24, weight: .heavy, design: .rounded)).foregroundStyle(Color.brandStageBg)
+                VStack(spacing: 0) {
+                    Text("Scan").font(.system(size: 24, weight: .heavy, design: .rounded))
+                    if session.nextPass > 1 {
+                        Text("PASS \(session.nextPass)").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.2)
+                    }
+                }
+                .foregroundStyle(Color.brandStageBg)
             }
             .shadow(color: .brandMint.opacity(0.45), radius: 18)
         }
     }
 }
 
-// MARK: - Done: what was captured, and the upload to Supabase
+// MARK: - Review: the passes so far, another pass or send them all
 
-private struct DoneCard: View {
-    let summary: VideoRecorder.Summary
-    let upload: CaptureSession.Upload
-    let retry: () -> Void
-    let newScan: () -> Void
+private struct ReviewCard: View {
+    @ObservedObject var session: CaptureSession
     @State private var zipURL: URL?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 14) {
-                thumbnail
+            HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Captured").font(.system(.title2, design: .rounded).weight(.heavy))
-                    Text(String(format: "%.1f s · %d frames · %.0f MB", summary.seconds, summary.frames, summary.megabytes))
-                        .font(.system(.subheadline, design: .rounded)).foregroundStyle(.secondary).monospacedDigit()
+                    Text(session.passes.count == 1 ? "Captured" : "\(session.passes.count) passes")
+                        .font(.system(.title2, design: .rounded).weight(.heavy))
+                    if let last = session.passes.last {
+                        Text(String(format: "Pass %d · %.0f s · %d frames", last.pass, last.seconds, last.frames))
+                            .font(.system(.subheadline, design: .rounded)).foregroundStyle(.secondary).monospacedDigit()
+                    }
                 }
                 Spacer()
             }
-            uploadRow
-            HStack(spacing: 12) {
-                if let zipURL {
-                    ShareLink(item: zipURL) {
-                        Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 46)
-                    }
-                    .buttonStyle(.bordered)
-                }
-                Button(action: newScan) {
-                    Text("New scan").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 46)
-                }
-                .buttonStyle(.borderedProminent).tint(.brandMint).foregroundStyle(Color.brandStageBg)
+            passStrip
+            switch session.upload {
+            case .idle: choices
+            default: uploadRow
             }
         }
         .padding(18)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
-        .task {
-            let dir = summary.directory, id = summary.scanID
+        .task(id: session.upload) {
+            guard session.upload == .notConfigured || isFailed else { return }
+            let dir = VideoRecorder.folder(scanID: session.scanID), id = session.scanID
             zipURL = await Task.detached { try? ScanExport.zip(directory: dir, scanID: id) }.value
         }
     }
 
-    @ViewBuilder private var thumbnail: some View {
-        if let img = UIImage(contentsOfFile: summary.directory.appendingPathComponent("thumb.jpg").path) {
-            Image(uiImage: img).resizable().scaledToFill().frame(width: 64, height: 64)
-                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.brandMint, lineWidth: 2))
+    private var isFailed: Bool {
+        if case .failed = session.upload { return true }
+        return false
+    }
+
+    /// One thumbnail per pass, numbered.
+    private var passStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(session.passes, id: \.pass) { p in
+                    ZStack(alignment: .bottomLeading) {
+                        thumbnail(p.directory)
+                        Text("\(p.pass)")
+                            .font(.system(.caption, design: .rounded).weight(.heavy))
+                            .foregroundStyle(Color.brandStageBg)
+                            .frame(width: 20, height: 20)
+                            .background(Color.brandMint, in: Circle())
+                            .padding(4)
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder private func thumbnail(_ dir: URL) -> some View {
+        if let img = UIImage(contentsOfFile: dir.appendingPathComponent("thumb.jpg").path) {
+            Image(uiImage: img).resizable().scaledToFill().frame(width: 58, height: 58)
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay(RoundedRectangle(cornerRadius: 13, style: .continuous).stroke(Color.brandMint, lineWidth: 2))
         } else {
-            RoundedRectangle(cornerRadius: 14).fill(Color.brandMint.opacity(0.25)).frame(width: 64, height: 64)
+            RoundedRectangle(cornerRadius: 13).fill(Color.brandMint.opacity(0.25)).frame(width: 58, height: 58)
+        }
+    }
+
+    private var choices: some View {
+        VStack(spacing: 10) {
+            HStack(spacing: 12) {
+                Button(action: session.scanAgain) {
+                    Label("Scan again", systemImage: "arrow.triangle.2.circlepath").fontWeight(.semibold)
+                        .frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.bordered)
+                Button(action: session.finish) {
+                    Label(session.passes.count == 1 ? "Done · send" : "Done · send \(session.passes.count)", systemImage: "paperplane.fill")
+                        .fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 48)
+                }
+                .buttonStyle(.borderedProminent).tint(.brandMint).foregroundStyle(Color.brandStageBg)
+            }
+            Button(role: .destructive, action: session.discardLastPass) {
+                Text("Discard pass \(session.passes.last?.pass ?? 1)").font(.footnote.weight(.semibold))
+            }
         }
     }
 
     @ViewBuilder private var uploadRow: some View {
-        switch upload {
+        switch session.upload {
         case .sending(let p):
             VStack(alignment: .leading, spacing: 6) {
                 HStack {
@@ -429,29 +479,56 @@ private struct DoneCard: View {
                 ProgressView(value: p).tint(.brandMint)
             }
         case .sent(let path):
-            Label {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Sent to Mint").font(.system(.subheadline, design: .rounded).weight(.semibold))
-                    Text(path).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+            VStack(alignment: .leading, spacing: 12) {
+                Label {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Sent to Mint").font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        Text(path).font(.system(.caption, design: .monospaced)).foregroundStyle(.secondary).lineLimit(1).truncationMode(.middle)
+                    }
+                } icon: {
+                    Image(systemName: "checkmark.icloud.fill").foregroundStyle(Color.brandMint)
                 }
-            } icon: {
-                Image(systemName: "checkmark.icloud.fill").foregroundStyle(Color.brandMint)
+                newItemButton
             }
         case .failed(let message):
-            HStack {
-                Label(message, systemImage: "exclamationmark.icloud").font(.footnote).foregroundStyle(Color.brandAmber).lineLimit(2)
-                Spacer()
-                Button("Retry", action: retry).font(.subheadline.weight(.semibold))
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Label(message, systemImage: "exclamationmark.icloud").font(.footnote).foregroundStyle(Color.brandAmber).lineLimit(3)
+                    Spacer()
+                    Button("Retry", action: session.retryUpload).font(.subheadline.weight(.semibold))
+                }
+                HStack(spacing: 12) { shareButton; newItemButton }
             }
         case .notConfigured:
-            Label("Saved on this phone. Uploads aren't set up yet, so share it instead.", systemImage: "internaldrive")
-                .font(.footnote).foregroundStyle(.secondary)
+            VStack(alignment: .leading, spacing: 12) {
+                Label("Saved on this phone. Uploads aren't set up yet, so share it instead.", systemImage: "internaldrive")
+                    .font(.footnote).foregroundStyle(.secondary)
+                HStack(spacing: 12) { shareButton; newItemButton }
+            }
+        case .idle:
+            EmptyView()
         }
+    }
+
+    @ViewBuilder private var shareButton: some View {
+        if let zipURL {
+            ShareLink(item: zipURL) {
+                Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 46)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    private var newItemButton: some View {
+        Button(action: session.newItem) {
+            Text("New item").fontWeight(.semibold).frame(maxWidth: .infinity, minHeight: 46)
+        }
+        .buttonStyle(.borderedProminent).tint(.brandMint).foregroundStyle(Color.brandStageBg)
     }
 }
 
 enum ScanExport {
-    /// Zips a scan folder (NSFileCoordinator's built-in zipping) into Documents/exports/mint-{id}.zip.
+    /// Zips a scan folder, every pass (NSFileCoordinator's built-in zipping), into Documents/exports/mint-{id}.zip.
     static func zip(directory: URL, scanID: String) throws -> URL {
         let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let exports = docs.appendingPathComponent("exports", isDirectory: true)

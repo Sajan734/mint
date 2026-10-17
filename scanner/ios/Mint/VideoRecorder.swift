@@ -4,7 +4,8 @@ import CoreImage
 import CoverageKit
 import VideoToolbox
 
-/// Writes one scan to Documents/scans/{scan_id}/:
+/// Writes one pass of a scan to Documents/scans/{scan_id}/pass{n}/ (an item can have several passes,
+/// e.g. upright then flipped over; they share the scan_id):
 ///   video.mp4     960×720 H.264, sensor (landscape) orientation, no B-frames; frame n ↔ poses.jsonl line n
 ///   poses.jsonl   one PoseRecord per video frame (raw ARKit camera pose + K for the video's pixels)
 ///   capture.json  session info
@@ -16,6 +17,7 @@ final class VideoRecorder {
     struct Summary: Equatable {
         let directory: URL
         let scanID: String
+        let pass: Int
         let seconds: Double
         let frames: Int
         let megabytes: Double
@@ -28,7 +30,8 @@ final class VideoRecorder {
         let sharpness: Double
     }
 
-    let scanID = UUID().uuidString.lowercased()
+    let scanID: String
+    let pass: Int
     let directory: URL
 
     private let writer: AVAssetWriter
@@ -41,9 +44,10 @@ final class VideoRecorder {
     private var lastTimestamp: TimeInterval = 0
     private var frameIndex = 0
 
-    init() throws {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        directory = docs.appendingPathComponent("scans/\(scanID)", isDirectory: true)
+    init(scanID: String, pass: Int) throws {
+        self.scanID = scanID
+        self.pass = pass
+        directory = Self.folder(scanID: scanID).appendingPathComponent("pass\(pass)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         writer = try AVAssetWriter(outputURL: directory.appendingPathComponent("video.mp4"), fileType: .mp4)
@@ -107,8 +111,13 @@ final class VideoRecorder {
         frameIndex += 1
     }
 
+    /// Where all passes of a scan live on the phone.
+    static func folder(scanID: String) -> URL {
+        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0].appendingPathComponent("scans/\(scanID)", isDirectory: true)
+    }
+
     /// Closes the video and writes capture.json. `completion` runs on the main queue.
-    func finish(sensorSize: CGSize, exposureLocked: Bool, completion: @escaping (Result<Summary, Error>) -> Void) {
+    func finish(sensorSize: CGSize, exposureLocked: Bool, coveragePct: Int, completion: @escaping (Result<Summary, Error>) -> Void) {
         input.markAsFinished()
         try? poseHandle.close()
         let frames = frameIndex
@@ -117,15 +126,17 @@ final class VideoRecorder {
             let result = Result<Summary, Error> {
                 guard writer.status == .completed else { throw RecorderError(writer.error?.localizedDescription ?? "video didn't finish") }
                 let createdAt = ISO8601DateFormatter().string(from: startDate)
-                let info = CaptureInfo(
+                var info = CaptureInfo(
                     scan_id: scanID, device: Self.deviceModel(), os: UIDevice.current.systemVersion, created_at: createdAt,
                     duration_ms: Int((seconds * 1000).rounded()), video: "video.mp4",
                     video_width: Int(Self.videoSize.width), video_height: Int(Self.videoSize.height), video_frames: frames,
                     sensor_width: Int(sensorSize.width), sensor_height: Int(sensorSize.height), orientation: "sensor_landscape",
                     exposure_locked: exposureLocked, mode: "turntable"
                 )
+                info.coverage_pct = coveragePct
+                info.pass = pass
                 try CaptureJSON.encode(info, pretty: true).write(to: directory.appendingPathComponent("capture.json"))
-                return Summary(directory: directory, scanID: scanID, seconds: seconds, frames: frames,
+                return Summary(directory: directory, scanID: scanID, pass: pass, seconds: seconds, frames: frames,
                                megabytes: Double(Self.folderSize(directory)) / 1_000_000)
             }
             DispatchQueue.main.async { completion(result) }

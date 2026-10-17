@@ -1,6 +1,6 @@
 # Supabase for the scanner
 
-The app uploads each scan to Storage, bucket **`scans`**, as `scans/{scan_id}/video.mp4` (+ `poses.jsonl`, `capture.json`, `thumb.jpg`). The app holds **no keys**: it asks the `scan-upload` Edge Function for one-time signed upload URLs, then PUTs the files.
+The app uploads each item to Storage, bucket **`scans`**, as `scans/{scan_id}/video.mp4` (+ `poses.jsonl`, `capture.json`, `thumb.jpg`), and any further passes as `bottom.mp4` (+ `bottom.poses.jsonl`, `bottom.capture.json`), `pass3.mp4`, … (see [../HANDOFF.md](../HANDOFF.md)). `video.mp4` goes last because it triggers the pipeline. The app holds **no keys**: it asks the `scan-upload` Edge Function for one-time signed upload URLs, then PUTs the files.
 
 ## One-time setup (~5 minutes)
 
@@ -27,5 +27,5 @@ python3 scanner/tools/fetch_scan.py latest ./scans
 
 ## Notes
 
-- The function only signs `video.mp4`, `poses.jsonl`, `capture.json`, `thumb.jpg` under a UUID folder, and the bucket only accepts those types up to 200 MB. It's open to anyone with its URL (fine for a hackathon; delete or add auth afterwards).
+- The function only signs pass files (`video.mp4`, `poses.jsonl`, `capture.json`, `thumb.jpg`, `bottom.*`, `pass3.*`…`pass19.*`) under a UUID folder, and the bucket only accepts those types up to 200 MB. It's open to anyone with its URL (fine for a hackathon; delete or add auth afterwards).
 - Per CLAUDE.md, D owns the team's Supabase schema; at merge this bucket + function fold into the team project (or the API's `POST /scans`).
