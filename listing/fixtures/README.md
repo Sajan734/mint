@@ -23,4 +23,4 @@ itemNN/
 
 item02 has stubs only for the stages before `match_gate`, because the pipeline stops there.
 
-`match_gate.json` holds only the two Jev scores. The verdict and the seller-facing reason are computed in code (`stages/match_gate.py`).
+`match_gate.json` holds per-view Jev answers (`item_usable`, `same_category`, `same_product` for each of the 12 views), in the same format the live stage saves to `runs/<item>/match_gate_raw.json`. The aggregation, verdict and seller-facing reason are computed in code (`stages/match_gate.py`), and `scripts/replay_match_gate.py` re-applies thresholds to stubs and saved runs.

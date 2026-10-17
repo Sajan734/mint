@@ -4,7 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from contracts import Baseline, Condition, Identity, ListingDraft, ReferencePrice, Views
-from stages.match_gate import _GateScores
+from stages.match_gate import GateRaw
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
 
@@ -12,7 +12,7 @@ STUB_MODELS = {
     "render": Views,
     "identify": Identity,
     "baseline_lookup": Baseline,
-    "match_gate": _GateScores,
+    "match_gate": GateRaw,
     "listing_text": ListingDraft,
     "reference_price": ReferencePrice,
     "condition": Condition,

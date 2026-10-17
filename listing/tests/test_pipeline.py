@@ -41,7 +41,9 @@ def test_item02_gives_rejection(tmp_path):
 def test_uncertain_gate_continues_with_seller_check(tmp_path):
     item_dir = tmp_path / "item_uncertain"
     shutil.copytree(FIXTURES / "item01", item_dir)
-    (item_dir / "stubs" / "match_gate.json").write_text(json.dumps({"same_category": 0.9, "same_product": 0.55}))
+    views = [{"view_id": f"v{i:02d}", "item_usable": 0.9, "same_category": 0.9, "same_product": 0.45}
+             for i in range(12)]  # same_product between mismatch (0.30) and match (0.60)
+    (item_dir / "stubs" / "match_gate.json").write_text(json.dumps({"views": views}))
     result = run(item_dir, tmp_path)
     assert isinstance(result, Listing)
     assert result.needs_seller_check is True
