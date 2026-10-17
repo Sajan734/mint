@@ -108,7 +108,7 @@ def _fit(R0, s0, t0, pa, pb, sil_a, sil_b, steps, lr, ha):
     return R.detach(), s.detach(), t.detach(), loss.detach()
 
 
-def register(a: dict, b: dict, n_yaw: int = 24, coarse_steps: int = 200, fine_steps: int = 200):
+def register(a: dict, b: dict, n_yaw: int = 24, coarse_steps: int = 120, fine_steps: int = 120):
     """4x4 similarity mapping capture b's scan frame into capture a's, plus health stats."""
     pa, pb = a["pts"], b["pts"]
     ha, hb = float(pa[:, 1].quantile(0.98)), float(pb[:, 1].quantile(0.98))

@@ -6,7 +6,8 @@
 
 For the demo use the deployed app instead (no cold start): see client.py.
 
-Outputs land in out/<name>/: splat.ply plus debug JPEGs and timings.json.
+Outputs land in out/<name>/: splat.spz (~3 MB; add --ply for the ~39 MB .ply) plus debug media and run.json.
+--gpu H100 roughly halves the pose stage; --scale 1.0 trains at full video resolution (sharpest).
 """
 import json
 import time
@@ -38,6 +39,10 @@ image = (
     # SAM 2's build pins a newer torch; build against the installed one, skip its optional CUDA op
     .run_commands("SAM2_BUILD_CUDA=0 pip install --no-deps --no-build-isolation "
                   "'git+https://github.com/facebookresearch/sam2.git'")
+    # Niantic's reference SPZ writer (pinned); builds its C++ core with CMake
+    .pip_install("cmake>=3.24", "ninja")
+    .apt_install("zlib1g-dev")
+    .run_commands("pip install 'spz @ git+https://github.com/nianticlabs/spz.git@affd0ecea7fbb4c265ee119475af7ee5b2997482'")
     .add_local_python_source("mintsplat")
 )
 
@@ -75,16 +80,17 @@ class Splatter:
 @app.local_entrypoint()
 def main(video: str, video2: str = "", name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 1000,
          batch: int = 4, cap: int = 200_000, scale: float = 0.75,
-         debug: bool = True, app_lr: float = 0.0, sh: int = 3, train_json: str = ""):
+         debug: bool = True, ply: bool = False, spz_sweep: bool = False, gpu: str = "", app_lr: float = 0.0, sh: int = 3, train_json: str = ""):
     src = Path(video)
     out_dir = Path("out") / (name or src.stem)
-    cfg = {"n_frames": n_frames, "stop_after": stop_after or None, "debug": debug,
+    cfg = {"n_frames": n_frames, "stop_after": stop_after or None, "debug": debug, "ply": ply, "spz_sweep": spz_sweep,
            "train": {"iters": iters, "batch": batch, "cap_max": cap, "train_scale": scale,
                      "appearance_lr": app_lr, "sh_degree": sh, **json.loads(train_json or "{}")}}
 
     t0 = time.perf_counter()
     payload = [src.read_bytes(), Path(video2).read_bytes()] if video2 else src.read_bytes()
-    res = Splatter().run.remote(payload, cfg)
+    cls = Splatter.with_options(gpu=gpu) if gpu else Splatter  # e.g. --gpu H100 to compare
+    res = cls().run.remote(payload, cfg)
     from client import save
 
     save(res, out_dir, time.perf_counter() - t0)

@@ -75,3 +75,58 @@ def to_ply(params, keep) -> bytes:
     buf = io.BytesIO()
     PlyData([PlyElement.describe(arr, "vertex")], text=False).write(buf)
     return buf.getvalue()
+
+
+def _cloud(params, keep, sh_degree: int):
+    import spz
+
+    n = int(keep.sum())
+    q = params["quats"][keep]
+    q = q / q.norm(dim=1, keepdim=True)
+    n_sh = (sh_degree + 1) ** 2 - 1
+    cloud = spz.GaussianCloud()
+    cloud.sh_degree = sh_degree
+    cloud.antialiased = False
+    cloud.positions = params["means"][keep].float().cpu().numpy().reshape(-1)
+    cloud.scales = params["scales"][keep].float().cpu().numpy().reshape(-1)
+    cloud.rotations = q[:, [1, 2, 3, 0]].float().cpu().numpy().reshape(-1)  # gsplat wxyz -> spz xyzw
+    cloud.alphas = params["opacities"][keep].float().cpu().numpy().reshape(-1)  # logits
+    cloud.colors = params["sh0"][keep][:, 0, :].float().cpu().numpy().reshape(-1)  # SH DC, not RGB
+    if n_sh:
+        # spz wants coefficient-major, channel-inner: exactly gsplat's (N, n_sh, 3) layout
+        cloud.sh = params["shN"][keep][:, :n_sh, :].float().cpu().numpy().reshape(-1)
+    assert cloud.num_points == n
+    return cloud
+
+
+@torch.no_grad()
+def to_spz(params, keep, sh_degree: int = 3, version: int = 3, sh1_bits: int = 6, sh_rest_bits: int = 5) -> bytes:
+    """Niantic SPZ (quantised + compressed, ~10x smaller than PLY). Our scan frame is right-handed
+    +Y up, i.e. SPZ's native RUB, so nothing is flipped. Version 3 (gzip) because viewers such as
+    Spark 2.1 predate the v4 (zstd) container. SH bits 6/5 instead of the library's 5/4: measured
+    on held-out views, 5/4 cost 0.76 dB PSNR for 2.4 MB, 6/5 costs 0.13 dB for 2.95 MB."""
+    import spz
+
+    opts = spz.PackOptions()
+    opts.from_coord = spz.CoordinateSystem.RUB
+    opts.version = version
+    opts.sh1_bits, opts.sh_rest_bits = sh1_bits, sh_rest_bits
+    return spz.save_spz_to_buffer(_cloud(params, keep, sh_degree), opts)
+
+
+@torch.no_grad()
+def from_spz(data: bytes) -> dict:
+    """Decode an SPZ back into gsplat-style tensors (for checking what the viewer will get)."""
+    import spz
+
+    opts = spz.UnpackOptions()
+    opts.to_coord = spz.CoordinateSystem.RUB
+    c = spz.load_spz_from_buffer(data, opts)
+    t = lambda a, *shape: torch.from_numpy(np.asarray(a, np.float32).copy()).cuda().view(*shape)
+    n, n_sh = c.num_points, (c.sh_degree + 1) ** 2 - 1
+    rot = t(c.rotations, n, 4)
+    shN = torch.zeros(n, 15, 3, device="cuda")
+    if n_sh:
+        shN[:, :n_sh] = t(c.sh, n, n_sh, 3)
+    return {"means": t(c.positions, n, 3), "scales": t(c.scales, n, 3), "quats": rot[:, [3, 0, 1, 2]],
+            "opacities": t(c.alphas, n), "sh0": t(c.colors, n, 1, 3), "shN": shN}

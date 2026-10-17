@@ -29,6 +29,7 @@ DEFAULTS = {
     "pose_lr": 1e-4,
     "appearance_lr": 0.0,  # >0 enables per-view colour correction (slightly smoother, ~+4 s)
     "appearance_reg": 0.1,
+    "session_reg": 0.05,
     "session_split": None,  # views >= this index come from a 2nd video: learn one gain/offset for them
     "pose_start": 100,
     "init_scale": 0.5,
@@ -42,7 +43,8 @@ def _ssim_window(device):
 
 
 def ssim_map(a, b, win):
-    """a, b: (1,3,H,W) in [0,1] -> per-pixel SSIM (1,3,H,W)."""
+    """a, b: (B,3,H,W) in [0,1] -> per-pixel SSIM (B,3,H,W). (A separable version with one
+    concatenated 15-channel blur was tried and was slower: the concat costs more than it saves.)"""
     mu_a, mu_b = F.conv2d(a, win, padding=5, groups=3), F.conv2d(b, win, padding=5, groups=3)
     s_aa = F.conv2d(a * a, win, padding=5, groups=3) - mu_a ** 2
     s_bb = F.conv2d(b * b, win, padding=5, groups=3) - mu_b ** 2
@@ -159,6 +161,7 @@ def split_views(n: int, every: int) -> tuple[list[int], list[int]]:
 def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     from gsplat.strategy import MCMCStrategy
 
+    torch.backends.cudnn.benchmark = True  # fixed crop/batch sizes: let cuDNN pick its fastest conv
     cfg = {**DEFAULTS, **(cfg or {})}
     iters, B = cfg["iters"], cfg["batch"]
     torch.manual_seed(0)
@@ -200,18 +203,29 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     cam_opt = torch.optim.Adam([{"params": [cam_delta], "lr": cfg["pose_lr"] * B ** 0.5},
                                 {"params": [app_A, app_b], "lr": cfg["appearance_lr"] * B ** 0.5}])
     use_app = cfg["appearance_lr"] > 0
-    # 2nd video was lit differently (object flipped, phone re-exposed): one per-channel gain + offset
-    # for all of its views, the 1st video is the colour reference
+    # 2nd video was lit differently (object flipped, phone re-exposed): one per-channel gain for all
+    # of its views; the 1st video is the colour reference. Gain only, regularised and clamped:
+    # surfaces only the 2nd video sees (the underside) can trade "darker gain, brighter splat"
+    # freely, and a free offset drifted far enough to tint the underside brown.
     split = cfg["session_split"]
     sess_gain = torch.nn.Parameter(torch.zeros(3, device="cuda"))
-    sess_bias = torch.nn.Parameter(torch.zeros(3, device="cuda"))
-    sess_opt = torch.optim.Adam([sess_gain, sess_bias], lr=2e-3 * B ** 0.5)
+    sess_opt = torch.optim.Adam([sess_gain], lr=1e-3 * B ** 0.5)
     zero_bg = torch.zeros(B, 3, device="cuda")
 
     win = _ssim_window("cuda")
     tid = torch.tensor(train_ids, device="cuda")
     sh_every = max(1, int(iters * 0.4) // max(1, cfg["sh_degree"]))
+    prof = None
     for step in range(iters):
+        if cfg.get("profile") and step in (300, 340):  # profile 40 steps mid-training
+            if step == 300:
+                prof = torch.profiler.profile(activities=[torch.profiler.ProfilerActivity.CPU,
+                                                          torch.profiler.ProfilerActivity.CUDA])
+                prof.__enter__()
+            else:
+                torch.cuda.synchronize()
+                prof.__exit__(None, None, None)
+                print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=18), flush=True)
         v = tid[torch.randint(len(tid), (B,), device="cuda")]
         if step >= cfg["pose_start"]:
             viewmats = torch.stack([rigid_inv(T) for T in c2w[v] @ se3_exp(cam_delta[v])])
@@ -225,7 +239,7 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
             rgb = torch.einsum("bij,bhwj->bhwi", app_A[v], rgb) + app_b[v][:, None, None] * a3
         if split is not None:
             sb = (v >= split).float()[:, None, None, None]
-            rgb = rgb * (1 + sb * sess_gain) + sb * sess_bias * a3
+            rgb = rgb * (1 + sb * sess_gain.clamp(-0.2, 0.25))
         rgb = rgb + bg[:, None, None] * (1 - a3)
 
         m, w = views["mask"][v][..., None], views["weight"][v][..., None]
@@ -241,6 +255,8 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         if use_app:  # keep the corrections small so the splat's own colours stay the canonical ones
             loss = loss + cfg["appearance_reg"] * (((app_A[v] - torch.eye(3, device="cuda")) ** 2).mean()
                                                    + (app_b[v] ** 2).mean())
+        if split is not None:
+            loss = loss + cfg["session_reg"] * (sess_gain ** 2).mean()
 
         strategy.step_pre_backward(params, optimizers, state, step, info)
         loss.backward()
@@ -262,7 +278,7 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         refined = c2w.clone()
         refined[train_ids] = c2w[train_ids] @ se3_exp(cam_delta[train_ids])
         if split is not None:
-            print(f"  2nd-video colour gain {(1 + sess_gain).tolist()} offset {sess_bias.tolist()}", flush=True)
+            print(f"  2nd-video colour gain {(1 + sess_gain.clamp(-0.2, 0.25)).tolist()}", flush=True)
     return params, refined, views, train_ids, test_ids
 
 

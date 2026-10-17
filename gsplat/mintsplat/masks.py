@@ -1,6 +1,3 @@
-import os
-import tempfile
-
 import cv2
 import numpy as np
 
@@ -43,15 +40,24 @@ class Segmenter:
         self.pred = SAM2VideoPredictor.from_pretrained(model_id)
 
     def __call__(self, frames: list[np.ndarray], box: list[float] | None = None) -> list[np.ndarray]:
+        import sam2.sam2_video_predictor as vp
         import torch
 
         h, w = frames[0].shape[:2]
-        with tempfile.TemporaryDirectory() as d:
-            for i, f in enumerate(frames):
-                cv2.imwrite(os.path.join(d, f"{i:05d}.jpg"), cv2.cvtColor(f, cv2.COLOR_RGB2BGR),
-                            [cv2.IMWRITE_JPEG_QUALITY, 95])
+        size = self.pred.image_size
+        # Same preprocessing as SAM 2's JPEG-folder loader (square resize, ImageNet norm), done on
+        # the GPU straight from memory instead of a JPEG write + read round trip (~2-3 s / video).
+        x = torch.from_numpy(np.stack(frames)).cuda().permute(0, 3, 1, 2).float() / 255
+        x = torch.nn.functional.interpolate(x, size=(size, size), mode="bicubic", antialias=True).clamp(0, 1)
+        mean = torch.tensor([0.485, 0.456, 0.406], device="cuda")[:, None, None]
+        std = torch.tensor([0.229, 0.224, 0.225], device="cuda")[:, None, None]
+        images = (x - mean) / std
+
+        loader = vp.load_video_frames
+        vp.load_video_frames = lambda **_: (images, h, w)
+        try:
             with torch.inference_mode(), torch.autocast("cuda", dtype=torch.bfloat16):
-                state = self.pred.init_state(video_path=d)
+                state = self.pred.init_state(video_path="<in-memory>")
                 if box is not None:
                     self.pred.add_new_points_or_box(state, frame_idx=0, obj_id=1, box=np.array(box, np.float32))
                 else:
@@ -63,8 +69,10 @@ class Segmenter:
                                                     labels=np.ones(len(pts), np.int32))
                 out: dict[int, np.ndarray] = {}
                 for fi, _, logits in self.pred.propagate_in_video(state):
-                    out[fi] = (logits[0, 0] > 0).float().cpu().numpy() > 0
+                    out[fi] = (logits[0, 0] > 0).cpu().numpy()
                 self.pred.reset_state(state)
+        finally:
+            vp.load_video_frames = loader
         return [clean(out[i]) for i in range(len(frames))]
 
 

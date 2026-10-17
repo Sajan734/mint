@@ -74,8 +74,13 @@ def align_transform(n: np.ndarray, plane_pt: np.ndarray, obj_ctr: np.ndarray, ca
 
 def estimate(model, frames: list[np.ndarray], masks: list[np.ndarray], n_init: int = 120_000):
     """Everything downstream needs: aligned c2w (N,4,4), K (N,3,3) full-res, init points + colours."""
+    import time
+
     dev = "cuda"
+    t0 = time.perf_counter()
     ext, K, K_small, depth, conf, (W, H) = run_vggt(model, frames)
+    torch.cuda.synchronize()
+    t_vggt = time.perf_counter() - t0
     N = len(frames)
 
     obj_P, obj_C, bg_P = [], [], []
@@ -112,7 +117,8 @@ def estimate(model, frames: list[np.ndarray], masks: list[np.ndarray], n_init: i
 
     sel = torch.randperm(len(obj_P), device=dev)[:n_init]
     stats = {"plane_inlier_frac": round(float(inlier_frac), 3), "object_radius": round(obj_r, 4),
-             "init_points": int(len(sel)), "vggt_res": [W, H]}
+             "init_points": int(len(sel)), "vggt_res": [W, H],
+             "vggt_s": round(t_vggt, 2), "post_s": round(time.perf_counter() - t0 - t_vggt, 2)}
     return torch.from_numpy(c2w).float().to(dev), K.to(dev), obj_P[sel], obj_C[sel], stats
 
 
