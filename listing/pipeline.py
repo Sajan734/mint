@@ -128,7 +128,7 @@ async def run_pipeline(
             run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity, seller_name),
             run_stage(ctx, "condition", Condition, condition, views, baseline),
         )
-        result = await run_stage(ctx, "finalize", Listing, finalize, views, match, draft, reference, cond)
+        result = await run_stage(ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond)
 
     write_json(ctx.run_dir / "result.json", result)
     return result

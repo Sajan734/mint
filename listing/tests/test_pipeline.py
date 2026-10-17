@@ -112,7 +112,7 @@ def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
 
     result = run(item_dir, tmp_path)
     assert isinstance(result, Listing)
-    assert result.price_cad == 207 and result.condition_grade == "light_wear"
+    assert result.price_cad == 150 and result.condition_grade == "light_wear"
     assert result.needs_seller_check is True
     assert len(asked) == 12 and all(b is None for b in asked)
 
@@ -137,8 +137,8 @@ def test_seller_name_reaches_reference_price(tmp_path, monkeypatch):
     result = run(item_dir, tmp_path)
     assert isinstance(result, Listing)
     assert len(prompts) == 1 and "Sony WH-1000XM4 Midnight Blue" in prompts[0]
-    assert result.price_cad == 284  # 450 x 0.70 new_retail x 0.90 light_wear, rounded
-    assert any("Search-grounded" in line for line in result.price_justification)
+    assert result.price_cad == 295  # 450 x 0.65 light_wear = 292.50, rounded to the nearest $5
+    assert "new price at about $450.00" in result.price_justification[0]
 
 
 def test_demo_mode_reads_cache_first(tmp_path):

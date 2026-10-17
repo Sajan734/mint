@@ -1,45 +1,35 @@
-"""finalize: everything -> Listing. The price is computed here, in code."""
+"""finalize: everything -> Listing. The price is computed here, in code.
+
+Price = reference price x condition factor x (1 - penalty) per priced defect, rounded to the nearest $5,
+never below the floor. The same factors feed the justification sentence, so it always shows the real numbers.
+"""
 
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
 
 from contracts import (
+    Baseline,
     Condition,
     Defect,
-    Grade,
     Listing,
     ListingDraft,
     MatchCheck,
     ReferencePrice,
     RunContext,
+    View,
     Views,
 )
 
-# Placeholder factors, to be tuned against real outputs.
+# Starting values, to be tuned against real outputs. Defect kinds without a penalty aren't priced.
 PRICE = {
-    "basis_factor": {"new_retail": 0.70, "used_comps": 1.00, "llm_estimate": 0.70},
-    "grade_factor": {"like_new": 1.00, "light_wear": 0.90, "moderate_wear": 0.75, "heavy_wear": 0.55},
-    "min_price_cad": 5,
+    "grade_factor": {"like_new": 0.80, "light_wear": 0.65, "moderate_wear": 0.50, "heavy_wear": 0.30},
+    "defect_penalty": {"missing_part": 0.25, "crack": 0.15, "stain": 0.08, "scratch": 0.05},
+    "defect_min_score": 0.60,  # defects scored below this are neither noted nor priced
+    "round_to_cad": 5,
+    "floor_cad": 5,
 }
 
-DEFECT_NOTE_MIN = 0.60  # defects scored below this are left out of buyer notes
-
-DEFECT_PHRASES = {
-    "scratch": "Scratch",
-    "scuff": "Scuff",
-    "dent": "Dent",
-    "crack": "Crack",
-    "stain": "Stain",
-    "discoloration": "Discolouration",
-    "wear": "Signs of wear",
-    "missing_part": "Missing part",
-    "other": "Other mark",
-}
-
-NO_DEFECTS_NOTE = "No notable defects found."
-
-BASIS_LABELS = {"new_retail": "new retail", "used_comps": "used sales", "llm_estimate": "estimate"}
 GRADE_LABELS = {
     "like_new": "like new",
     "light_wear": "light wear",
@@ -47,45 +37,110 @@ GRADE_LABELS = {
     "heavy_wear": "heavy wear",
 }
 
-PREVIEW_VIEW_IDS = ["v00", "v02", "v04", "v06"]  # front, right, back, left at the low ring
+# What Jev was asked about for each kind condition reports, so notes don't claim more than was checked.
+DEFECT_NOUNS = {
+    "scratch": "scratches or scuffs",
+    "scuff": "a scuff",
+    "dent": "a dent",
+    "crack": "a crack or tear",
+    "stain": "stains or discolouration",
+    "discoloration": "discolouration",
+    "wear": "signs of wear",
+    "missing_part": "a missing or broken part",
+    "other": "a mark",
+}
 
+REFERENCE_OPENINGS = {
+    "new_retail": "We estimate the new price at about ${amount:,.2f}",
+    "used_comps": "We estimate the used market price at about ${amount:,.2f}",
+    "llm_estimate": "Our rough estimate of the new price is about ${amount:,.2f}",
+}
+
+PREVIEW_VIEW_IDS = ["v00", "v02", "v04", "v06"]  # front, right, back, left on the low ring
+
+NO_DEFECTS_NOTE = "No defects stood out in any view."
+NO_BASELINE_REASON = "We found no reference photo of this product, so condition was judged from the scan alone."
 CONDITION_CHECK_REASON = "Condition needs a quick check before publishing."
 
-
-def compute_price(reference: ReferencePrice, grade: Grade) -> tuple[int, list[str]]:
-    basis_factor = PRICE["basis_factor"][reference.basis]
-    grade_factor = PRICE["grade_factor"][grade]
-    raw = Decimal(str(reference.amount_cad)) * Decimal(str(basis_factor)) * Decimal(str(grade_factor))
-    price = int(raw.quantize(Decimal("1"), rounding=ROUND_HALF_UP))
-    price = max(price, PRICE["min_price_cad"])
-    lines = [
-        f"Reference: ${reference.amount_cad:,.2f} CAD ({BASIS_LABELS[reference.basis]}). {reference.note}",
-        f"Basis adjustment ({BASIS_LABELS[reference.basis]}): x{basis_factor:.2f}",
-        f"Condition ({GRADE_LABELS[grade]}): x{grade_factor:.2f}",
-        f"Asking price: ${price:,} CAD",
-    ]
-    return price, lines
+Factor = tuple[str, Decimal]  # (what it's for, multiplier)
 
 
-def build_notes(defects: list[Defect]) -> list[str]:
-    shown = sorted((d for d in defects if d.score >= DEFECT_NOTE_MIN), key=lambda d: -d.score)
-    notes = []
-    for d in shown:
-        n = len(d.view_ids)
-        notes.append(f"{DEFECT_PHRASES[d.kind]} (seen in {n} view{'' if n == 1 else 's'})")
-    return notes or [NO_DEFECTS_NOTE]
+def views_by_id(views: Views, view_ids: list[str]) -> list[View]:
+    by_id = {v.view_id: v for v in views.views}
+    missing = [i for i in view_ids if i not in by_id]
+    if missing:
+        raise ValueError(f"no rendered view with id {', '.join(missing)}; rendered: {', '.join(by_id)}")
+    return [by_id[i] for i in view_ids]
+
+
+def noted_defects(defects: list[Defect]) -> list[Defect]:
+    """Defects confident enough to show buyers and to price, most confident first."""
+    return sorted((d for d in defects if d.score >= PRICE["defect_min_score"]), key=lambda d: -d.score)
+
+
+def defect_note(defect: Defect, views: Views) -> str:
+    noun = DEFECT_NOUNS[defect.kind]
+    labels = [v.label for v in views_by_id(views, defect.view_ids)]
+    if not labels:
+        return f"The condition check found {noun}, but no single view shows it clearly."
+    if len(labels) == 1:
+        return f"The {labels[0]} view shows {noun}."
+    return f"{len(labels)} views show {noun}: {'; '.join(labels)}."
+
+
+def build_notes(defects: list[Defect], views: Views) -> list[str]:
+    return [defect_note(d, views) for d in noted_defects(defects)] or [NO_DEFECTS_NOTE]
+
+
+def price_factors(condition: Condition) -> list[Factor]:
+    factors = [(GRADE_LABELS[condition.grade], Decimal(str(PRICE["grade_factor"][condition.grade])))]
+    for d in noted_defects(condition.defects):
+        penalty = PRICE["defect_penalty"].get(d.kind)
+        if penalty is not None:
+            factors.append((DEFECT_NOUNS[d.kind], 1 - Decimal(str(penalty))))
+    return factors
+
+
+def round_price(raw: Decimal) -> int:
+    step = Decimal(PRICE["round_to_cad"])
+    rounded = int((raw / step).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * step)
+    return max(rounded, PRICE["floor_cad"])
+
+
+def join_words(parts: list[str]) -> str:
+    return parts[0] if len(parts) == 1 else f"{', '.join(parts[:-1])} and {parts[-1]}"
+
+
+def justify_price(reference: ReferencePrice, factors: list[Factor], raw: Decimal, price: int) -> str:
+    opening = REFERENCE_OPENINGS[reference.basis].format(amount=reference.amount_cad)
+    steps = join_words([f"x {factor:.2f} for {label}" for label, factor in factors])
+    if price == PRICE["floor_cad"] and raw < price:
+        ending = f"which is below our ${price} minimum, so it's listed at ${price}"
+    else:
+        ending = f"rounded to ${price}"
+    return f"{opening}; {steps} gives ${raw:,.2f}, {ending}."
+
+
+def compute_price(reference: ReferencePrice, condition: Condition) -> tuple[int, str]:
+    """Returns (price in CAD, the one-sentence justification)."""
+    factors = price_factors(condition)
+    raw = Decimal(str(reference.amount_cad))
+    for _, factor in factors:
+        raw *= factor
+    price = round_price(raw)
+    return price, justify_price(reference, factors, raw, price)
 
 
 def pick_previews(views: Views) -> list[str]:
-    by_id = {v.view_id: v.image_path for v in views.views}
-    previews = [by_id[i] for i in PREVIEW_VIEW_IDS if i in by_id]
-    return previews or [v.image_path for v in views.views[: len(PREVIEW_VIEW_IDS)]]
+    return [v.image_path for v in views_by_id(views, PREVIEW_VIEW_IDS)]
 
 
-def seller_check_reasons(match: MatchCheck, condition: Condition) -> list[str]:
+def seller_check_reasons(match: MatchCheck, baseline: Baseline, condition: Condition) -> list[str]:
     reasons = []
     if match.verdict == "uncertain":
         reasons.append(match.reason)
+    if baseline.image_path is None:
+        reasons.append(NO_BASELINE_REASON)
     if condition.needs_seller_check:
         reasons.append(CONDITION_CHECK_REASON)
     return reasons
@@ -94,12 +149,13 @@ def seller_check_reasons(match: MatchCheck, condition: Condition) -> list[str]:
 def build_listing(
     views: Views,
     match: MatchCheck,
+    baseline: Baseline,
     draft: ListingDraft,
     reference: ReferencePrice,
     condition: Condition,
 ) -> Listing:
-    price, justification = compute_price(reference, condition.grade)
-    reasons = seller_check_reasons(match, condition)
+    price, justification = compute_price(reference, condition)
+    reasons = seller_check_reasons(match, baseline, condition)
     return Listing(
         item_id=views.item_id,
         title=draft.title,
@@ -107,9 +163,9 @@ def build_listing(
         attributes=draft.attributes,
         tags=draft.tags,
         condition_grade=condition.grade,
-        condition_notes=build_notes(condition.defects),
+        condition_notes=build_notes(condition.defects, views),
         price_cad=price,
-        price_justification=justification,
+        price_justification=[justification],
         preview_images=pick_previews(views),
         needs_seller_check=bool(reasons),
         seller_check_reasons=reasons,
@@ -120,8 +176,9 @@ async def finalize(
     ctx: RunContext,
     views: Views,
     match: MatchCheck,
+    baseline: Baseline,
     draft: ListingDraft,
     reference: ReferencePrice,
     condition: Condition,
 ) -> Listing:
-    return build_listing(views, match, draft, reference, condition)
+    return build_listing(views, match, baseline, draft, reference, condition)
