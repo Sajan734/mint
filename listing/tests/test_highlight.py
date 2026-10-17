@@ -11,18 +11,19 @@ from PIL import Image as PILImage, ImageDraw
 from pydantic import ValidationError
 
 import stages.highlight as hl
-from contracts import Baseline, Defect, DefectBox, View, Views
+from contracts import Baseline, Defect, DefectBox, DesignBox, Identity, View, Views
 from stages.highlight import (
     HIGHLIGHT,
     Box,
     Lifted,
-    boxes_schema,
     camera_diff,
+    design_overlap,
     ellipse_mask,
     kinds_by_view,
     parse_boxes,
     red_shares,
     select,
+    view_schema,
     widen,
 )
 from tests.test_splat_render import gaussians, ply_bytes
@@ -71,11 +72,25 @@ def test_parse_boxes_keeps_valid_boxes_of_the_asked_kinds():
     assert parse_boxes({}, ["scratch"], 4) == ([], [])
 
 
-def test_schema_offers_only_the_asked_kinds():
-    schema = boxes_schema(["scratch", "crack"])
-    box = schema["properties"]["boxes"]["items"]
-    assert box["properties"]["kind"]["enum"] == ["scratch", "crack"]
-    assert box["required"] == ["kind", "box_2d"]
+def test_schema_asks_for_design_first_and_only_the_asked_kinds():
+    schema = view_schema(["scratch", "crack"])
+    assert list(schema["properties"]) == ["design", "defects"] and schema["required"] == ["design", "defects"]
+    defect = schema["properties"]["defects"]["items"]
+    assert defect["properties"]["kind"]["enum"] == ["scratch", "crack"]
+    assert defect["required"] == ["kind", "box_2d"]
+    assert schema["properties"]["design"]["items"]["required"] == ["label", "box_2d"]
+
+
+@pytest.mark.parametrize(
+    "defect, designs, share",
+    [([100, 100, 200, 200], [], 0.0),
+     ([100, 100, 200, 200], [[50, 50, 250, 250]], 1.0),  # inside the logo
+     ([100, 100, 200, 200], [[150, 100, 300, 200]], 0.5),  # half on it
+     ([100, 100, 200, 200], [[300, 300, 400, 400], [100, 150, 200, 400]], 0.5)],  # the best of several
+)
+def test_design_overlap(defect, designs, share):
+    box = DefectBox(kind="scratch", box_2d=defect)
+    assert design_overlap(box, [DesignBox(label="ThinkPad", box_2d=d) for d in designs]) == pytest.approx(share)
 
 
 def make_views(n=4):
@@ -194,7 +209,8 @@ def test_camera_diff_is_zero_for_the_same_view_and_large_for_another():
 
 SETTINGS = HIGHLIGHT | {"lift_px": 32, "min_gaussians_per_mark": 1}
 SCRATCH = Defect(kind="scratch", score=0.8, view_ids=["v00"])
-BASELINE = Baseline(query="q", image_path=None, source="image_search")
+BASELINE = Baseline(query="q", image_path="baseline.jpg", source="manual")  # only the faked Gemini call reads it
+NO_BASELINE = Baseline(query="q", image_path=None, source="image_search")
 
 
 @pytest.fixture
@@ -220,11 +236,12 @@ def fake_lift(mask_item_px=20.0, seen_selected=10.0, stored_offset=0):
     return lift
 
 
-def patch(monkeypatch, boxes=((300, 300, 500, 500),), lift=None, calls=None):
-    async def locate(views, targets, baseline_path, t):
+def patch(monkeypatch, boxes=((300, 300, 500, 500),), lift=None, calls=None, designs=()):
+    async def locate(views, targets, baseline_path, t, identity=None):
         if calls is not None:
             calls.append([v.view_id for v in views])
-        return {v.view_id: [DefectBox(kind="scratch", box_2d=list(b)) for b in boxes] for v in views}, {"raw": "fake"}
+        return {v.view_id: ([DefectBox(kind="scratch", box_2d=list(b)) for b in boxes],
+                            [DesignBox(label="ThinkPad", box_2d=list(d)) for d in designs]) for v in views}, {"raw": "fake"}
 
     monkeypatch.setattr(hl, "locate", locate)
     monkeypatch.setattr(hl, "lift_masks", lift or fake_lift())
@@ -240,7 +257,7 @@ def test_stage_writes_a_tinted_copy_and_a_debug_sheet(scene, monkeypatch):
     patch(monkeypatch)
     result = run(scene)
     run_dir = scene[0] / "run"
-    assert result.produced
+    assert result.status == "produced"
     assert result.splat_path.endswith("splat_highlighted.ply")
     out = (run_dir / "splat_highlighted.ply").read_bytes()
     assert out != scene[1].read_bytes() and len(out) == len(scene[1].read_bytes())
@@ -261,7 +278,7 @@ def test_debug_render_failure_keeps_the_highlight(scene, monkeypatch):
 
     monkeypatch.setattr(hl, "render_pngs", offline)
     result = run(scene)
-    assert result.produced and (scene[0] / "run" / "highlight_sheet.png").is_file()
+    assert result.status == "produced" and (scene[0] / "run" / "highlight_sheet.png").is_file()
     raw = json.loads((scene[0] / "run" / "highlight_raw.json").read_text(encoding="utf-8"))
     assert "DNS lookup failed" in raw["debug_render_error"]
 
@@ -270,26 +287,26 @@ def test_no_noted_defects_skips_without_asking(scene, monkeypatch):
     calls = []
     patch(monkeypatch, calls=calls)
     result = run(scene, defects=())
-    assert not result.produced and "no defects were noted" in result.summary
+    assert result.status == "skipped" and "no defects were noted" in result.summary
     assert calls == []
 
 
 def test_defect_without_a_view_is_reported(scene, monkeypatch):
     patch(monkeypatch)
     result = run(scene, defects=(Defect(kind="stain", score=0.7, view_ids=[]),))
-    assert not result.produced and "no single view clearly shows" in result.summary
+    assert result.status == "skipped" and "no single view clearly shows" in result.summary
 
 
 def test_nothing_located_skips(scene, monkeypatch):
     patch(monkeypatch, boxes=())
     result = run(scene)
-    assert not result.produced and "couldn't be located in any view" in result.summary
+    assert result.status == "skipped" and "couldn't be located in any view" in result.summary
 
 
 def test_too_broad_box_skips(scene, monkeypatch):
     patch(monkeypatch, lift=fake_lift(mask_item_px=600.0))  # 60% of the item's 1000 px
     result = run(scene)
-    assert not result.produced
+    assert result.status == "skipped"
     assert "spread too widely to point at" in result.summary
     assert result.debug_sheet is not None  # the boxes are still drawn, for checking why
 
@@ -297,7 +314,7 @@ def test_too_broad_box_skips(scene, monkeypatch):
 def test_too_much_red_skips(scene, monkeypatch):
     patch(monkeypatch, lift=fake_lift(seen_selected=150.0))  # 300 of 1000 px would turn red
     result = run(scene)
-    assert not result.produced
+    assert result.status == "skipped"
     assert "30% of the item in the front, 10° above view" in result.summary
     assert "localisation probably went wrong" in result.summary
     assert not (scene[0] / "run" / "splat_highlighted.ply").exists()
@@ -307,13 +324,13 @@ def test_too_many_gaussians_skips(scene, monkeypatch):
     patch(monkeypatch)
     result = asyncio.run(hl.make_highlight(scene[1], "+y", scene[2], BASELINE, [SCRATCH], scene[0] / "run",
                                            SETTINGS | {"max_gaussian_share": 0.01}))
-    assert not result.produced and "2% of the item's Gaussians" in result.summary
+    assert result.status == "skipped" and "2% of the item's Gaussians" in result.summary
 
 
 def test_views_from_other_cameras_skip(scene, monkeypatch):
     patch(monkeypatch, lift=fake_lift(stored_offset=14))
     result = run(scene)
-    assert not result.produced and "doesn't match this splat's cameras" in result.summary
+    assert result.status == "skipped" and "doesn't match this splat's cameras" in result.summary
 
 
 def test_locate_asks_once_for_all_views(tmp_path, monkeypatch):
@@ -328,24 +345,64 @@ def test_locate_asks_once_for_all_views(tmp_path, monkeypatch):
 
     async def fake(contents, system_prompt, schema, **kwargs):
         calls.append(schema)
-        return GeminiReply(raw={"v00": [{"kind": "scratch", "box_2d": [1, 2, 30, 40]},
-                                        {"kind": "crack", "box_2d": [1, 2, 30, 40]}]},  # v01 missing
+        return GeminiReply(raw={"v00": {"design": [{"label": "ThinkPad", "box_2d": [5, 5, 9, 9]}],
+                                        "defects": [{"kind": "scratch", "box_2d": [1, 2, 30, 40]},
+                                                    {"kind": "crack", "box_2d": [1, 2, 30, 40]}]}},  # v01 missing
                            model="fake", latency_ms=1.0)
 
     monkeypatch.setattr(hl, "generate_json", fake)
-    found, record = asyncio.run(hl.locate(views, {"v00": ["scratch"], "v01": ["scratch", "crack"]}, None))
+    identity = Identity(category="mouse", brand="ThinkPad", visible_text=["ThinkPad"],
+                        attributes={"colour": "black"}, search_query="q", confidence=0.9)
+    found, record = asyncio.run(hl.locate(views, {"v00": ["scratch"], "v01": ["scratch", "crack"]}, None,
+                                          identity=identity))
     assert len(calls) == 1
     props = calls[0]["properties"]
-    assert props["v00"]["items"]["properties"]["kind"]["enum"] == ["scratch"]
-    assert props["v01"]["items"]["properties"]["kind"]["enum"] == ["scratch", "crack"]
-    assert [b.box_2d for b in found["v00"]] == [[1, 2, 30, 40]] and found["v01"] == []
+    assert props["v00"]["properties"]["defects"]["items"]["properties"]["kind"]["enum"] == ["scratch"]
+    assert props["v01"]["properties"]["defects"]["items"]["properties"]["kind"]["enum"] == ["scratch", "crack"]
+    defects, designs = found["v00"]
+    assert [b.box_2d for b in defects] == [[1, 2, 30, 40]] and [d.label for d in designs] == ["ThinkPad"]
+    assert found["v01"] == ([], [])
     assert record["dropped"]["v00"][0]["reason"] == "crack was not asked for in this view"
+
+
+def test_mark_on_printed_design_is_dropped_before_lifting(scene, monkeypatch):
+    """The real-scan case: the ThinkPad lettering boxed as a scratch. Gemini also boxes it as design, so it goes."""
+    lifts = []
+    patch(monkeypatch, designs=((280, 280, 520, 520),), lift=lambda *a: lifts.append(a))
+    result = run(scene)
+    assert result.status == "skipped"
+    assert "only found on the product's printed text or logos" in result.summary
+    assert lifts == []  # nothing left to lift
+    raw = json.loads((scene[0] / "run" / "highlight_raw.json").read_text(encoding="utf-8"))
+    assert raw["boxes"][0]["status"] == "on printed design" and raw["views"]["v00"]["design"] == ["ThinkPad"]
+    assert result.debug_sheet is not None
+
+
+def test_mark_next_to_printed_design_is_kept(scene, monkeypatch):
+    patch(monkeypatch, designs=((100, 100, 200, 200),))
+    assert run(scene).status == "produced"
+
+
+def test_without_a_baseline_a_mark_needs_a_second_view(scene, monkeypatch):
+    patch(monkeypatch)
+    out, splat, views = scene
+    result = asyncio.run(hl.make_highlight(splat, "+y", views, NO_BASELINE, [SCRATCH], out / "run", SETTINGS))
+    assert result.status == "skipped"
+    assert "no reference photo was found and no second view confirmed it" in result.summary
+
+
+def test_without_a_baseline_unchecked_boxes_are_dropped():
+    lift = lifted(SEEN, HIT, GAP)  # too little overlap between the views to check either box
+    assert hl.confirmed_boxes(lift, BOXES, [0, 1], {"scratch": [0, 1]})[0] == [0, 1]
+    assert hl.confirmed_boxes(lift, BOXES, [0, 1], {"scratch": [0, 1]}, need_evidence=True)[0] == []
+    checked = HIGHLIGHT | {"confirm_min_checked": 1}
+    assert hl.confirmed_boxes(lift, BOXES, [0, 1], {"scratch": [0, 1]}, checked, need_evidence=True)[0] == [0, 1]
 
 
 def test_gemini_failing_raises(scene, monkeypatch):
     patch(monkeypatch)
 
-    async def down(views, targets, baseline_path, t):
+    async def down(views, targets, baseline_path, t, identity=None):
         raise RuntimeError("Gemini is down")
 
     monkeypatch.setattr(hl, "locate", down)

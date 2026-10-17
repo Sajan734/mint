@@ -27,14 +27,14 @@ def test_item01_gives_listing(tmp_path):
     assert result.needs_seller_check is expected["needs_seller_check"]
     assert result.deal_rating.rating == expected["deal_rating"]
     assert result.deal_rating.asking_price_source == "suggested"
-    assert result.highlight.produced is expected["highlight_produced"]
+    assert result.highlight.status == expected["highlight_status"]
     written = {p.stem for p in (tmp_path / "runs" / "item01").glob("*.json")}
     assert written == {
         "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
         "highlight", "deal_rating", "finalize", "result",
     }
     saved = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text(encoding="utf-8"))
-    assert saved["deal_rating"]["rating"] == "fair" and saved["highlight"]["produced"] is False
+    assert saved["deal_rating"]["rating"] == "fair" and saved["highlight"]["status"] == "skipped"
 
 
 def test_item02_gives_rejection(tmp_path):
@@ -55,10 +55,10 @@ def test_highlight_failure_still_gives_listing(tmp_path, monkeypatch):
     monkeypatch.setattr(pipeline, "highlight", broken)
     result = run(FIXTURES / "item01", tmp_path)
     assert isinstance(result, Listing)
-    assert result.highlight.produced is False and result.highlight.splat_path is None
+    assert result.highlight.status == "failed" and result.highlight.splat_path is None
     assert "RuntimeError: Modal app isn't deployed" in result.highlight.summary
     saved = json.loads((tmp_path / "runs" / "item01" / "highlight.json").read_text(encoding="utf-8"))
-    assert saved["produced"] is False
+    assert saved["status"] == "failed"
 
 
 def test_highlight_failure_is_not_cached(tmp_path, monkeypatch):
@@ -73,15 +73,121 @@ def test_highlight_failure_is_not_cached(tmp_path, monkeypatch):
     assert not (tmp_path / "cache" / "item01" / "highlight.json").exists()
 
 
+def demo_run(tmp_path, item=FIXTURES / "item01", **kwargs):
+    return asyncio.run(run_pipeline(item, runs_root=tmp_path / "runs", cache_root=tmp_path / "cache",
+                                    **({"demo_mode": True} | kwargs)))
+
+
+def cached_stages(tmp_path, item_id="item01"):
+    """{stage: number of cache entries}; entries are <stage>.<key>.json."""
+    stages = [p.name.split(".")[0] for p in (tmp_path / "cache" / item_id).glob("*.json")]
+    return {s: stages.count(s) for s in stages}
+
+
 def test_cached_highlight_with_missing_file_is_reported(tmp_path):
     from contracts import Highlight
 
-    gone = Highlight(produced=True, splat_path="runs/item01/splat_highlighted.spz", summary="Marked a scuff.")
-    cache.put(tmp_path / "cache", "item01", "highlight", gone)
-    result = asyncio.run(run_pipeline(FIXTURES / "item01", runs_root=tmp_path / "runs", cache_root=tmp_path / "cache",
-                                      demo_mode=True))
-    assert result.highlight.produced is False
+    demo_run(tmp_path)  # fills the cache, including the (stub) highlight
+    entry = next((tmp_path / "cache" / "item01").glob("highlight.*.json"))
+    gone = Highlight(status="produced", splat_path="runs/item01/gone/splat_highlighted.spz", summary="Marked a scuff.")
+    entry.write_text(gone.model_dump_json())  # a cached result whose file is in neither runs/ nor the cache
+    result = demo_run(tmp_path)
+    assert result.highlight.status == "failed"
     assert "missing" in result.highlight.summary
+
+
+def fake_highlight_writing_a_file(calls):
+    from contracts import Highlight
+
+    async def fake(ctx, splat, views, baseline, identity, cond):
+        calls.append(ctx.item_id)
+        path = ctx.run_dir / "splat_highlighted.spz"
+        path.write_bytes(b"tinted splat")
+        return Highlight(status="produced", splat_path=str(path), summary="Marked scratches or scuffs in red.")
+
+    return fake
+
+
+def test_demo_cache_keeps_the_highlighted_splat(tmp_path, monkeypatch):
+    import pipeline
+
+    calls = []
+    monkeypatch.setattr(pipeline, "highlight", fake_highlight_writing_a_file(calls))
+    demo_run(tmp_path)
+    splat = tmp_path / "runs" / "item01" / "splat_highlighted.spz"
+    splat.unlink()  # e.g. runs/ was cleaned before the demo
+    result = demo_run(tmp_path)
+    assert calls == ["item01"]  # the second run came from the cache
+    assert result.highlight.status == "produced" and splat.read_bytes() == b"tinted splat"
+
+
+def test_offline_demo_needs_nothing_live(tmp_path, monkeypatch):
+    import pipeline
+
+    demo_run(tmp_path, asking_price_cad=120)
+    for name in ("render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price",
+                 "condition", "highlight"):
+        async def must_not_run(*args, name=name):
+            raise AssertionError(f"{name} ran in an offline demo")
+
+        monkeypatch.setattr(pipeline, name, must_not_run)
+    replay = demo_run(tmp_path, asking_price_cad=120, demo_offline=True)
+    assert replay.deal_rating.rating == "great"
+    other = demo_run(tmp_path, asking_price_cad=260, demo_offline=True)  # pure code, so a new price still works
+    assert other.deal_rating.rating == "overpriced"
+
+
+def test_offline_demo_reports_a_cold_stage(tmp_path):
+    from pipeline import DemoCacheMiss
+
+    with pytest.raises(DemoCacheMiss, match="'render'"):
+        demo_run(tmp_path, demo_offline=True)
+
+
+def test_seller_name_is_part_of_the_cache_key(tmp_path):
+    item_dir = tmp_path / "item01"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    demo_run(tmp_path, item=item_dir)
+    demo_run(tmp_path, item=item_dir, seller_name="Sony WH-1000XM4")
+    counts = cached_stages(tmp_path)
+    assert counts["render"] == counts["identify"] == 1  # not affected by the seller's name
+    assert counts["baseline_lookup"] == counts["reference_price"] == 2
+
+
+def test_listing_is_written_before_the_highlight_finishes(tmp_path, monkeypatch):
+    import pipeline
+    from contracts import Highlight
+
+    release = asyncio.Event()
+    seen = {}
+
+    async def slow_highlight(ctx, splat, views, baseline, identity, cond):
+        await release.wait()
+        return Highlight(status="skipped", summary="No highlighted splat: test.")
+
+    def posted(listing):
+        seen["status"] = listing.highlight.status
+        seen["file"] = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text())["highlight"]["status"]
+        release.set()
+
+    monkeypatch.setattr(pipeline, "highlight", slow_highlight)
+    result = run(FIXTURES / "item01", tmp_path, on_listing=posted)
+    assert seen == {"status": "pending", "file": "pending"}
+    assert result.highlight.status == "skipped"
+    final = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text())
+    assert final["highlight"]["status"] == "skipped" and final["deal_rating"]["rating"] == "fair"
+
+
+def test_a_quick_highlight_is_in_the_first_write(tmp_path):
+    seen = []
+    result = run(FIXTURES / "item01", tmp_path, on_listing=lambda listing: seen.append(listing.highlight.status))
+    assert seen == ["skipped"] and result.highlight.status == "skipped"  # the stub is ready straight away
+
+
+def test_rejection_reaches_the_hook(tmp_path):
+    seen = []
+    result = run(FIXTURES / "item02", tmp_path, on_listing=seen.append)
+    assert seen == [result] and type(result).__name__ == "Rejection"
 
 
 def test_asking_price_from_input_json(tmp_path):
@@ -116,7 +222,10 @@ def test_demo_mode_rerates_a_new_asking_price(tmp_path):
     kwargs = dict(runs_root=tmp_path / "runs", cache_root=tmp_path / "cache", demo_mode=True)
     first = asyncio.run(run_pipeline(FIXTURES / "item01", asking_price_cad=120, **kwargs))
     second = asyncio.run(run_pipeline(FIXTURES / "item01", asking_price_cad=260, **kwargs))
-    assert (first.deal_rating.rating, second.deal_rating.rating) == ("great", "overpriced")
+    again = asyncio.run(run_pipeline(FIXTURES / "item01", asking_price_cad=120, **kwargs))
+    assert [r.deal_rating.rating for r in (first, second, again)] == ["great", "overpriced", "great"]
+    counts = cached_stages(tmp_path)
+    assert counts["deal_rating"] == 2 and counts["condition"] == 1  # the asking price is part of the key
 
 
 def test_uncertain_gate_continues_with_seller_check(tmp_path):
@@ -225,7 +334,7 @@ def test_seller_name_reaches_reference_price(tmp_path, monkeypatch):
 def test_demo_mode_reads_cache_first(tmp_path):
     ctx = RunContext(item_id="item01", item_dir=FIXTURES / "item01", run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache", demo_mode=True)
     cached = Views.model_validate_json((FIXTURES / "item01" / "stubs" / "render.json").read_text(encoding="utf-8"))
-    cache.put(ctx.cache_dir, ctx.item_id, "render", cached)
+    cache.put(ctx.cache_dir, ctx.item_id, "render", cache.key("render", ctx.up_axis, ctx.manual_baseline, None), cached)
 
     async def must_not_run(ctx, *args):
         raise AssertionError("stage ran despite a cache hit")
@@ -238,6 +347,7 @@ def test_demo_mode_reads_cache_first(tmp_path):
 def test_demo_mode_fills_cache_on_miss(tmp_path):
     run_pipeline_kwargs = dict(runs_root=tmp_path / "runs", cache_root=tmp_path / "cache", demo_mode=True)
     asyncio.run(run_pipeline(FIXTURES / "item01", **run_pipeline_kwargs))
-    cached = {p.stem for p in (tmp_path / "cache" / "item01").glob("*.json")}
-    assert {"condition", "highlight", "reference_price"} <= cached
-    assert not cached & {"deal_rating", "finalize"}  # pure code: always recomputed from the cached inputs
+    assert set(cached_stages(tmp_path)) == {
+        "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
+        "highlight", "deal_rating", "finalize",
+    }

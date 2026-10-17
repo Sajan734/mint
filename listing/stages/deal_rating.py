@@ -131,10 +131,10 @@ def percent(share: float) -> str:
     return f"{round(abs(share) * 100)}%"
 
 
-def condition_phrase(condition: Condition) -> str:
+def condition_phrase(condition: Condition, has_baseline: bool = True) -> str:
     """"with light wear", "in like-new condition with a crack or tear": the grade and the priced defects."""
     phrase = CONDITION_PHRASES[condition.grade]
-    defects = [label for label, _ in price_factors(condition)[1:]]
+    defects = [label for label, _ in price_factors(condition, has_baseline)[1:]]
     if not defects:
         return phrase
     return f"{phrase}{' and ' if phrase.startswith('with') else ' with '}{join_words(defects)}"
@@ -159,8 +159,8 @@ def against_fair(asking: float, fair: int, new: float) -> str:
 
 
 def explain(rating: str, alone: str, asking: float, source: str, fair: int, new: float, condition: Condition,
-            u: float, notes: list[str]) -> str:
-    phrase = condition_phrase(condition)
+            u: float, notes: list[str], has_baseline: bool = True) -> str:
+    phrase = condition_phrase(condition, has_baseline)
     expected = f"{phrase[0].upper()}{phrase[1:]} we'd expect about {dollars(fair)}"
     sentences = [HEADLINES[rating]]
     if source == "suggested":
@@ -188,7 +188,8 @@ def rate_deal(
     baseline: Baseline,
     asking_price_cad: float | None,
 ) -> DealRating:
-    fair, _ = compute_price(reference, condition)
+    has_baseline = baseline.image_path is not None
+    fair, _ = compute_price(reference, condition, has_baseline)  # exactly finalize's price
     source = "seller" if asking_price_cad is not None else "suggested"
     asking = round(asking_price_cad, 2) if asking_price_cad is not None else float(fair)
     u, weak = uncertainty(reference, condition, match, baseline)
@@ -196,7 +197,8 @@ def rate_deal(
     notes = [CONFIDENCE_NOTES[w] for w in weak]
     return DealRating(
         rating=rating,
-        explanation=explain(rating, alone, asking, source, fair, reference.amount_cad, condition, u, notes),
+        explanation=explain(rating, alone, asking, source, fair, reference.amount_cad, condition, u, notes,
+                            has_baseline),
         asking_price_cad=asking,
         asking_price_source=source,
         fair_price_cad=fair,

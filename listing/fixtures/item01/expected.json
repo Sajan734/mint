@@ -5,5 +5,5 @@
   "price_cad": 150,
   "needs_seller_check": false,
   "deal_rating": "fair",
-  "highlight_produced": false
+  "highlight_status": "skipped"
 }

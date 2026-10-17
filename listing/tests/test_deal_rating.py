@@ -47,6 +47,17 @@ def test_same_discount_rates_differently_by_condition():
     assert ratings == ["great", "fair", "overpriced"]
 
 
+def test_fair_price_matches_finalize_without_a_baseline():
+    from stages.finalize import compute_price
+
+    borderline = make_condition("light_wear", [Defect(kind="scratch", score=0.6, view_ids=["v01"])])
+    no_photo = Baseline(query="q", image_path=None, source="image_search")
+    deal = rate_deal(NEW, borderline, MATCH, no_photo, None)
+    assert deal.fair_price_cad == compute_price(NEW, borderline, has_baseline=False)[0] == 130  # scratch not priced
+    assert "scratches" not in deal.explanation
+    assert rate_deal(NEW, borderline, MATCH, BASELINE, None).fair_price_cad == 125  # with a photo it is priced
+
+
 def test_priced_defects_lower_the_fair_price():
     cracked = make_condition("light_wear", [Defect(kind="crack", score=0.9, view_ids=["v01"])])
     deal = rate_deal(NEW, cracked, MATCH, BASELINE, 130)

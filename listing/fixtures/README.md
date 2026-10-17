@@ -23,6 +23,6 @@ itemNN/
 
 item02 has stubs only for the stages before `match_gate`, because the pipeline stops there.
 
-item01's `highlight.json` stub says no highlighted splat was produced, because the fixture has no splat file. The real stage (Gemini boxes, then lifting on the render backend) runs on items with a splat, e.g. `samples/<scan_id>`; `scripts/try_highlight.py` runs it alone on a finished run.
+item01's `highlight.json` stub has status `skipped` (no highlighted splat), because the fixture has no splat file. The real stage (Gemini boxes, then lifting on the render backend) runs on items with a splat, e.g. `samples/<scan_id>`; `scripts/try_highlight.py` runs it alone on a finished run.
 
 `match_gate.json` holds per-view Jev answers (`item_usable`, `same_category`, `same_product` for each of the 12 views), in the same format the live stage saves to `runs/<item>/match_gate_raw.json`. The aggregation, verdict and seller-facing reason are computed in code (`stages/match_gate.py`), and `scripts/replay_match_gate.py` re-applies thresholds to stubs and saved runs.

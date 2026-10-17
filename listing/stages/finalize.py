@@ -29,6 +29,9 @@ PRICE = {
     "grade_factor": {"like_new": 0.80, "light_wear": 0.65, "moderate_wear": 0.50, "heavy_wear": 0.30},
     "defect_penalty": {"missing_part": 0.25, "crack": 0.15, "stain": 0.08, "scratch": 0.05},
     "defect_min_score": 0.60,  # defects scored below this are neither noted nor priced
+    # Without a reference photo Jev can't compare with the intact product, and borderline scores are mostly the
+    # product's own printing or scan texture (a ThinkPad logo scored 0.60 as a scratch), so the bar is higher.
+    "defect_min_score_no_baseline": 0.75,
     "round_to_cad": 5,
     "floor_cad": 5,
 }
@@ -76,9 +79,11 @@ def views_by_id(views: Views, view_ids: list[str]) -> list[View]:
     return [by_id[i] for i in view_ids]
 
 
-def noted_defects(defects: list[Defect]) -> list[Defect]:
-    """Defects confident enough to show buyers and to price, most confident first."""
-    return sorted((d for d in defects if d.score >= PRICE["defect_min_score"]), key=lambda d: -d.score)
+def noted_defects(defects: list[Defect], has_baseline: bool = True) -> list[Defect]:
+    """Defects confident enough to show buyers and to price, most confident first. The bar is higher when the
+    condition was judged without a reference photo."""
+    floor = PRICE["defect_min_score"] if has_baseline else PRICE["defect_min_score_no_baseline"]
+    return sorted((d for d in defects if d.score >= floor), key=lambda d: -d.score)
 
 
 def defect_note(defect: Defect, views: Views) -> str:
@@ -91,13 +96,13 @@ def defect_note(defect: Defect, views: Views) -> str:
     return f"{len(labels)} views show {noun}: {'; '.join(labels)}."
 
 
-def build_notes(defects: list[Defect], views: Views) -> list[str]:
-    return [defect_note(d, views) for d in noted_defects(defects)] or [NO_DEFECTS_NOTE]
+def build_notes(defects: list[Defect], views: Views, has_baseline: bool = True) -> list[str]:
+    return [defect_note(d, views) for d in noted_defects(defects, has_baseline)] or [NO_DEFECTS_NOTE]
 
 
-def price_factors(condition: Condition) -> list[Factor]:
+def price_factors(condition: Condition, has_baseline: bool = True) -> list[Factor]:
     factors = [(GRADE_LABELS[condition.grade], Decimal(str(PRICE["grade_factor"][condition.grade])))]
-    for d in noted_defects(condition.defects):
+    for d in noted_defects(condition.defects, has_baseline):
         penalty = PRICE["defect_penalty"].get(d.kind)
         if penalty is not None:
             factors.append((DEFECT_NOUNS[d.kind], 1 - Decimal(str(penalty))))
@@ -124,9 +129,9 @@ def justify_price(reference: ReferencePrice, factors: list[Factor], raw: Decimal
     return f"{opening}; {steps} gives ${raw:,.2f}, {ending}."
 
 
-def compute_price(reference: ReferencePrice, condition: Condition) -> tuple[int, str]:
+def compute_price(reference: ReferencePrice, condition: Condition, has_baseline: bool = True) -> tuple[int, str]:
     """Returns (price in CAD, the one-sentence justification)."""
-    factors = price_factors(condition)
+    factors = price_factors(condition, has_baseline)
     raw = Decimal(str(reference.amount_cad))
     for _, factor in factors:
         raw *= factor
@@ -159,7 +164,8 @@ def build_listing(
     deal_rating: DealRating,
     highlight: Highlight,
 ) -> Listing:
-    price, justification = compute_price(reference, condition)
+    has_baseline = baseline.image_path is not None
+    price, justification = compute_price(reference, condition, has_baseline)
     reasons = seller_check_reasons(match, baseline, condition)
     return Listing(
         item_id=views.item_id,
@@ -168,7 +174,7 @@ def build_listing(
         attributes=draft.attributes,
         tags=draft.tags,
         condition_grade=condition.grade,
-        condition_notes=build_notes(condition.defects, views),
+        condition_notes=build_notes(condition.defects, views, has_baseline),
         price_cad=price,
         price_justification=[justification],
         preview_images=pick_previews(views),

@@ -45,10 +45,11 @@ def test_not_found_baseline_and_unscored_match_are_valid():
     MatchCheck(same_category=None, same_product=None, verdict="uncertain", reason="r")
 
 
-@pytest.mark.parametrize("produced, path", [(True, None), (False, "runs/x/splat_highlighted.spz")])
-def test_highlight_path_is_set_exactly_when_produced(produced, path):
+@pytest.mark.parametrize("status, path", [("produced", None), ("skipped", "runs/x/splat_highlighted.spz"),
+                                          ("pending", "runs/x/splat_highlighted.spz")])
+def test_highlight_path_is_set_exactly_when_produced(status, path):
     with pytest.raises(ValidationError, match="splat_path"):
-        Highlight(produced=produced, splat_path=path, summary="s")
+        Highlight(status=status, splat_path=path, summary="s")
 
 
 def test_extra_fields_are_rejected():
