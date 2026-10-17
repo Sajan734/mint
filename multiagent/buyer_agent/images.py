@@ -7,7 +7,7 @@ from PIL import Image, ImageOps
 from buyer_agent.errors import AgentError, ErrorCode
 
 MIN_SIDE = 280
-MAX_PIXELS_IN = 64_000_000  # decompression-bomb guard on the decoded size
+MAX_PIXELS_IN = 16_000_000  # decompression-bomb guard on the decoded size
 MAX_IMAGE_BYTES = 16 * 1024 * 1024
 MAX_REQUEST_BYTES = 32 * 1024 * 1024
 JEV_MAX_PIXELS = 2_458_624
@@ -57,3 +57,12 @@ def normalise_png(data: bytes, max_side: int = 1024) -> bytes:
 def check_request_bytes(images: list[bytes]) -> None:
     if sum(len(i) for i in images) > MAX_REQUEST_BYTES:
         raise AgentError(ErrorCode.PAYLOAD_TOO_LARGE, "images over 32 MiB per request")
+
+
+def thumbnail_png(data: bytes, max_side: int) -> bytes:
+    """Small PNG for logs. Skips the Jev size rules; still bounded by the decode guard."""
+    img = ImageOps.exif_transpose(_open(data)).convert("RGB")
+    img.thumbnail((max_side, max_side))
+    out = io.BytesIO()
+    img.save(out, format="PNG")
+    return out.getvalue()

@@ -1,4 +1,7 @@
+import asyncio
+import dataclasses
 import json
+import threading
 
 from buyer_agent import sources
 from buyer_agent.errors import AgentError, ErrorCode
@@ -152,6 +155,9 @@ def test_listing_mismatch_is_rejected_without_jev_or_claims(tmp_path):
     assert out.status == "done" and out.verdict.label == "listing_rejected"
     assert out.next_step.reason_code == "R8" and out.next_step.category == "escalate"
     assert jev.calls == [] and out.claims_findings == [] and not out.claims_available
+    assert "repeated" not in out.next_step.summary
+    assert "did not compare" in out.explanation.what_we_compared
+    assert "could not be compared" not in " ".join(out.explanation.what_we_found)
 
 
 def test_listing_match_or_uncertain_check_runs_normally(tmp_path):
@@ -167,3 +173,63 @@ def test_claims_skip_views_the_judge_found_unusable(tmp_path):
     out = go(tmp_path, jev, req(claims=claims))
     shown = out.claims_findings[0].views
     assert len(shown) == 4 and not {"v0", "v1", "v2", "v3", "v4"} & set(shown)
+
+
+def test_slow_claims_degrade_instead_of_failing_the_request(tmp_path):
+    class SlowClaims(FakeJev):
+        async def ask(self, state, questions, *, key=""):
+            if key.startswith("claim"):
+                await asyncio.sleep(10)
+            return await super().ask(state, questions, key=key)
+
+    claims = ListingClaims(title="Lamp", accessories_included=["charger"])
+    out = go(tmp_path, SlowClaims(views()), req(claims=claims), request_cap_s=2, advise_cap_s=1)
+    assert out.status == "done" and not out.claims_available
+    assert any("could not be checked" in c for c in out.verdict.caveats)
+    assert out.next_step is not None
+
+
+def test_run_log_write_errors_never_fail_a_finished_comparison(tmp_path):
+    class BrokenLog(RunLog):
+        def save_json(self, name, obj):
+            raise OSError("disk full")
+
+        def save_png(self, name, png):
+            raise OSError("disk full")
+
+    d = deps(tmp_path, FakeJev(views()))
+    d = dataclasses.replace(d, runlog_factory=lambda rid: BrokenLog(tmp_path / "runs", rid))
+    out = run(compare(req(), d))
+    assert out.status == "done" and out.verdict.label == "same"
+
+
+def test_oversized_pairs_rejected_before_any_jev_call(tmp_path):
+    big = [pair(f"v{i}", a=b"0" * (3 * 1024 * 1024)) for i in range(12)]
+    jev = FakeJev([])
+    res = lambda r, s, rend: sources.Resolved(big, None, "skipped_view_pairs")
+    out = go(tmp_path, jev, resolver=res)
+    assert out.status == "failed" and out.error.code == "PAYLOAD_TOO_LARGE"
+    assert jev.calls == []
+
+
+def test_timed_out_resolve_cannot_overlap_the_next_run(tmp_path):
+    release, entered = threading.Event(), []
+
+    def slow(r, s, rend):
+        entered.append("slow")
+        release.wait(3)
+        return stub_resolver()(r, s, rend)
+
+    def fast(r, s, rend):
+        entered.append(("fast", release.is_set()))
+        return stub_resolver()(r, s, rend)
+
+    async def scenario():
+        first = await compare(req(), deps(tmp_path, FakeJev([]), resolver=slow, request_cap_s=0.2))
+        second = await compare(req(), deps(tmp_path, FakeJev([]), resolver=fast, request_cap_s=0.3))
+        release.set()
+        return first, second
+
+    first, second = run(scenario())
+    assert first.status == "failed" and second.status == "failed"
+    assert entered[0] == "slow" and all(flag for name, flag in entered[1:])  # fast waited

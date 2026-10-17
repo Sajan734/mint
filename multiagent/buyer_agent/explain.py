@@ -2,6 +2,7 @@
 
 from collections.abc import Sequence
 
+from buyer_agent.jev_prompts import SAFE_CLAIM, claim_label
 from buyer_agent.models import ClaimsFinding, Explanation, NextStep, Verdict
 from buyer_agent.planner import Plan
 
@@ -45,6 +46,8 @@ def how_sure(score: float | None) -> str:
 
 
 def found_lines(verdict: Verdict) -> list[str]:
+    if verdict.label == "listing_rejected":
+        return ["The listing's scan did not match the product it describes."]
     total = _views(verdict)
     lines = [
         f"{DIFF_TEXT[cat].capitalize()} (in {len(ev.views)} of {total} views)."
@@ -62,9 +65,8 @@ def claim_lines(findings: Sequence[ClaimsFinding]) -> list[str]:
     lines = []
     for f in findings:
         prefix = CLAIM_PREFIX.get(f.source, CLAIM_PREFIX["_"])
-        lines.append(
-            f"{prefix.format(c=f.claim.strip().rstrip(TRAILING_PUNCT))} {CLAIM_SUFFIX[f.status]}"
-        )
+        text = (claim_label(f.claim) or SAFE_CLAIM).rstrip(TRAILING_PUNCT)
+        lines.append(f"{prefix.format(c=text)} {CLAIM_SUFFIX[f.status]}")
     return lines
 
 
@@ -87,7 +89,9 @@ def refund_text(verdict: Verdict, findings: Sequence[ClaimsFinding]) -> str:
         "Hello, I received the item and compared a 3D scan of it with the scan in your listing "
         f"({_views(verdict)} views). The comparison appears to show that {diffs}."
     )
-    bad = [f.claim for f in findings if f.status == "contradicted"][:MAX_REFUND_CLAIMS]
+    bad = [claim_label(f.claim) or SAFE_CLAIM for f in findings if f.status == "contradicted"][
+        :MAX_REFUND_CLAIMS
+    ]
     if bad:
         text += " I also could not see in my scan: " + "; ".join(bad) + "."
     return (

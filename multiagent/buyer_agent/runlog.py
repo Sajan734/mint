@@ -54,6 +54,21 @@ class RedactingFilter(logging.Filter):
         return True
 
 
+def install_log_redaction() -> None:
+    """Redact secrets in every log record the process creates (package, uvicorn, libraries)."""
+    previous = logging.getLogRecordFactory()
+    if getattr(previous, "redacting", False):
+        return
+
+    def factory(*args: Any, **kwargs: Any) -> logging.LogRecord:
+        record = previous(*args, **kwargs)
+        record.msg, record.args = _redact_str(record.getMessage()), None
+        return record
+
+    factory.redacting = True  # type: ignore[attr-defined]
+    logging.setLogRecordFactory(factory)
+
+
 class RunLog:
     def __init__(self, runs_root: Path, run_id: str) -> None:
         try:

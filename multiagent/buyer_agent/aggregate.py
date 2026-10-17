@@ -108,6 +108,8 @@ def aggregate(
     th: Thresholds | None = None,
 ) -> Verdict:
     th = th or Thresholds()
+    if alignment_mode not in ("icp", "skipped_view_pairs"):
+        raise AgentError(ErrorCode.INPUT_INVALID, f"unknown alignment_mode {alignment_mode!r}")
     unique_labels(s.view for s in scores)
     answered = len(scores)
     if requested < answered + len(failures) or requested < 1:

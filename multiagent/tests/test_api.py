@@ -245,3 +245,23 @@ def test_startup_prunes_old_runs(env):
     with TestClient(make(env)):
         pass
     assert not old.exists()
+
+
+def test_old_runs_pruned_before_each_run(env):
+    old = env / "runs" / str(uuid4())
+    old.mkdir(parents=True)
+    (old / "response.json").write_text("{}")
+    past = time.time() - 40 * 86400
+    os.utime(old / "response.json", (past, past))
+    os.utime(old, (past, past))
+    c = TestClient(make(env))  # no lifespan entered: only the per-run prune can remove it
+    assert post(c, body()).status_code == 200 and not old.exists()
+
+
+def test_corrupt_meta_json_is_not_a_500(env):
+    cid = str(uuid4())
+    c = TestClient(make(env))
+    post(c, body(cid))
+    (env / "runs" / cid / "meta.json").write_text('{"executions": "x", "body_sha256": ')
+    (env / "runs" / cid / "response.json").unlink()
+    assert post(c, body(cid)).status_code == 200

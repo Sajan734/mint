@@ -4,7 +4,12 @@ import time
 from collections import deque
 from collections.abc import Callable
 
-WORST_CASE_CALLS = 12 + 8 + 2  # views + claims + Groq; logical calls, SDK retries not counted
+from buyer_agent.advisor import MAX_GROQ_CALLS
+from buyer_agent.claims import MAX_CLAIMS
+from buyer_agent.sources import MAX_PAIRS
+
+# views + claims + Groq; logical calls, SDK retries not counted
+WORST_CASE_CALLS = MAX_PAIRS + MAX_CLAIMS + MAX_GROQ_CALLS
 WINDOW_S = 3600.0
 
 

@@ -48,6 +48,8 @@ def check_rel(rel: str, suffixes: frozenset[str]) -> None:
     for part in _SPLIT.split(rel):
         if part in ("", ".", ".."):
             raise _invalid("bad path component")
+        if not part.isascii():
+            raise _invalid("non-ascii path component")
         if ":" in part:
             raise _invalid("colon in path")
         if part.split(".")[0].rstrip(" ").upper() in _RESERVED:
@@ -70,6 +72,8 @@ def safe_open(root: Path, rel: str, suffixes: frozenset[str]) -> tuple[BinaryIO,
     except OSError as exc:
         raise _invalid(f"cannot open: {type(exc).__name__}") from exc
     try:
+        if not Path(os.path.realpath(target)).is_relative_to(base):  # re-check after open
+            raise _invalid("path escapes data root")
         fd_stat, path_stat = os.fstat(fh.fileno()), os.stat(target)
         same = (fd_stat.st_dev, fd_stat.st_ino) == (path_stat.st_dev, path_stat.st_ino)
         if not same or not stat.S_ISREG(fd_stat.st_mode):

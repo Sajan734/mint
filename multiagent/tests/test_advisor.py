@@ -143,7 +143,9 @@ def test_buyer_photos_template_and_required_drafts():
 
 
 def test_category_none_has_null_drafts():
-    g = FakeGroq([reply(summary="Looks fine.", message_to_seller="x", refund_request="y")])
+    g = FakeGroq(
+        [reply(summary="The item appears fine.", message_to_seller="x", refund_request="y")]
+    )
     step = run_draft(g, plan("none"))
     assert step.message_to_seller is None and step.refund_request is None and not step.is_template
 
@@ -187,3 +189,23 @@ def test_validator_rejects_scan_counts():
         assert SCAN_COUNT.search(bad)
     for ok in ("Seen in 3 views.", "Compare the scans", "the scan is clear"):
         assert not SCAN_COUNT.search(ok)
+
+
+@pytest.mark.parametrize(
+    "summary",
+    [
+        "The item matches the listing perfectly and is exactly as described.",
+        "The item matches the listing.",
+        "The item appears fine but has a scratch.",
+        "It appears there are no issues at all.",
+    ],
+)
+def test_none_summary_needs_hedge_and_no_absolutes(summary):
+    g = FakeGroq([reply(summary=summary), reply(summary=summary)])
+    step = run_draft(g, plan("none"))
+    assert step.is_template and len(g.calls) == 2
+
+
+def test_hedge_required_for_every_category():
+    g = FakeGroq([reply(summary="Tell the seller."), reply(summary="Tell the seller.")])
+    assert run_draft(g, plan("message_seller")).is_template

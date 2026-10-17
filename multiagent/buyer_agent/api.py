@@ -1,5 +1,6 @@
 """HTTP API (U25). Run:
-`.venv\\Scripts\\python -m uvicorn --factory buyer_agent.api:app_factory --host 127.0.0.1 --port 8765`
+`.venv\\Scripts\\python -m uvicorn --factory buyer_agent.api:app_factory --host 127.0.0.1 --port 8765 --no-proxy-headers`
+Keep `--no-proxy-headers`: limits are keyed on the socket peer, never on X-Forwarded-For.
 """
 
 import asyncio
@@ -29,7 +30,7 @@ from buyer_agent.jev_client import JevClient
 from buyer_agent.models import CompareRequest
 from buyer_agent.pipeline import Deps, compare
 from buyer_agent.retention import prune_runs
-from buyer_agent.runlog import RedactingFilter, RunLog, register_secrets
+from buyer_agent.runlog import RedactingFilter, RunLog, install_log_redaction, register_secrets
 
 log = logging.getLogger("buyer_agent.api")
 log.addFilter(RedactingFilter())
@@ -89,9 +90,23 @@ def _default_clients(settings: Settings) -> tuple[JevClient, GroqClient]:
 
 def _read_meta(run: RunLog) -> dict[str, Any] | None:
     try:
-        return json.loads((run.dir / "meta.json").read_text(encoding="utf-8"))
-    except (OSError, ValueError):
+        meta = json.loads((run.dir / "meta.json").read_text(encoding="utf-8"))
+        if isinstance(meta, dict) and isinstance(meta.get("executions"), int):
+            return meta
+        raise ValueError("bad meta shape")
+    except FileNotFoundError:
         return None
+    except (OSError, ValueError):  # corrupt meta: treat as a fresh id, but say so
+        log.warning("corrupt meta.json ignored")
+        return None
+
+
+def _prune(settings: Settings) -> None:
+    """Cheap and bounded: only walks run folders. Never fails a request."""
+    try:
+        prune_runs(settings.runs_root, settings.run_retention_days, time.time())
+    except OSError:
+        log.warning("run prune failed")
 
 
 def _stored_done(run: RunLog) -> dict[str, Any] | None:
@@ -113,6 +128,7 @@ def create_app(
 ) -> FastAPI:
     secrets_ = (settings.typesafe_api_key, settings.groq_api_key, settings.buyer_agent_token)
     register_secrets(*(s.get_secret_value() for s in secrets_))
+    install_log_redaction()
     if jev is None or groq is None:
         default_jev, default_groq = _default_clients(settings)
         jev, groq = jev or default_jev, groq or default_groq
@@ -171,6 +187,7 @@ def create_app(
             if not budget.try_take(WORST_CASE_CALLS):
                 return _error(ErrorCode.BUDGET_EXHAUSTED)
             runs.add(key)
+            _prune(settings)
             run.save_json("meta.json", {"body_sha256": digest, "executions": executions + 1})
             response = await compare(req, deps)
         return JSONResponse(response.model_dump(mode="json"))

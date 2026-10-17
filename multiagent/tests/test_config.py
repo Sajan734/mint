@@ -15,7 +15,7 @@ def env(tmp_path, monkeypatch):
         monkeypatch.delenv(k, raising=False)
     monkeypatch.setenv("TYPESAFE_API_KEY", "ts-secret-1")
     monkeypatch.setenv("GROQ_API_KEY", "gsk_secret_2")
-    monkeypatch.setenv("BUYER_AGENT_TOKEN", "tok-secret-3")
+    monkeypatch.setenv("BUYER_AGENT_TOKEN", "tok-secret-3-" + "x" * 24)
     monkeypatch.setenv("DATA_ROOT", str(tmp_path))
     return tmp_path / "missing.env"
 
@@ -28,10 +28,17 @@ def test_missing_key_raises_clear_message_naming_variable(env, monkeypatch, name
     assert name in e.value.detail
 
 
+def test_short_token_rejected_with_clear_error(env, monkeypatch):
+    monkeypatch.setenv("BUYER_AGENT_TOKEN", "short-token")
+    with pytest.raises(AgentError) as e:
+        config.load_settings(env)
+    assert "at least 32" in e.value.detail
+
+
 def test_secrets_not_in_repr_or_dump(env):
     s = config.load_settings(env)
     text = repr(s) + str(s)
-    assert not any(x in text for x in ("ts-secret-1", "gsk_secret_2", "tok-secret-3"))
+    assert not any(x in text for x in ("ts-secret-1", "gsk_secret_2", "tok-secret-3-" + "x" * 24))
     assert s.groq_api_key.get_secret_value() == "gsk_secret_2"
 
 

@@ -21,6 +21,11 @@ MIN_RAW_CLAIM_LEN = 8
 FORBIDDEN = re.compile(
     r"\b(proven|proof|definitely|guaranteed|certainly|undoubtedly)\b", re.IGNORECASE
 )
+NONE_BAD = re.compile(
+    r"\b(perfect\w*|exactly|flawless\w*|identical|completely|entirely|damage\w*|broken|missing"
+    r"|scratch\w*|dent\w*|defect\w*|no (?:issues?|problems?|differences?))\b|100 ?%",
+    re.IGNORECASE,
+)  # "none" must hedge and may not claim perfection or a defect
 URL = re.compile(r"https?:|www\.|://|\b\w+\.(?:com|net|org|io|co)\b", re.IGNORECASE)
 SCAN_COUNT = re.compile(
     r"(?<![A-Za-z0-9_])(?:[0-9]+|two|three|several|multiple|at least +[a-z]+) +scans(?![A-Za-z0-9_])",
@@ -130,8 +135,10 @@ def validate(
         return "forbidden_word"
     if SCAN_COUNT.search(draft.summary):
         return "scans_count_wording"
-    if plan.category != "none" and "likely" not in summary and "appears" not in summary:
+    if "likely" not in summary and "appears" not in summary:
         return "missing_likely"
+    if plan.category == "none" and NONE_BAD.search(draft.summary):
+        return "none_absolute_or_defect"
     if not set(draft.cited_views) <= set(allowed_views):
         return "uncited_view"
     allowed_digits = set(DIGITS.findall(evidence.replace(nonce, "")))
@@ -176,6 +183,14 @@ _TEMPLATES: dict[str, tuple[str, str | None, str | None]] = {
         "Hello, the item does not seem to match the listing. I would like to talk about a refund.",
         "I am requesting a refund because the item appears to differ from the listing.",
     ),
+    "rejected": (
+        (
+            "The listing's scan does not appear to match the product it describes, so support "
+            "should likely review the listing."
+        ),
+        None,
+        None,
+    ),
     "escalate": (
         "This case appears unresolved after repeated checks, so support should likely review it.",
         None,
@@ -210,7 +225,7 @@ def _step(
 def template_step(
     plan: Plan, verdict: Verdict | None = None, findings: list[ClaimsFinding] | None = None
 ) -> NextStep:
-    key = plan.category
+    key = "rejected" if plan.reason_code == "R8" else plan.category
     if key == "request_more_photos":
         key = "seller_photos" if plan.audience == "seller" else "buyer_photos"
     summary, msg, refund = _TEMPLATES[key]

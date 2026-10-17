@@ -4,7 +4,6 @@ import asyncio
 import json
 import logging
 import re
-import secrets
 from collections.abc import Collection
 from pathlib import Path
 from typing import Protocol
@@ -16,7 +15,13 @@ from buyer_agent.aggregate import Thresholds
 from buyer_agent.config import Settings
 from buyer_agent.images import normalise_png
 from buyer_agent.jev_client import JevClient
-from buyer_agent.jev_prompts import CLAIM_VIEW_KEYS, claim_label, claim_question
+from buyer_agent.jev_prompts import (
+    CLAIM_STATE_KEY,
+    CLAIM_VIEW_KEYS,
+    SAFE_CLAIM,
+    claim_label,
+    claim_question,
+)
 from buyer_agent.listing_adapter import parse_claims
 from buyer_agent.models import ClaimsFinding, JevViewScores, ListingClaims, Verdict, ViewPair
 
@@ -91,9 +96,11 @@ def _is_fine_mark(text: str) -> bool:
 
 
 def _finding(claim: str, source: str, status: str, p: float | None = None, views=()):
+    """S-M1: seller text is echoed only when it passes the label allowlist."""
     return ClaimsFinding(
-        claim=claim[:200], source=source, status=status, p_present=p, views=list(views)
-    )
+        claim=claim_label(claim) or SAFE_CLAIM, source=source, status=status, p_present=p,
+        views=list(views),
+    )  # fmt: skip
 
 
 def _status(p: float) -> str:
@@ -115,7 +122,8 @@ async def _check_one(
     label = claim_label(text)
     if label is None:  # AM-10: never send non-allowlisted text
         return _finding(text, source, "unverifiable")
-    question = {"claim": claim_question(label, secrets.token_hex(8))}
+    question = {"claim": claim_question()}
+    state = {**state, CLAIM_STATE_KEY: label}
     try:
         async with sem:
             answer = await asyncio.wait_for(

@@ -193,3 +193,9 @@ def test_property_quality_poor_or_misaligned_never_same():
         v = run(s, requested=n)
         if n - n_bad < max(6, -(-3 * n // 4)):
             assert v.label != "same"
+
+
+def test_unknown_alignment_mode_rejected_not_defaulted():
+    with pytest.raises(AgentError) as e:
+        run(views(), mode="skiped_view_pairs")
+    assert e.value.code is ErrorCode.INPUT_INVALID

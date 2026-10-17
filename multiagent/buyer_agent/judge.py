@@ -93,9 +93,15 @@ async def judge_views(
         asyncio.ensure_future(_view(client, p, f"view-{i:02d}", sem, settings, on_raw, on_failure))
         for i, p in enumerate(pairs)
     ]
-    done, pending = await asyncio.wait(
-        tasks, timeout=settings.judge_stage_cap_s, return_when=asyncio.FIRST_EXCEPTION
-    )
+    try:
+        done, pending = await asyncio.wait(
+            tasks, timeout=settings.judge_stage_cap_s, return_when=asyncio.FIRST_EXCEPTION
+        )
+    except BaseException:  # outer cancel (request cap): stop paid in-flight calls, then re-raise
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        raise
     for task in pending:
         task.cancel()
     await asyncio.gather(*pending, return_exceptions=True)

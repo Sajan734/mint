@@ -55,11 +55,17 @@ def is_listing_format(data: dict[str, Any]) -> bool:
     return bool(LISTING_KEYS & data.keys()) or isinstance(data.get("condition_grade"), str)
 
 
+MAX_DESCRIPTION_CHARS = 4000  # bound the regex scan on seller text (S-M7)
+MAX_CANDIDATES = 50
+
+
 def _clean(items: list[str]) -> list[str]:
     out: list[str] = []
-    for raw in items:
-        item = _ARTICLE_RE.sub("", raw.strip().strip(".")).strip()
-        if item and item.lower() not in {o.lower() for o in out}:
+    seen: set[str] = set()
+    for raw in items[:MAX_CANDIDATES]:  # slice first: the rest could never be kept anyway
+        item = _ARTICLE_RE.sub("", raw[:300].strip().strip(".")).strip()
+        if item and item.lower() not in seen:
+            seen.add(item.lower())
             out.append(item[:100])
     return out
 
@@ -80,8 +86,10 @@ def stated_accessories(listing: _Listing) -> list[str]:
     for key in ACCESSORY_KEYS:
         if listing.attributes.get(key):
             found += _SPLIT_RE.split(listing.attributes[key])
-    for match in _STATED_RE.finditer(listing.description):
+    for match in _STATED_RE.finditer(listing.description[:MAX_DESCRIPTION_CHARS]):
         found += _SPLIT_RE.split(match.group(1))
+        if len(found) >= MAX_CANDIDATES:
+            break
     return _clean(found)[:10]
 
 

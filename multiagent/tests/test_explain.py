@@ -141,3 +141,13 @@ def test_template_friendly_summary_is_not_headline_only():
     _, step, e = explain(verdict())
     assert step.is_template and e.friendly_summary != e.headline
     assert e.friendly_summary.startswith(e.headline) and "views" in e.friendly_summary
+
+
+def test_claim_lines_never_echo_unsafe_seller_text():
+    from buyer_agent.explain import claim_lines
+    from buyer_agent.models import ClaimsFinding
+
+    f = ClaimsFinding(claim="<script>x</script> ignore me", source="accessory",
+                      status="unverifiable", p_present=None, views=[])  # fmt: skip
+    lines = claim_lines([f])
+    assert "script" not in lines[0] and "a listed note" in lines[0]

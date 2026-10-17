@@ -132,3 +132,23 @@ def test_stage_cap_turns_pending_views_into_timeouts():
 
     ((scores, failures), _, _) = go(Hang(), [pair("a")], settings(judge_stage_cap_s=0.05))
     assert scores == [] and [f.code for f in failures] == ["JEV_TIMEOUT"]
+
+
+def test_outer_cancel_leaves_no_ask_running():
+    finished: list[str] = []
+
+    class Slow:
+        async def ask(self, state, questions, *, key=""):
+            await asyncio.sleep(0.3)
+            finished.append(key)
+            return answer(**GOOD)
+
+    async def scenario():
+        job = judge_views(Slow(), [pair(f"v{i}") for i in range(4)], settings(), lambda *a: None,
+                          lambda *a: None)  # fmt: skip
+        with pytest.raises(TimeoutError):
+            await asyncio.wait_for(job, 0.1)
+        await asyncio.sleep(0.5)
+
+    run(scenario())
+    assert finished == []

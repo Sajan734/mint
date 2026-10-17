@@ -224,3 +224,20 @@ def test_validate_request_paths_catches_traversal():
 def replace_ref(path):
     ref = {"path": path, "format": "ply"}
     return CompareRequest(comparison_id=ID, listing_id="x", listing_splat=ref, buyer_splat=ref)
+
+
+def test_non_ascii_path_component_rejected():
+    assert code_of(sources.check_rel, "COM¹.json", sources.MANIFEST_SUFFIXES) is (
+        ErrorCode.INPUT_INVALID
+    )
+
+
+def test_realpath_rechecked_after_open(tmp_path, monkeypatch):
+    (tmp_path / "m.json").write_text("[]")
+    other = tmp_path.parent / "elsewhere.json"
+    real = os.path.realpath  # Path.resolve passes `strict`; only the post-open check does not
+    monkeypatch.setattr(os.path, "realpath", lambda p, **kw: real(p, **kw) if kw else str(other))
+    assert (
+        code_of(sources.safe_open, tmp_path, "m.json", sources.MANIFEST_SUFFIXES)
+        is ErrorCode.INPUT_INVALID
+    )

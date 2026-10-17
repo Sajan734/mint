@@ -111,3 +111,13 @@ def test_view_labels_stripped_from_notes_and_pass_allowlist():
     assert clean_note("Scuff near the hinge (azimuth 90°) in v02 and view_03") == (
         "Scuff near the hinge in and"
     )
+
+
+def test_huge_description_cleans_fast():
+    import time
+
+    desc = "includes " + ",".join(str(i) for i in range(15000))  # ~ 60 KB
+    assert len(desc) > 60_000 - 5000
+    start = time.perf_counter()
+    c = claims_from_listing({"title": "t", "description": desc})
+    assert time.perf_counter() - start < 1.0 and len(c.accessories_included) <= 10

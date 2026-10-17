@@ -13,6 +13,7 @@ JEV_MODEL_PIN = "jev-1.13.0"
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent  # .../multiagent
 REPO_ROOT = PACKAGE_ROOT.parent
 DEFAULT_ENV_FILE = PACKAGE_ROOT / ".env"
+MIN_TOKEN_LEN = 32
 _TRUE = {"1", "true", "yes", "on"}
 
 
@@ -63,6 +64,11 @@ def load_settings(env_file: Path | None = None) -> Settings:
     typesafe, groq, token = (
         _required(n) for n in ("TYPESAFE_API_KEY", "GROQ_API_KEY", "BUYER_AGENT_TOKEN")
     )
+    if len(token) < MIN_TOKEN_LEN:
+        raise AgentError(
+            ErrorCode.INPUT_INVALID,
+            f"BUYER_AGENT_TOKEN must be at least {MIN_TOKEN_LEN} characters",
+        )
     data_root = Path(_required("DATA_ROOT"))
     if not data_root.is_absolute():
         data_root = REPO_ROOT / data_root

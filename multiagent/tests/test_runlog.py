@@ -76,3 +76,15 @@ def test_failed_response_not_persisted(tmp_path):
     p = log.save_json("jev/view_00.json", {"status": "failed", "token": "t"})
     assert json.loads(p.read_text())["token"] == REDACTED
     assert log.save_failure_detail("left/90", "oops").name == "failure_left_90.json"
+
+
+def test_installed_redaction_covers_other_package_loggers(caplog):
+    import logging
+
+    from buyer_agent.runlog import install_log_redaction
+
+    install_log_redaction()
+    install_log_redaction()  # idempotent
+    with caplog.at_level(logging.WARNING):
+        logging.getLogger("buyer_agent.pipeline").warning("boom %s", "gsk_abcdefgh12345678")
+    assert "gsk_abcdefgh12345678" not in caplog.text and "[REDACTED]" in caplog.text

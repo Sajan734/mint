@@ -5,6 +5,7 @@ resolve -> judge -> aggregate -> check_claims -> plan(PRE-claims verdict) -> app
 import asyncio
 import dataclasses
 import logging
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ from buyer_agent.config import Settings
 from buyer_agent.errors import AgentError, ErrorCode, user_message
 from buyer_agent.explain import build_explanation
 from buyer_agent.groq_client import GroqAnswer, GroqClient
+from buyer_agent.images import check_request_bytes, thumbnail_png
 from buyer_agent.jev_client import JevAnswer, JevClient
 from buyer_agent.judge import judge_views
 from buyer_agent.models import (
@@ -46,7 +48,16 @@ UNVALIDATED_CAVEAT = "Rendered with an unvalidated renderer; treat this result a
 NO_CLAIMS_CAVEAT = "No listing details were available, so the item was not checked against them."
 CLAIMS_FAILED_CAVEAT = "The listing details could not be checked."
 FEW_VIEWS_CAVEAT = "Too few clear views to check the listing details."
+THUMB_SIDE = 512
 REJECTED_REASON = "The listing's scan does not match the product it describes."
+
+
+_RESOLVE_GATE = threading.Semaphore(1)  # a resolve thread outlives its timeout; never overlap two
+
+
+def _gated_resolve(resolver: Callable[..., sources.Resolved], *args: Any) -> sources.Resolved:
+    with _RESOLVE_GATE:
+        return resolver(*args)
 
 
 @dataclass(frozen=True)
@@ -68,6 +79,10 @@ class _Ctx:
     run: RunLog
     t0: float
     timings: dict[str, int] = field(default_factory=dict)
+
+    def remaining_s(self) -> float:
+        """Request time left under request_cap_s (never negative)."""
+        return max(0.0, self.deps.settings.request_cap_s - (self.deps.clock() - self.t0))
 
     def lap(self, name: str, start: float) -> None:
         self.timings[name] = int((self.deps.clock() - start) * 1000)
@@ -110,22 +125,30 @@ def _failed(ctx: _Ctx, code: ErrorCode) -> CompareResponse:
     )  # fmt: skip
 
 
+def _quiet(label: str, fn: Callable[..., Any], *args: Any) -> None:
+    """Run-log writes are best effort: a disk error never fails a request (M2)."""
+    try:
+        fn(*args)
+    except Exception as exc:  # noqa: BLE001 the verdict matters more than its log
+        log.warning("run log write failed (%s): %s", label, safe_exc(exc))
+
+
 def _save_pairs(run: RunLog, pairs: list[ViewPair]) -> None:
+    """Thumbnails only (<= THUMB_SIDE px), so a run folder stays small (S-M4)."""
     for i, p in enumerate(pairs):
-        run.save_png(f"a_{i:02d}.png", p.png_a)
-        run.save_png(f"b_{i:02d}.png", p.png_b)
+        for name, data in ((f"a_{i:02d}.png", p.png_a), (f"b_{i:02d}.png", p.png_b)):
+            _quiet(name, lambda n=name, d=data: run.save_png(n, thumbnail_png(d, THUMB_SIDE)))
 
 
 async def _judge(ctx: _Ctx, pairs: list[ViewPair]) -> tuple[list[JevViewScores], list]:
     index = {p.label: i for i, p in enumerate(pairs)}
 
     def on_raw(label: str, answer: JevAnswer) -> None:
-        ctx.run.save_json(
-            f"jev/view_{index[label]:02d}.json", {"view": label, **dataclasses.asdict(answer)}
-        )
+        _quiet("jev", ctx.run.save_json, f"jev/view_{index[label]:02d}.json",
+               {"view": label, **dataclasses.asdict(answer)})  # fmt: skip
 
     def on_failure(label: str, code: str, detail: str) -> None:
-        ctx.run.save_failure_detail(label, f"{code}: {detail}")
+        _quiet("failure", ctx.run.save_failure_detail, label, f"{code}: {detail}")
 
     return await judge_views(ctx.deps.jev, pairs, ctx.deps.settings, on_raw, on_failure)
 
@@ -142,7 +165,10 @@ async def _claims(
     if not pairs:
         return [], False, None
     try:
-        found = await check_claims(ctx.deps.jev, claims, pairs, ctx.deps.settings, usable)
+        budget = max(0.0, ctx.remaining_s() - ctx.deps.settings.advise_cap_s)  # leave advise time
+        found = await asyncio.wait_for(
+            check_claims(ctx.deps.jev, claims, pairs, ctx.deps.settings, usable), budget
+        )
         few = usable is not None and len(usable) < MIN_USABLE_VIEWS
         return found, True, FEW_VIEWS_CAVEAT if few else None
     except Exception as exc:  # noqa: BLE001 claims are optional; never fail the comparison
@@ -180,12 +206,15 @@ def _rejected(ctx: _Ctx) -> CompareResponse:
 
 async def _compare(ctx: _Ctx) -> CompareResponse:
     req, deps = ctx.req, ctx.deps
-    ctx.run.save_json("request.json", req)
+    _quiet("request", ctx.run.save_json, "request.json", req)
     if req.listing_match_check is not None and req.listing_match_check.verdict == "mismatch":
         return _rejected(ctx)
     start = deps.clock()
-    resolved = await asyncio.to_thread(deps.resolver, req, deps.settings, deps.renderer)
+    resolved = await asyncio.to_thread(
+        _gated_resolve, deps.resolver, req, deps.settings, deps.renderer
+    )
     ctx.lap("resolve", start)
+    check_request_bytes([b for p in resolved.pairs for b in (p.png_a, p.png_b)])
     _save_pairs(ctx.run, resolved.pairs)
     pre, scores = await _verdict(ctx, resolved)
 
@@ -205,8 +234,10 @@ async def _compare(ctx: _Ctx) -> CompareResponse:
 
     start = deps.clock()
     groq = _RecordingGroq(deps.groq)
-    step = await draft(groq, next_plan, reported, findings, claims, deps.settings)
-    ctx.run.save_json("groq.json", {"calls": groq.records})
+    advise_cap = min(deps.settings.advise_cap_s, ctx.remaining_s())
+    st = dataclasses.replace(deps.settings, advise_cap_s=advise_cap)
+    step = await draft(groq, next_plan, reported, findings, claims, st)
+    _quiet("groq", ctx.run.save_json, "groq.json", {"calls": groq.records})
     ctx.lap("advise", start)
     ctx.lap("total", ctx.t0)
     return CompareResponse(
@@ -233,5 +264,7 @@ async def compare(req: CompareRequest, deps: Deps) -> CompareResponse:
     except Exception as exc:  # noqa: BLE001 last line of defence; detail goes to the log only
         log.error("compare crashed: %s", safe_exc(exc))
         response = _failed(ctx, ErrorCode.INTERNAL)
-    ctx.run.save_json("response.json", response)  # failed responses are never persisted
+    _quiet(
+        "response", ctx.run.save_json, "response.json", response
+    )  # failed responses are never persisted
     return response
