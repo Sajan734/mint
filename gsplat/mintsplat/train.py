@@ -24,9 +24,11 @@ DEFAULTS = {
     "edge_band_px": 2,
     "ssim_w": 0.2,
     "alpha_w": 0.1,
-    "opacity_reg": 0.01,
+    "opacity_reg": 0.0005,  # higher values leave a see-through, blotchy surface (tested 0.01)
     "scale_reg": 0.01,
     "pose_lr": 1e-4,
+    "appearance_lr": 0.0,  # >0 enables per-view colour correction (slightly smoother, ~+4 s)
+    "appearance_reg": 0.1,
     "pose_start": 100,
     "init_scale": 0.5,
     "train_scale": 0.75,  # training resolution relative to the video frames
@@ -189,7 +191,15 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
 
     w2c = torch.linalg.inv(c2w)
     cam_delta = torch.nn.Parameter(torch.zeros(len(frames), 6, device="cuda"))
-    cam_opt = torch.optim.Adam([cam_delta], lr=cfg["pose_lr"] * B ** 0.5)
+    # per-view colour correction (3x3 + bias): absorbs the phone's auto exposure / white balance
+    # drifting around the orbit, which otherwise gets baked into the splat as blotches. Only used
+    # while training; the exported splat keeps the neutral (shared) colours.
+    app_A = torch.nn.Parameter(torch.eye(3, device="cuda").repeat(len(frames), 1, 1))
+    app_b = torch.nn.Parameter(torch.zeros(len(frames), 3, device="cuda"))
+    cam_opt = torch.optim.Adam([{"params": [cam_delta], "lr": cfg["pose_lr"] * B ** 0.5},
+                                {"params": [app_A, app_b], "lr": cfg["appearance_lr"] * B ** 0.5}])
+    use_app = cfg["appearance_lr"] > 0
+    zero_bg = torch.zeros(B, 3, device="cuda")
 
     win = _ssim_window("cuda")
     tid = torch.tensor(train_ids, device="cuda")
@@ -202,7 +212,11 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
             viewmats = w2c[v]
         deg = min(cfg["sh_degree"], step // sh_every)
         bg = torch.rand(B, 3, device="cuda")
-        rgb, alpha, info = render(params, viewmats, views["K"][v], W, H, deg, bg)
+        rgb, alpha, info = render(params, viewmats, views["K"][v], W, H, deg, zero_bg)  # premultiplied
+        a3 = alpha[..., None]
+        if use_app:
+            rgb = torch.einsum("bij,bhwj->bhwi", app_A[v], rgb) + app_b[v][:, None, None] * a3
+        rgb = rgb + bg[:, None, None] * (1 - a3)
 
         m, w = views["mask"][v][..., None], views["weight"][v][..., None]
         gt = views["img"][v].float() / 255 * m + bg[:, None, None] * (1 - m)
@@ -214,6 +228,9 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         loss = ((1 - cfg["ssim_w"]) * l1 + cfg["ssim_w"] * dssim + cfg["alpha_w"] * a_loss
                 + cfg["opacity_reg"] * torch.sigmoid(params["opacities"]).mean()
                 + cfg["scale_reg"] * torch.exp(params["scales"]).mean())
+        if use_app:  # keep the corrections small so the splat's own colours stay the canonical ones
+            loss = loss + cfg["appearance_reg"] * (((app_A[v] - torch.eye(3, device="cuda")) ** 2).mean()
+                                                   + (app_b[v] ** 2).mean())
 
         strategy.step_pre_backward(params, optimizers, state, step, info)
         loss.backward()

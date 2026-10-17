@@ -1,5 +1,6 @@
 """Stage driver. Each stage is timed; `stop_after` lets us iterate on one stage at a time."""
 import subprocess
+import time
 from pathlib import Path
 
 import numpy as np
@@ -13,6 +14,7 @@ DEFAULTS = {
     "n_frames": 80,
     "box": None,  # [x0, y0, x1, y1] in pixels of the first picked frame; None = centre prompt
     "stop_after": None,  # "masks" | "poses" | None
+    "debug": True,  # contact sheets, held-out eval, turntable (adds a few seconds after the timed path)
 }
 
 
@@ -32,8 +34,9 @@ def run(models, video: bytes, cfg: dict) -> dict:
         ok = masks_mod.sane(masks)
     print(f"usable masks: {sum(ok)}/{len(ok)}; median area {np.median([m.mean() for m in masks]):.3f}", flush=True)
 
-    pick = np.linspace(0, len(frames) - 1, 12).astype(int)
-    out["files"]["masks.jpg"] = debug.sheet([debug.overlay(frames[i], masks[i]) for i in pick])
+    if cfg["debug"]:
+        pick = np.linspace(0, len(frames) - 1, 12).astype(int)
+        out["files"]["masks.jpg"] = debug.sheet([debug.overlay(frames[i], masks[i]) for i in pick])
     out["frames_used"] = int(sum(ok))
     if cfg["stop_after"] == "masks":
         out["timings"] = {**T.t, "total": T.total()}
@@ -46,8 +49,9 @@ def run(models, video: bytes, cfg: dict) -> dict:
         c2w, K, init_pts, init_cols, pstats = poses_mod.estimate(models.vggt, frames, masks)
     out["poses"] = pstats
     print(f"poses: {pstats}", flush=True)
-    out["files"]["poses.jpg"] = _jpg(poses_mod.preview(
-        c2w.cpu().numpy(), init_pts.cpu().numpy(), init_cols.cpu().numpy()))
+    if cfg["debug"]:
+        out["files"]["poses.jpg"] = _jpg(poses_mod.preview(
+            c2w.cpu().numpy(), init_pts.cpu().numpy(), init_cols.cpu().numpy()))
     if cfg["stop_after"] == "poses":
         out["timings"] = {**T.t, "total": T.total()}
         return out
@@ -62,19 +66,25 @@ def run(models, video: bytes, cfg: dict) -> dict:
     out["gaussians"] = cstats
     print(f"cleanup: {cstats}", flush=True)
 
-    # ---- evaluation + debug media (not part of the timed path)
+    out["timings"] = {**T.t, "total": T.total()}
+    if not cfg["debug"]:
+        return out
+
+    # ---- evaluation + debug media (after the timed path)
+    t0 = time.perf_counter()
     sh = {**train_mod.DEFAULTS, **tcfg}["sh_degree"]
     clean = {k: torch.nn.Parameter(v[keep]) for k, v in params.items()}
+    out["eval_heldout_raw"], _ = train_mod.evaluate(params, c2w, views, test_ids, sh)  # before cleanup
     out["eval_heldout"], pairs = train_mod.evaluate(clean, c2w, views, test_ids, sh)
     out["eval_train"], _ = train_mod.evaluate(clean, c2w_ref, views, train_ids[::8], sh)
-    print(f"held-out: {out['eval_heldout']}  train: {out['eval_train']}", flush=True)
+    print(f"held-out raw: {out['eval_heldout_raw']}  cleaned: {out['eval_heldout']}  train: {out['eval_train']}",
+          flush=True)
     if pairs:
         pairs = pairs[:4]
         out["files"]["heldout.jpg"] = debug.sheet([g for g, _ in pairs] + [r for _, r in pairs], cols=len(pairs))
     center = clean["means"].detach().median(0).values
     out["files"]["turntable.mp4"] = _mp4(train_mod.turntable(clean, c2w_ref, K, center, sh))
-
-    out["timings"] = {**T.t, "total": T.total()}
+    out["debug_extras_s"] = round(time.perf_counter() - t0, 2)
     return out
 
 

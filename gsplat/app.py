@@ -3,6 +3,8 @@
     modal run app.py --video orbit.mp4                      # full run (~28 s warm) -> out/<video stem>/
     modal run app.py --video orbit.mp4 --stop-after masks   # iterate on one stage
 
+For the demo use the deployed app instead (no cold start): see client.py.
+
 Outputs land in out/<name>/: splat.ply plus debug JPEGs and timings.json.
 """
 import json
@@ -70,20 +72,16 @@ class Splatter:
 
 @app.local_entrypoint()
 def main(video: str, name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 1000,
-         batch: int = 4, cap: int = 200_000, scale: float = 0.75):
+         batch: int = 4, cap: int = 200_000, scale: float = 0.75,
+         debug: bool = True, app_lr: float = 0.0, sh: int = 3, train_json: str = ""):
     src = Path(video)
     out_dir = Path("out") / (name or src.stem)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    cfg = {"n_frames": n_frames, "stop_after": stop_after or None,
-           "train": {"iters": iters, "batch": batch, "cap_max": cap, "train_scale": scale}}
+    cfg = {"n_frames": n_frames, "stop_after": stop_after or None, "debug": debug,
+           "train": {"iters": iters, "batch": batch, "cap_max": cap, "train_scale": scale,
+                     "appearance_lr": app_lr, "sh_degree": sh, **json.loads(train_json or "{}")}}
 
     t0 = time.perf_counter()
     res = Splatter().run.remote(src.read_bytes(), cfg)
-    wall = time.perf_counter() - t0
+    from client import save
 
-    for fname, data in res.pop("files").items():
-        (out_dir / fname).write_bytes(data)
-    res["wall_incl_upload_and_cold_start"] = round(wall, 1)
-    (out_dir / "run.json").write_text(json.dumps(res, indent=2))
-    print(json.dumps(res, indent=2))
-    print(f"\nwrote {out_dir}/")
+    save(res, out_dir, time.perf_counter() - t0)
