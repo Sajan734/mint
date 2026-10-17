@@ -44,3 +44,5 @@ Thumbs.db
 orbit.mp4
 gsplat/.agents/skills/modal/references/
 gsplat/legacy/
+# Git Bash crash dumps (Windows)
+*.stackdump
