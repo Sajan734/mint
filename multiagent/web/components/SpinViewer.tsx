@@ -46,7 +46,7 @@ export default function SpinViewer({ frames, alt, variant, viewerUrl, splat }: P
     if (preloadStarted.current || n < 2) return;
     preloadStarted.current = true;
     setPreloading(true);
-    for (const i of loadOrder(pos.current, n)) {
+    for (const i of loadOrder(Math.round(pos.current), n)) {
       if (i === 0) continue;
       const img = new Image();
       img.onload = () => setLoaded((s) => new Set(s).add(i));

@@ -44,3 +44,4 @@ next-env.d.ts
 /public/local/
 /test-results/
 /playwright-report/
+/e2e/shots/
