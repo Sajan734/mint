@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/statement.schema.json",
+  "title": "Household statement (D → web)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "batch_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "item_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "label": {
+            "type": "string"
+          },
+          "thumb": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          },
+          "condition": {
+            "$ref": "common.schema.json#/$defs/prob"
+          },
+          "price_band_cad": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "minimum": 0
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "chosen_price_cad": {
+            "type": "number"
+          },
+          "coverage_verified": {
+            "type": "boolean"
+          },
+          "identity_warning": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "item_id",
+          "label",
+          "thumb",
+          "condition",
+          "price_band_cad",
+          "coverage_verified",
+          "identity_warning"
+        ]
+      }
+    },
+    "totals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mid": {
+          "type": "number"
+        },
+        "low": {
+          "type": "number"
+        },
+        "high": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "mid",
+        "low",
+        "high"
+      ]
+    }
+  },
+  "required": [
+    "v",
+    "batch_id",
+    "items",
+    "totals"
+  ]
+}

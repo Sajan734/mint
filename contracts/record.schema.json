@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/record.schema.json",
+  "title": "Signed record (D → verify). INTEGERS AND STRINGS ONLY, no floats, no nulls; optional fields omitted. sha256 + sig_seller + sig_buyer are stored beside it, over the raw 32-byte hash",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "record_version": {
+      "const": 3
+    },
+    "record_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "kind": {
+      "$ref": "common.schema.json#/$defs/scanKind"
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "item_id": {
+          "$ref": "common.schema.json#/$defs/uuid"
+        },
+        "label": {
+          "type": "string"
+        },
+        "brand": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "variant": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "label"
+      ]
+    },
+    "listing_scan_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256Hex"
+    },
+    "handover_scan_sha256": {
+      "$ref": "common.schema.json#/$defs/sha256Hex"
+    },
+    "regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "region_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "class": {
+            "$ref": "common.schema.json#/$defs/changeClass"
+          },
+          "prob_bp": {
+            "$ref": "common.schema.json#/$defs/bp"
+          },
+          "severity_bp": {
+            "$ref": "common.schema.json#/$defs/bp"
+          },
+          "decision": {
+            "$ref": "common.schema.json#/$defs/decision"
+          },
+          "source": {
+            "enum": [
+              "reference",
+              "handover"
+            ]
+          },
+          "delta_cents": {
+            "type": "integer",
+            "maximum": 0
+          }
+        },
+        "required": [
+          "region_id",
+          "class",
+          "prob_bp",
+          "severity_bp",
+          "decision",
+          "source",
+          "delta_cents"
+        ]
+      },
+      "description": "Sorted by region_id"
+    },
+    "price": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "market_value_cents": {
+          "type": "integer"
+        },
+        "mid_cents": {
+          "type": "integer"
+        },
+        "band_low_cents": {
+          "type": "integer"
+        },
+        "band_high_cents": {
+          "type": "integer"
+        },
+        "condition_bp": {
+          "$ref": "common.schema.json#/$defs/bp"
+        }
+      },
+      "required": [
+        "market_value_cents",
+        "mid_cents",
+        "band_low_cents",
+        "band_high_cents",
+        "condition_bp"
+      ]
+    },
+    "adjustment_cents": {
+      "type": "integer"
+    },
+    "identity_match_bp": {
+      "$ref": "common.schema.json#/$defs/bp"
+    },
+    "currency": {
+      "const": "CAD"
+    },
+    "timestamp": {
+      "$ref": "common.schema.json#/$defs/isoTime"
+    },
+    "seller_pubkey": {
+      "$ref": "common.schema.json#/$defs/base64"
+    },
+    "buyer_pubkey": {
+      "$ref": "common.schema.json#/$defs/base64"
+    }
+  },
+  "required": [
+    "record_version",
+    "record_id",
+    "kind",
+    "item",
+    "listing_scan_sha256",
+    "regions",
+    "price",
+    "identity_match_bp",
+    "currency",
+    "timestamp",
+    "seller_pubkey"
+  ]
+}

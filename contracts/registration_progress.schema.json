@@ -1,0 +1,39 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/registration_progress.schema.json",
+  "title": "Realtime `registration_progress` payload (B → stage snap animation), every ~10 iterations",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "ref_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "iter": {
+      "type": "integer"
+    },
+    "pose": {
+      "$ref": "common.schema.json#/$defs/mat4"
+    },
+    "intrinsics": {
+      "$ref": "common.schema.json#/$defs/mat3"
+    },
+    "silhouette_iou": {
+      "$ref": "common.schema.json#/$defs/prob"
+    }
+  },
+  "required": [
+    "v",
+    "ref_id",
+    "item_id",
+    "iter",
+    "pose",
+    "intrinsics",
+    "silhouette_iou"
+  ]
+}

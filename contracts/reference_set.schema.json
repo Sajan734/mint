@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/reference_set.schema.json",
+  "title": "data/refs/{model_key}/refs.json (A → B). Curated official images with sources",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "model_key": {
+      "type": "string"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "variant": {
+      "type": "string"
+    },
+    "refs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ref_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "file": {
+            "type": "string"
+          },
+          "mask_file": {
+            "type": "string"
+          },
+          "source_url": {
+            "type": "string",
+            "format": "uri"
+          },
+          "variant": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "ref_id",
+          "file",
+          "source_url",
+          "variant"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "v",
+    "model_key",
+    "brand",
+    "model",
+    "variant",
+    "refs"
+  ]
+}

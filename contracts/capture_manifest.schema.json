@@ -1,0 +1,108 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/capture_manifest.schema.json",
+  "title": "Capture manifest (C → A, B). pose = RAW ARKit camera.transform; intrinsics scaled to the saved JPEG (sensor/landscape orientation, D2)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "scan_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "batch_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "deal_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "kind": {
+      "$ref": "common.schema.json#/$defs/scanKind"
+    },
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "path": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          },
+          "t_ms": {
+            "type": "integer"
+          },
+          "pose": {
+            "$ref": "common.schema.json#/$defs/mat4"
+          },
+          "intrinsics": {
+            "$ref": "common.schema.json#/$defs/mat3"
+          },
+          "sharpness": {
+            "type": "number"
+          },
+          "segment": {
+            "type": "string",
+            "examples": [
+              "az090_el20"
+            ]
+          },
+          "sha256": {
+            "$ref": "common.schema.json#/$defs/sha256Hex"
+          }
+        },
+        "required": [
+          "index",
+          "path",
+          "t_ms",
+          "pose",
+          "intrinsics",
+          "sharpness",
+          "segment"
+        ]
+      },
+      "minItems": 8
+    },
+    "anchor": {
+      "$ref": "common.schema.json#/$defs/vec3",
+      "description": "Tap anchor in the ARKit world of this session"
+    },
+    "coverage_pct": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "width": {
+      "type": "integer"
+    },
+    "height": {
+      "type": "integer"
+    },
+    "device": {
+      "type": "string"
+    },
+    "created_at": {
+      "$ref": "common.schema.json#/$defs/isoTime"
+    }
+  },
+  "required": [
+    "v",
+    "scan_id",
+    "item_id",
+    "batch_id",
+    "kind",
+    "frames",
+    "anchor",
+    "coverage_pct",
+    "width",
+    "height",
+    "device",
+    "created_at"
+  ]
+}

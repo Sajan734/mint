@@ -1,0 +1,152 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/common.schema.json",
+  "title": "Shared definitions (v3)",
+  "$defs": {
+    "v": {
+      "const": 3
+    },
+    "uuid": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "isoTime": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "storagePath": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*/[A-Za-z0-9_./{}-]+$",
+      "description": "Storage object key, never a full URL"
+    },
+    "sha256Hex": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "base64": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9+/]+={0,2}$"
+    },
+    "prob": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "bp": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "description": "Basis points (signed records only)"
+    },
+    "vec3": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Metres, listing scan frame (anchor origin, +Y up)"
+    },
+    "mat3": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "Intrinsics K, pixels of the saved image"
+    },
+    "mat4": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 4,
+        "maxItems": 4
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "Camera-to-world, row-major. Manifest: raw ARKit. Everywhere else: OpenCV convention in the scan frame"
+    },
+    "bbox01": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "minItems": 4,
+      "maxItems": 4,
+      "description": "x0,y0,x1,y1 normalised"
+    },
+    "changeClass": {
+      "enum": [
+        "wear",
+        "damage",
+        "missing_part",
+        "dirt_or_smudge",
+        "removable_addition",
+        "scan_artifact"
+      ]
+    },
+    "decision": {
+      "enum": [
+        "accepted",
+        "needs_confirmation",
+        "uncertain",
+        "dropped"
+      ]
+    },
+    "scanKind": {
+      "enum": [
+        "listing",
+        "handover"
+      ]
+    },
+    "party": {
+      "enum": [
+        "seller",
+        "buyer"
+      ]
+    },
+    "classProbs": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "wear",
+        "damage",
+        "missing_part",
+        "dirt_or_smudge",
+        "removable_addition",
+        "scan_artifact"
+      ],
+      "properties": {
+        "wear": {
+          "$ref": "#/$defs/prob"
+        },
+        "damage": {
+          "$ref": "#/$defs/prob"
+        },
+        "missing_part": {
+          "$ref": "#/$defs/prob"
+        },
+        "dirt_or_smudge": {
+          "$ref": "#/$defs/prob"
+        },
+        "removable_addition": {
+          "$ref": "#/$defs/prob"
+        },
+        "scan_artifact": {
+          "$ref": "#/$defs/prob"
+        }
+      }
+    }
+  }
+}

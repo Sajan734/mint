@@ -1,0 +1,61 @@
+{
+  "$comment": "Cross-language vector. Python, TypeScript and Swift canonicalisers MUST produce exactly `canonical` from `record` and `sha256` from it. Numbers are illustrative; pubkeys are placeholders.",
+  "record": {
+    "record_version": 3,
+    "record_id": "3b9f2c4e-8a17-4d2b-9c61-5e0a7f3d1b22",
+    "kind": "handover",
+    "item": {
+      "item_id": "c4e8a1f2-6b3d-4e9a-8f17-2d5c9b0e7a33",
+      "label": "over-ear headphones",
+      "brand": "Sony",
+      "model": "WH-1000XM4",
+      "variant": "black"
+    },
+    "listing_scan_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "handover_scan_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "regions": [
+      {
+        "region_id": "1e0c7a52-3d4b-4f8e-8a1d-6c2b9e0f4a11",
+        "class": "wear",
+        "prob_bp": 9100,
+        "severity_bp": 4500,
+        "decision": "accepted",
+        "source": "reference",
+        "delta_cents": -1502
+      },
+      {
+        "region_id": "7a3d9e21-5c8b-4f6a-b2e0-9d1c4a8f6e44",
+        "class": "damage",
+        "prob_bp": 9400,
+        "severity_bp": 2000,
+        "decision": "accepted",
+        "source": "handover",
+        "delta_cents": -1365
+      },
+      {
+        "region_id": "9b2e4f60-7a1c-4d3e-b5f2-0e8d1c6a7b22",
+        "class": "removable_addition",
+        "prob_bp": 9200,
+        "severity_bp": 500,
+        "decision": "accepted",
+        "source": "handover",
+        "delta_cents": 0
+      }
+    ],
+    "price": {
+      "market_value_cents": 18000,
+      "mid_cents": 15952,
+      "band_low_cents": 15314,
+      "band_high_cents": 16590,
+      "condition_bp": 8862
+    },
+    "adjustment_cents": -1365,
+    "identity_match_bp": 9300,
+    "currency": "CAD",
+    "timestamp": "2026-10-18T06:30:00Z",
+    "seller_pubkey": "c2VsbGVyLXB1YmtleS1wbGFjZWhvbGRlci0zMmJ5dGVzIQ==",
+    "buyer_pubkey": "YnV5ZXItcHVia2V5LXBsYWNlaG9sZGVyLTMyYnl0ZXMhIQ=="
+  },
+  "canonical": "{\"adjustment_cents\":-1365,\"buyer_pubkey\":\"YnV5ZXItcHVia2V5LXBsYWNlaG9sZGVyLTMyYnl0ZXMhIQ==\",\"currency\":\"CAD\",\"handover_scan_sha256\":\"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\",\"identity_match_bp\":9300,\"item\":{\"brand\":\"Sony\",\"item_id\":\"c4e8a1f2-6b3d-4e9a-8f17-2d5c9b0e7a33\",\"label\":\"over-ear headphones\",\"model\":\"WH-1000XM4\",\"variant\":\"black\"},\"kind\":\"handover\",\"listing_scan_sha256\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"price\":{\"band_high_cents\":16590,\"band_low_cents\":15314,\"condition_bp\":8862,\"market_value_cents\":18000,\"mid_cents\":15952},\"record_id\":\"3b9f2c4e-8a17-4d2b-9c61-5e0a7f3d1b22\",\"record_version\":3,\"regions\":[{\"class\":\"wear\",\"decision\":\"accepted\",\"delta_cents\":-1502,\"prob_bp\":9100,\"region_id\":\"1e0c7a52-3d4b-4f8e-8a1d-6c2b9e0f4a11\",\"severity_bp\":4500,\"source\":\"reference\"},{\"class\":\"damage\",\"decision\":\"accepted\",\"delta_cents\":-1365,\"prob_bp\":9400,\"region_id\":\"7a3d9e21-5c8b-4f6a-b2e0-9d1c4a8f6e44\",\"severity_bp\":2000,\"source\":\"handover\"},{\"class\":\"removable_addition\",\"decision\":\"accepted\",\"delta_cents\":0,\"prob_bp\":9200,\"region_id\":\"9b2e4f60-7a1c-4d3e-b5f2-0e8d1c6a7b22\",\"severity_bp\":500,\"source\":\"handover\"}],\"seller_pubkey\":\"c2VsbGVyLXB1YmtleS1wbGFjZWhvbGRlci0zMmJ5dGVzIQ==\",\"timestamp\":\"2026-10-18T06:30:00Z\"}",
+  "sha256": "68b71c27aebcf7fd65edb2bf10cb0b6d9caf9f3b7db4ede61fa5867b9d6acab2"
+}

@@ -1,0 +1,33 @@
+sequenceDiagram
+  autonumber
+  participant API as mint-api
+  participant R as Reference store (A)
+  participant B as Comparator GPU (B)
+  participant DC as Decisions (B)
+  participant PR as Price engine (D)
+  participant S as Supabase
+  participant W as Stage + review queue
+  API->>R: references for model + variant
+  R-->>API: 3 to 5 official images + product masks + sources
+  API->>B: spawn condition(item_id)
+  B->>B: coarse pose: render viewpoint sphere, match DINOv2 global + silhouette
+  B->>B: fine pose: ALIKED + LightGlue, lift with splat depth, PnP-RANSAC + focal sweep
+  B->>B: render-and-optimize on silhouette IoU + feature alignment
+  B->>S: registration progress (pose, IoU ticking up)
+  S-->>W: reference snaps onto the 3D model
+  B->>B: drop references with IoU below 0.85
+  B->>B: render at solved pose, histogram-match inside mask
+  B->>B: DINOv2 patch distance + high-pass Lab difference = anomaly map
+  B->>B: keep anomalies seen in at least 2 references
+  B->>B: lift to 3D with splat depth, HDBSCAN, region features
+  B->>B: identity score from IoU + geometric agreement
+  B->>S: anomaly maps, candidates, regions, identity
+  S-->>W: heatmap, noise fades, real wear glows
+  API->>DC: decide(regions)
+  DC-->>API: verdicts (accepted, needs_confirmation, uncertain, dropped)
+  API->>PR: price(item, counted regions, comps)
+  PR-->>API: price band + ledger
+  API->>S: broadcast verdicts + price
+  S-->>W: ledger builds line by line
+  W->>API: POST /items/{id}/confirm/{region_id}
+  API->>PR: re-price, band narrows

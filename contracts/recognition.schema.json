@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/recognition.schema.json",
+  "title": "Live recognition (A → C, D, stage), broadcast as `recognition`",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "scan_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "label": {
+      "type": "string"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "variant": {
+      "type": "string"
+    },
+    "category": {
+      "type": "string"
+    },
+    "bbox_xyxy": {
+      "$ref": "common.schema.json#/$defs/bbox01"
+    },
+    "confidence": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "engine": {
+      "type": "string"
+    },
+    "latency_ms": {
+      "type": "integer"
+    }
+  },
+  "required": [
+    "v",
+    "scan_id",
+    "label",
+    "category",
+    "bbox_xyxy",
+    "confidence",
+    "latency_ms"
+  ]
+}

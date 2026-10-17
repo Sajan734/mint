@@ -1,0 +1,29 @@
+sequenceDiagram
+  autonumber
+  participant J as Buyer phone (judge) + stage
+  participant P as iPhone app (C)
+  participant API as mint-api
+  participant B as Comparator GPU (B)
+  participant DC as Decisions (B)
+  participant PR as Price engine (D)
+  participant S as Supabase
+  J->>API: open deal link, POST /deals/{id}/join (buyer pubkey)
+  P->>API: POST /scans {kind: handover, deal_id}
+  P->>S: 10 s scan, about 25 frames
+  P->>API: POST /deals/{id}/handover
+  API->>B: spawn handover(deal_id)
+  B->>B: SAM 2 masks
+  B->>B: per frame: nearest keyframes, LightGlue inside mask, PnP-RANSAC vs splat depth
+  B->>B: render seller splat at each pose, exposure-normalise, DINOv2 + Lab diff
+  B->>B: lift changes to 3D, HDBSCAN, region features
+  B->>S: regions + wipe pairs
+  API->>DC: decide(regions, disclosed listing regions)
+  DC-->>API: verdicts with present_before_prob
+  API->>PR: adjustment = re-price with new damage
+  API->>S: broadcast handover_result
+  S-->>J: red new regions beside amber disclosed ones, wipe slider
+  API->>S: record_ready (canonical JSON + sha256)
+  J->>API: POST /deals/{id}/sign (buyer, tweetnacl)
+  P->>API: POST /deals/{id}/sign (seller, CryptoKit)
+  API->>S: broadcast sealed
+  S-->>J: stamp, QR, verify

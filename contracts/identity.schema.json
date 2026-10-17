@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/identity.schema.json",
+  "title": "Identity check (B → D, stage). A mismatch warning, not authenticity certification",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "identity_match": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "threshold": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "warning": {
+      "type": "boolean"
+    },
+    "per_ref": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ref_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "iou": {
+            "$ref": "common.schema.json#/$defs/prob"
+          },
+          "inlier_ratio": {
+            "$ref": "common.schema.json#/$defs/prob"
+          }
+        },
+        "required": [
+          "ref_id",
+          "iou",
+          "inlier_ratio"
+        ]
+      }
+    }
+  },
+  "required": [
+    "v",
+    "item_id",
+    "identity_match",
+    "threshold",
+    "warning",
+    "per_ref"
+  ]
+}

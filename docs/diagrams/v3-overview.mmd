@@ -1,0 +1,46 @@
+flowchart TB
+  subgraph iOS["iOS capture app · Swift + ARKit (C)"]
+    AR["AR dome + guided capture<br/>pose-tagged frames · seller key"]
+  end
+  subgraph Back["mint-api · FastAPI on Modal CPU"]
+    ORCH["Job orchestrator (D)"]
+    DEC["Decision harness + rules (B)"]
+    PRICE["Fair price engine (D)"]
+    REC["Record builder + verification (D)"]
+  end
+  subgraph GPU["Modal GPU workers"]
+    RECOG["Recognition VLM (A)"]
+    MASK["SAM 2 + hand filter (A)"]
+    POSE["ARKit poses + VGGT refine (A)"]
+    TRAIN["gsplat + export (A)"]
+    REG["Reference registration (B)"]
+    DIFF["Render and compare + 3D lifting (B)"]
+    LOC["Handover localization (B)"]
+  end
+  subgraph Data["Supabase"]
+    DB[("Postgres")]
+    ST[("Storage")]
+    RT(["Realtime"])
+  end
+  subgraph Web["Next.js on Vercel"]
+    STAGE["Stage view (C)"]
+    SALE["Sale page + statement (D)"]
+    PASS["Passport viewer · Spark (D)"]
+    REVIEW["Seller review queue (D)"]
+    VERIFY["Verify page (D)"]
+  end
+  AR --> ST
+  AR --> ORCH
+  ORCH --> RECOG --> MASK --> POSE --> TRAIN
+  TRAIN --> REG --> DIFF --> DEC --> PRICE
+  ORCH --> LOC --> DIFF
+  DEC --> DB
+  PRICE --> DB
+  PRICE --> REC
+  REC --> DB
+  DB --> RT
+  RT --> STAGE
+  RT --> REVIEW
+  ST --> PASS
+  DB --> SALE
+  REC --> VERIFY

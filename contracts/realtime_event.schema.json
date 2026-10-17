@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/realtime_event.schema.json",
+  "title": "Realtime envelope on batch:{id} and deal:{id}; also the demo-mode JSONL line format",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "type": {
+      "enum": [
+        "stage",
+        "capture_progress",
+        "recognition",
+        "passport_ready",
+        "registration_progress",
+        "registration",
+        "anomaly_map",
+        "candidates",
+        "region",
+        "verdict",
+        "identity",
+        "price",
+        "statement",
+        "handover_result",
+        "record_ready",
+        "signature",
+        "sealed",
+        "error"
+      ]
+    },
+    "id": {
+      "$ref": "common.schema.json#/$defs/uuid",
+      "description": "batch_id or deal_id of the channel"
+    },
+    "at": {
+      "$ref": "common.schema.json#/$defs/isoTime"
+    },
+    "t_ms": {
+      "type": "integer"
+    },
+    "payload": {
+      "type": "object"
+    }
+  },
+  "required": [
+    "v",
+    "type",
+    "id",
+    "at",
+    "t_ms",
+    "payload"
+  ]
+}

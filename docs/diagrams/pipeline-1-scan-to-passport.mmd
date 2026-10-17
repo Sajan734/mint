@@ -1,0 +1,33 @@
+sequenceDiagram
+  autonumber
+  participant P as iPhone app (C)
+  participant API as mint-api
+  participant V as Recognition VLM (A)
+  participant G as Reconstructor GPU (A)
+  participant S as Supabase
+  participant W as Stage + web
+  P->>API: POST /scans {batch_id, item_id, kind: listing}
+  API-->>P: scan_id + signed upload URLs
+  Note over P: tap item, AR dome anchors, exposure + focus + WB locked
+  P->>S: upload first sharp frame
+  P->>API: POST /scans/{id}/first-frame
+  API->>V: one VLM call (label, brand, model, variant, category, box)
+  V-->>API: recognition
+  API->>S: broadcast recognition
+  S-->>P: model name pops up mid-scan
+  S-->>W: model name on stage
+  P->>S: frames + ARKit pose + intrinsics as dome segments fill
+  Note over P: about 90 percent coverage, upload finishes automatically
+  P->>API: POST /scans/{id}/complete (manifest)
+  API->>G: spawn reconstruct(scan_id)
+  G->>G: ARKit poses to OpenCV, re-centre on anchor
+  G->>G: SAM 2 masks from box, drop hand-occluded frames
+  G->>G: VGGT pose refinement (ARKit init, metric scale kept)
+  G->>G: gsplat train with alpha supervision
+  G->>G: export .spz + keep .ply + keyframe index
+  G->>G: sha256(manifest + frame hashes + splat)
+  G->>S: upload splat + thumbs, write passport
+  API->>S: broadcast passport_ready
+  S-->>W: splat reveal
+  S-->>P: passport ready
+  P->>API: POST /scans/{id}/seal (seller signature, CryptoKit Ed25519)

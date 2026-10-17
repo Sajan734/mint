@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/registration.schema.json",
+  "title": "Registration result per reference (B → D, stage)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "ref_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "pose": {
+      "$ref": "common.schema.json#/$defs/mat4"
+    },
+    "intrinsics": {
+      "$ref": "common.schema.json#/$defs/mat3",
+      "description": "Solved focal, reference image pixels"
+    },
+    "silhouette_iou": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "inliers": {
+      "type": "integer"
+    },
+    "iterations": {
+      "type": "integer"
+    },
+    "render_path": {
+      "$ref": "common.schema.json#/$defs/storagePath"
+    },
+    "anomaly_map_path": {
+      "$ref": "common.schema.json#/$defs/storagePath"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "failed"
+      ]
+    },
+    "fail_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "v",
+    "ref_id",
+    "item_id",
+    "silhouette_iou",
+    "inliers",
+    "iterations",
+    "status"
+  ]
+}

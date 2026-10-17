@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/handover_result.schema.json",
+  "title": "Handover result (D → web)",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "deal_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "region_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "status": {
+            "enum": [
+              "new",
+              "disclosed"
+            ]
+          },
+          "verdict": {
+            "$ref": "verdict.schema.json"
+          },
+          "wipe_pair": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "render": {
+                "$ref": "common.schema.json#/$defs/storagePath"
+              },
+              "photo": {
+                "$ref": "common.schema.json#/$defs/storagePath"
+              }
+            },
+            "required": [
+              "render",
+              "photo"
+            ]
+          }
+        },
+        "required": [
+          "region_id",
+          "status",
+          "verdict",
+          "wipe_pair"
+        ]
+      }
+    },
+    "adjustment_cad": {
+      "type": "number"
+    },
+    "record_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    }
+  },
+  "required": [
+    "v",
+    "deal_id",
+    "regions",
+    "adjustment_cad",
+    "record_id"
+  ]
+}

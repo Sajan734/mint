@@ -1,0 +1,129 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/price_band.schema.json",
+  "title": "Price band (D → web). Every ledger line links to a region; market value cites its comps",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "market_value_cad": {
+      "type": "number",
+      "minimum": 0
+    },
+    "comps": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "price_cad": {
+            "type": "number"
+          },
+          "source": {
+            "type": "string",
+            "format": "uri"
+          },
+          "date": {
+            "type": "string"
+          },
+          "condition_note": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "price_cad",
+          "source"
+        ]
+      },
+      "minItems": 1
+    },
+    "condition": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "price_mid_cad": {
+      "type": "number"
+    },
+    "price_band_cad": {
+      "type": "array",
+      "items": {
+        "type": "number",
+        "minimum": 0
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "ledger": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "region_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "label": {
+            "type": "string"
+          },
+          "delta_cad": {
+            "type": "number",
+            "maximum": 0
+          },
+          "confidence": {
+            "$ref": "common.schema.json#/$defs/prob"
+          }
+        },
+        "required": [
+          "region_id",
+          "label",
+          "delta_cad",
+          "confidence"
+        ]
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "region_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "text": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "region_id",
+          "text"
+        ]
+      }
+    },
+    "identity_match": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "chosen_price_cad": {
+      "type": "number"
+    },
+    "constants_version": {
+      "const": "price_v3"
+    }
+  },
+  "required": [
+    "v",
+    "item_id",
+    "market_value_cad",
+    "comps",
+    "condition",
+    "price_mid_cad",
+    "price_band_cad",
+    "ledger",
+    "identity_match",
+    "constants_version"
+  ]
+}

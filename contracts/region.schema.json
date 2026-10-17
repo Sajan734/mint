@@ -1,0 +1,102 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/region.schema.json",
+  "title": "Region with measured features (B → D). Features only go to the decision engine",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "region_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "scan_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "source": {
+      "enum": [
+        "reference",
+        "handover"
+      ]
+    },
+    "centroid": {
+      "$ref": "common.schema.json#/$defs/vec3"
+    },
+    "radius_m": {
+      "type": "number"
+    },
+    "normal": {
+      "$ref": "common.schema.json#/$defs/vec3"
+    },
+    "part": {
+      "type": "string"
+    },
+    "area_cm2": {
+      "type": "number",
+      "minimum": 0
+    },
+    "lab_delta": {
+      "type": "number"
+    },
+    "feature_dist": {
+      "type": "number"
+    },
+    "silhouette_delta": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "views_agreeing": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "views_seeing": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "evidence": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "render": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          },
+          "photo": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          },
+          "reference": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          },
+          "keyframe": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          }
+        },
+        "required": [
+          "render"
+        ]
+      },
+      "minItems": 1
+    }
+  },
+  "required": [
+    "v",
+    "region_id",
+    "item_id",
+    "scan_id",
+    "source",
+    "centroid",
+    "radius_m",
+    "part",
+    "area_cm2",
+    "lab_delta",
+    "feature_dist",
+    "silhouette_delta",
+    "views_agreeing",
+    "views_seeing",
+    "evidence"
+  ]
+}

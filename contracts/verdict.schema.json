@@ -1,0 +1,94 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/verdict.schema.json",
+  "title": "Verdict (B → D). Model gives probabilities; code sets decision + floor",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "region_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "class_probs": {
+      "$ref": "common.schema.json#/$defs/classProbs"
+    },
+    "top_class": {
+      "$ref": "common.schema.json#/$defs/changeClass"
+    },
+    "severity": {
+      "$ref": "common.schema.json#/$defs/prob"
+    },
+    "present_before_prob": {
+      "oneOf": [
+        {
+          "$ref": "common.schema.json#/$defs/prob"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "Handover only; null for listings"
+    },
+    "decision": {
+      "$ref": "common.schema.json#/$defs/decision"
+    },
+    "floor_applied": {
+      "type": "boolean"
+    },
+    "rule_notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "engine": {
+      "enum": [
+        "jev",
+        "fallback",
+        "rules_v0"
+      ]
+    },
+    "latency_ms": {
+      "type": "integer"
+    },
+    "human_decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "decision": {
+          "enum": [
+            "confirmed",
+            "dismissed"
+          ]
+        },
+        "class": {
+          "$ref": "common.schema.json#/$defs/changeClass"
+        },
+        "by": {
+          "$ref": "common.schema.json#/$defs/party"
+        },
+        "at": {
+          "$ref": "common.schema.json#/$defs/isoTime"
+        }
+      },
+      "required": [
+        "decision",
+        "by",
+        "at"
+      ]
+    }
+  },
+  "required": [
+    "v",
+    "region_id",
+    "class_probs",
+    "top_class",
+    "severity",
+    "present_before_prob",
+    "decision",
+    "floor_applied",
+    "engine"
+  ]
+}

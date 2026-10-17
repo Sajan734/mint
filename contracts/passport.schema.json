@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/passport.schema.json",
+  "title": "Passport (A → B, D). Poses are OpenCV camera-to-world in the scan frame",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "scan_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "label": {
+      "type": "string"
+    },
+    "brand": {
+      "type": "string"
+    },
+    "model": {
+      "type": "string"
+    },
+    "variant": {
+      "type": "string"
+    },
+    "splat_path": {
+      "$ref": "common.schema.json#/$defs/storagePath"
+    },
+    "splat_ply_path": {
+      "type": "string",
+      "description": "Modal Volume path, e.g. mint-work/{scan_id}/splat.ply"
+    },
+    "metric_scale": {
+      "type": "number",
+      "description": "1.0 = ARKit metres"
+    },
+    "bbox": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "min": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        },
+        "max": {
+          "$ref": "common.schema.json#/$defs/vec3"
+        }
+      },
+      "required": [
+        "min",
+        "max"
+      ]
+    },
+    "keyframes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "pose": {
+            "$ref": "common.schema.json#/$defs/mat4"
+          },
+          "K": {
+            "$ref": "common.schema.json#/$defs/mat3"
+          },
+          "sharpness": {
+            "$ref": "common.schema.json#/$defs/prob"
+          },
+          "segment": {
+            "type": "string"
+          },
+          "thumb_path": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          }
+        },
+        "required": [
+          "index",
+          "pose",
+          "K",
+          "sharpness",
+          "segment",
+          "thumb_path"
+        ]
+      }
+    },
+    "coverage_pct": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100
+    },
+    "coverage_verified": {
+      "type": "boolean"
+    },
+    "sha256": {
+      "$ref": "common.schema.json#/$defs/sha256Hex"
+    },
+    "seller_pubkey": {
+      "$ref": "common.schema.json#/$defs/base64"
+    },
+    "seller_sig": {
+      "$ref": "common.schema.json#/$defs/base64"
+    },
+    "references": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "ref_id": {
+            "$ref": "common.schema.json#/$defs/uuid"
+          },
+          "path": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          },
+          "mask_path": {
+            "$ref": "common.schema.json#/$defs/storagePath"
+          },
+          "source": {
+            "type": "string",
+            "format": "uri"
+          }
+        },
+        "required": [
+          "ref_id",
+          "path",
+          "mask_path",
+          "source"
+        ]
+      }
+    },
+    "stage_timings_ms": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "integer"
+      }
+    }
+  },
+  "required": [
+    "v",
+    "scan_id",
+    "item_id",
+    "label",
+    "splat_path",
+    "splat_ply_path",
+    "metric_scale",
+    "bbox",
+    "keyframes",
+    "coverage_pct",
+    "coverage_verified",
+    "sha256",
+    "references",
+    "stage_timings_ms"
+  ]
+}

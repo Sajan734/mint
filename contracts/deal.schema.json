@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "mint/deal.schema.json",
+  "title": "POST /deals body (D web → API): a deal on a listed item",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "v": {
+      "$ref": "common.schema.json#/$defs/v"
+    },
+    "item_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "listing_record_id": {
+      "$ref": "common.schema.json#/$defs/uuid"
+    },
+    "agreed_price_cad": {
+      "type": "number",
+      "minimum": 0
+    },
+    "seller_pubkey": {
+      "$ref": "common.schema.json#/$defs/base64"
+    }
+  },
+  "required": [
+    "v",
+    "item_id",
+    "agreed_price_cad",
+    "seller_pubkey"
+  ]
+}
