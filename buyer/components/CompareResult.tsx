@@ -29,9 +29,9 @@ const CLAIM_MARK: Record<ClaimsFinding["status"], { mark: Mark; cls: string }> =
   unverifiable: { mark: "dash", cls: "text-ink-2" },
 };
 const VERDICT_MARK = (label: VerdictLabel | undefined): { mark: Mark; cls: string } =>
-  label === "same" ? { mark: "check", cls: "bg-mint-wash text-mint-ink" } : label === "different" ? { mark: "cross", cls: "bg-coral/15 text-ink" } : { mark: "dash", cls: "bg-surface-2 text-ink-2" };
+  label === "same" ? { mark: "check", cls: "bg-mint-wash text-mint-ink" } : label === "different" ? { mark: "cross", cls: "bg-coral-wash text-ink" } : { mark: "dash", cls: "bg-surface-2 text-ink-2" };
 
-const h2 = "text-[length:var(--t-lg)] font-bold";
+const h2 = "text-[length:var(--t-xl)]";
 
 /** Small buttons that put a view on the wipe. Visible text is the view number; the name says which view. */
 function ViewChips({ label, views, current, onPick }: { label: string; views: string[]; current: number; onPick: (i: number) => void }) {
@@ -39,7 +39,7 @@ function ViewChips({ label, views, current, onPick }: { label: string; views: st
   if (!idx.length) return null;
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      <span className="mr-1 text-xs text-ink-2">{label}</span>
+      <span className="mr-1 text-sm text-ink-2">{label}</span>
       {idx.map((i) => (
         <button
           key={i}
@@ -47,7 +47,7 @@ function ViewChips({ label, views, current, onPick }: { label: string; views: st
           aria-label={`Show view ${i + 1}`}
           aria-pressed={i === current}
           onClick={() => onPick(i)}
-          className="min-h-11 min-w-11 rounded-md border border-line bg-surface px-2 text-sm font-semibold tabular-nums transition-colors hover:border-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bg"
+          className="min-h-11 min-w-11 rounded-md bg-surface px-2 text-sm font-semibold tabular-nums transition-colors hover:border-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bg"
         >
           {i + 1}
         </button>
@@ -86,16 +86,15 @@ export default function CompareResult({ result, listingId, recorded = false, not
   return (
     <article aria-labelledby="result-h" className="flex flex-col gap-8">
       <header className="flex max-w-3xl flex-col gap-3">
-        <p className="text-sm font-semibold text-ink-2">How it matches</p>
         {/* Focus lands here for screen readers; it is not a control, so no ring (inline: the global :focus-visible rule is unlayered) */}
-        <h1 id="result-h" ref={title} tabIndex={-1} style={{ outline: "none" }} className="flex items-center gap-3 text-[length:var(--t-2xl)] font-bold">
+        <h1 id="result-h" ref={title} tabIndex={-1} style={{ outline: "none" }} className="flex items-center gap-3 text-[2rem] md:text-[2.5rem]">
           <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${mark.cls}`}>
             <Icon mark={mark.mark} className="" />
           </span>
           {heading(result)}
         </h1>
         {note && (
-          <p role="note" className="w-fit rounded-md border border-dashed border-line-strong bg-surface-2 px-3 py-2 text-sm">
+          <p role="note" className="w-fit rounded-full bg-amber-wash px-4 py-1.5 text-sm font-medium text-amber">
             {note}
           </p>
         )}
@@ -136,7 +135,7 @@ export default function CompareResult({ result, listingId, recorded = false, not
                   {ev.flagged.map((c) => {
                     const views = ev.categories[c]?.views ?? [];
                     return (
-                      <li key={c} className="flex flex-col gap-2 border-t border-line py-3">
+                      <li key={c} className="flex flex-col gap-2 py-3">
                         <p className="flex items-start gap-2">
                           <span aria-hidden className="mt-2 size-2 shrink-0 rounded-full bg-coral" />
                           <span>
@@ -159,7 +158,7 @@ export default function CompareResult({ result, listingId, recorded = false, not
               ) : (
                 <ul className="m-0 flex list-none flex-col p-0">
                   {result.claims_findings.map((f, k) => (
-                    <li key={k} data-status={f.status} className="flex flex-col gap-1.5 border-t border-line py-3">
+                    <li key={k} data-status={f.status} className="flex flex-col gap-1.5 py-3">
                       <p className="font-semibold">{f.claim}</p>
                       <p className="flex items-center gap-1.5 text-sm">
                         <Icon mark={CLAIM_MARK[f.status].mark} className={CLAIM_MARK[f.status].cls} />
@@ -173,7 +172,7 @@ export default function CompareResult({ result, listingId, recorded = false, not
             </section>
 
             {ns && (
-              <section aria-labelledby="next-h" className="flex flex-col gap-3 rounded-lg border border-line bg-surface p-4">
+              <section aria-labelledby="next-h" className="flex flex-col gap-3 rounded-lg bg-surface p-4">
                 <h2 id="next-h" className={h2}>Next step</h2>
                 <p>{ns.summary}</p>
                 {ns.message_to_seller && (
@@ -181,7 +180,7 @@ export default function CompareResult({ result, listingId, recorded = false, not
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <h3 className="text-sm font-semibold">Message to the seller</h3>
                       {!ns.is_template && (
-                        <span className="rounded-sm border border-dashed border-slate px-2 py-0.5 text-xs text-ink-2">Drafted by AI</span>
+                        <span className="rounded-full bg-surface px-3 py-0.5 text-sm text-ink-2">Drafted by AI</span>
                       )}
                     </div>
                     <p className="rounded-md bg-surface-2 p-3 text-sm">{ns.message_to_seller}</p>
@@ -205,7 +204,7 @@ export default function CompareResult({ result, listingId, recorded = false, not
       )}
 
       {(caveats.length > 0 || disclaimer || recorded) && (
-        <footer className="flex flex-col gap-3 border-t border-line pt-6 text-sm text-ink-2">
+        <footer className="flex flex-col gap-3 pt-6 text-sm text-ink-2">
           {caveats.length > 0 && (
             <ul className="m-0 flex list-disc flex-col gap-1 pl-5">
               {caveats.map((c) => <li key={c}>{c}</li>)}
@@ -214,8 +213,8 @@ export default function CompareResult({ result, listingId, recorded = false, not
           {disclaimer && <p>{disclaimer}</p>}
           {recorded && (
             <p className="flex flex-wrap items-center gap-2">
-              <span className="rounded-sm border border-dashed border-slate px-2 py-0.5 text-xs font-semibold text-ink">Recorded result</span>
-              <span className="font-mono text-xs">{runFooter(result)}</span>
+              <span className="rounded-full bg-amber-wash px-3 py-0.5 text-sm font-semibold text-amber">Recorded result</span>
+              <span className="tabular-nums text-sm">{runFooter(result)}</span>
             </p>
           )}
         </footer>

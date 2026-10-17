@@ -32,7 +32,7 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
           <ul className="flex list-none flex-col gap-2 p-0">
             {sales.map((s) => (
               <li key={s.id}>
-                <Link href={`/sale/${s.id}`} className="flex min-h-12 items-center justify-between gap-3 rounded-md border border-line bg-surface px-4 hover:border-ink-2">
+                <Link href={`/sale/${s.id}`} className="flex min-h-12 items-center justify-between gap-3 rounded-md bg-surface px-4 hover:border-ink-2">
                   <span className="font-semibold">{s.name}</span>
                   <span className="text-sm text-ink-2">{s.location.neighbourhood}</span>
                 </Link>

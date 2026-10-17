@@ -44,7 +44,7 @@ export default function VerifyItemPanel({ explanation, verified, onVerify }: {
 
   const level = explanation ? sureLevel(explanation.how_sure) : 0;
   return (
-    <section aria-labelledby="verify-h" className="rounded-lg border border-line bg-surface p-5 md:p-6">
+    <section aria-labelledby="verify-h" className="rounded-lg bg-surface p-5 md:p-6">
       <h2 id="verify-h" className="text-[length:var(--t-xl)] font-bold">Verify your item</h2>
       <p className="mt-2 max-w-[56ch] text-ink-2">Rescan what you received and Mint compares it with the listing.</p>
 
@@ -103,7 +103,7 @@ export default function VerifyItemPanel({ explanation, verified, onVerify }: {
             <ol className="m-0 grid list-none gap-3 p-0">
               {explanation.what_to_do.map((t, i) => (
                 <li key={i} className="flex gap-3">
-                  <span aria-hidden className="grid size-6 shrink-0 place-items-center rounded-full bg-ink font-mono text-xs text-bg">{i + 1}</span>
+                  <span aria-hidden className="grid size-6 shrink-0 place-items-center rounded-full bg-ink tabular-nums text-xs text-bg">{i + 1}</span>
                   <span>{t}</span>
                 </li>
               ))}
@@ -115,7 +115,7 @@ export default function VerifyItemPanel({ explanation, verified, onVerify }: {
               {explanation.caveats.map((t, i) => <li key={i}>{t}</li>)}
             </ul>
           </Block>
-          <p className="border-t border-line pt-4 text-sm text-ink-2">{explanation.disclaimer}</p>
+          <p className=" pt-4 text-sm text-ink-2">{explanation.disclaimer}</p>
         </div>
       )}
 
@@ -126,7 +126,7 @@ export default function VerifyItemPanel({ explanation, verified, onVerify }: {
             Marked as verified.
           </p>
         ) : (
-          <button type="button" onClick={onVerify} className="mt-5 min-h-12 rounded-md border border-line px-6 font-semibold hover:border-ink-2">
+          <button type="button" onClick={onVerify} className="mt-5 min-h-12 rounded-md px-6 font-semibold hover:border-ink-2">
             Mark as verified
           </button>
         )

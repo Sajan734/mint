@@ -29,8 +29,8 @@ async function Grid({ label, list }: { label: string; list: MarketListing[] }) {
     }),
   );
   return (
-    <section className="mt-16">
-      <h2 className="mb-4 text-[length:var(--t-xl)] font-bold">{label}</h2>
+    <section className="rise mt-24">
+      <h2 className="mb-6 text-[length:var(--t-xl)] md:text-[length:var(--t-2xl)]">{label}</h2>
       <ListingGrid label={label}>{cards}</ListingGrid>
     </section>
   );

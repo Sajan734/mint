@@ -56,7 +56,7 @@ export function MediaProvider({ children, ...p }: MediaPanelProps & { children: 
 }
 
 const BOX = "relative aspect-square w-full overflow-hidden rounded-md";
-const PILL = "pointer-events-none absolute rounded-full border border-line-strong bg-surface px-3 py-1 text-sm font-semibold leading-tight text-ink";
+const PILL = "pointer-events-none absolute rounded-full bg-raised px-3 py-1.5 text-sm font-semibold leading-tight text-ink";
 
 export function MediaViewer({ className = "" }: { className?: string }) {
   const { title, splatUrl, frames, photos, sample, selected, broken, markBroken } = useMedia();
@@ -126,8 +126,8 @@ export function MediaTiles({ className = "" }: { className?: string }) {
   const shown = photos.slice(0, MAX_PHOTOS);
   if ((has3d ? 1 : 0) + shown.length < 2) return null; // one view needs no picker
   const tile = (on: boolean) =>
-    `relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-sm border transition-[border-color,box-shadow] duration-150 md:size-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
-      on ? "border-ink ring-2 ring-mint-ink ring-offset-2 ring-offset-bg" : "border-line hover:border-ink-2"
+    `relative grid size-16 shrink-0 place-items-center overflow-hidden rounded-[12px] bg-surface transition-[background-color,box-shadow] duration-150 md:size-20 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus ${
+      on ? "ring-2 ring-leaf ring-offset-2 ring-offset-bg" : "hover:bg-surface-2"
     }`;
   return (
     <div role="group" aria-label={`Views of ${title}`} className={`flex flex-wrap gap-2 ${className}`}>

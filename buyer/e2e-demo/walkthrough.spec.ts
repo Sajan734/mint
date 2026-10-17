@@ -8,11 +8,14 @@ test("demo walk-through: list an item, find it, contact the seller, check it", a
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message} @ ${page.url()}`));
 
   await page.goto("/?mock=1");
-  await expect(page.getByText("Demo data").first()).toBeVisible();
+  const header = page.getByRole("banner");
+  await expect(header.getByText("Demo data")).toBeVisible();
 
-  await page.getByRole("link", { name: "Sell an item" }).click();
+  await header.getByRole("link", { name: "Sell an item" }).click();
   await expect(page).toHaveURL(/\/sell$/);
   await expect(page.getByRole("heading", { name: "Your listings" })).toBeVisible();
+  // The dev server can reload a page once just after it arrives; a click in between is lost. Let it settle.
+  await page.waitForLoadState("networkidle");
 
   await page.getByRole("link", { name: "New listing" }).click();
   await expect(page).toHaveURL(/\/sell\/scan\/[0-9a-f-]{36}$/);

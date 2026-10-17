@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
-import { Bricolage_Grotesque, DM_Mono, Figtree } from "next/font/google";
+import { Figtree, Fraunces } from "next/font/google";
+import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import "./globals.css";
 
-const bricolage = Bricolage_Grotesque({ variable: "--font-bricolage", subsets: ["latin"], weight: ["600", "700"], display: "swap" });
-const figtree = Figtree({ variable: "--font-figtree", subsets: ["latin"], weight: ["400", "500", "600"], display: "swap" });
-const dmMono = DM_Mono({ variable: "--font-dm-mono", subsets: ["latin"], weight: ["500"], display: "swap" });
+// Two faces (docs/design/DESIGN.md §3): Fraunces at its softest for signs, Figtree for everything read or pressed.
+const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], axes: ["SOFT", "WONK", "opsz"], display: "swap" });
+const figtree = Figtree({ variable: "--font-figtree", subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap" });
 
 export const metadata: Metadata = {
   title: "Mint for sellers",
@@ -14,13 +15,16 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${bricolage.variable} ${figtree.variable} ${dmMono.variable}`}>
-      <body className="flex min-h-screen flex-col">
+    <html lang="en" className={`${fraunces.variable} ${figtree.variable}`}>
+      <body className="flex min-h-svh flex-col">
         <a href="#main" className="skip-link">
           Skip to content
         </a>
         <SiteHeader />
-        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-16 pt-6 md:px-6 lg:px-8">{children}</main>
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1240px] flex-1 px-4 pb-24 pt-6 sm:px-6 lg:px-10">
+          {children}
+        </main>
+        <SiteFooter />
       </body>
     </html>
   );

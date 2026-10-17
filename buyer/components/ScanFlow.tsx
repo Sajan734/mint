@@ -11,7 +11,7 @@ import { isMockMode, useMockMode } from "@/lib/mock-mode";
 import { STEPS, stepMark, type ScanKind, type StepMark } from "@/lib/progress";
 import { initialScan, isFinal, watchScan, type FeedState, type ScanState } from "@/lib/scan-feed";
 import type { MarketListing } from "@/lib/types";
-import PhoneRing, { ROUNDED } from "./PhoneRing";
+import PhoneRing from "./PhoneRing";
 
 export interface ScanFlowProps {
   kind: ScanKind;
@@ -25,9 +25,8 @@ export interface ScanFlowProps {
   onDone?: (s: ScanState) => void;
 }
 
-const MINT_BTN = "inline-flex min-h-11 items-center justify-center rounded-md bg-mint px-5 font-bold text-[#0b0f0e] hover:opacity-90";
-const LINE_BTN = "inline-flex min-h-11 items-center justify-center rounded-md border border-white/30 px-5 text-sm font-semibold text-white hover:border-white";
-const rounded = { fontFamily: ROUNDED };
+const MINT_BTN = "inline-flex min-h-12 items-center justify-center rounded-full bg-spark px-6 font-semibold text-pine transition-transform hover:bg-[#5be6aa] active:scale-[0.97]";
+const LINE_BTN = "inline-flex min-h-11 items-center justify-center rounded-full bg-white/10 px-5 text-sm font-semibold text-on-pine transition-colors hover:bg-white/15";
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "es"}`;
 
 /** The panel's words for a state: [title, line under it]. Also what the live region reads out. */
@@ -105,7 +104,7 @@ function Frames({ frames, onFail }: { frames: string[]; onFail: () => void }) {
   }, [frames]);
   return (
     // eslint-disable-next-line @next/next/no-img-element -- frames from Storage or the demo folder
-    <img src={frames[i % frames.length]} alt="Your scan, turning" onError={onFail} className="aspect-square w-full max-w-64 rounded-md object-cover" />
+    <img src={frames[i % frames.length]} alt="Your scan, turning" onError={onFail} className="aspect-square w-full max-w-64 rounded-[20px] bg-bg object-contain" />
   );
 }
 
@@ -115,8 +114,8 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   const again = s.kind === "listing" ? "/sell/scan/new" : listingId ? `/listing/${listingId}/check` : "/";
   const heading = (
     <div>
-      <p className="text-2xl font-extrabold leading-tight" style={rounded}>{title}</p>
-      {line && <p className="mt-1.5 text-white/75">{line}</p>}
+      <p className="font-display text-[1.75rem] leading-tight">{title}</p>
+      {line && <p className="mt-2 text-on-pine-2">{line}</p>}
     </div>
   );
 
@@ -127,7 +126,7 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
         <div className="relative grid size-72 place-items-center md:size-80">
           <Ripples from={0.7} />
           <div
-            className="relative w-52 rounded-md bg-white p-3 md:w-56"
+            className="relative w-52 rounded-[20px] bg-white p-3 md:w-56"
             role="img"
             aria-label="QR code that opens the Mint app for this scan"
             dangerouslySetInnerHTML={{ __html: qrSvg }}
@@ -140,7 +139,7 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   } else if (s.phase === "connected") {
     body = (
       <>
-        <span className="grid size-28 place-items-center rounded-full bg-mint/15 text-mint"><PhoneGlyph /></span>
+        <span className="grid size-28 place-items-center rounded-full bg-spark/15 text-spark"><PhoneGlyph /></span>
         {heading}
         {s.passes > 0 && <p className="rounded-full bg-white/10 px-3 py-1 text-sm font-semibold">{plural(s.passes, "pass")} recorded</p>}
       </>
@@ -158,10 +157,10 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
         {s.spinUrls?.length && !framesFailed ? (
           <Frames frames={s.spinUrls} onFail={() => setFramesFailed(true)} />
         ) : (
-          <span className="size-14 animate-spin rounded-full border-4 border-white/15 border-t-mint motion-reduce:animate-none" aria-hidden />
+          <span className="size-14 animate-spin rounded-full border-4 border-white/15 border-t-spark motion-reduce:animate-none" aria-hidden />
         )}
         {heading}
-        {s.message && <p className="max-w-sm rounded-md bg-white/10 px-4 py-3 text-sm">{s.message}</p>}
+        {s.message && <p className="max-w-sm rounded-[16px] bg-white/10 px-4 py-3 text-sm">{s.message}</p>}
       </>
     );
   } else if (s.phase === "ready") {
@@ -169,11 +168,11 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
       <>
         <span className="relative grid size-72 place-items-center">
           <Ripples from={0.31} />
-          <span className="relative grid size-28 place-items-center rounded-full bg-mint text-[#0b0f0e] shadow-[0_0_30px_rgb(61_220_151/0.55)]">
+          <span className="relative grid size-28 place-items-center rounded-full bg-spark text-pine">
             <Check className="size-12" />
           </span>
         </span>
-        {s.kind === "listing" && <p className="font-semibold text-mint" style={rounded}>Your phone is done</p>}
+        {s.kind === "listing" && <p className="font-semibold text-spark">Your phone is done</p>}
         {heading}
         {s.kind === "listing" && <Link href={`/listing/${scanId}`} className={MINT_BTN}>Review your listing</Link>}
       </>
@@ -181,12 +180,12 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   } else {
     body = (
       <>
-        <span className="grid size-20 place-items-center rounded-full bg-coral text-[#0b0f0e]"><Cross className="size-9" /></span>
+        <span className="grid size-20 place-items-center rounded-full bg-[#ff9a84] text-pine"><Cross className="size-9" /></span>
         {heading}
         {s.phase === "failed" && s.message && (
-          <details className="max-w-sm text-left text-xs text-white/65">
+          <details className="max-w-sm text-left text-sm text-on-pine-2">
             <summary className="cursor-pointer">Details</summary>
-            <p className="mt-1 break-words font-mono">{s.message}</p>
+            <p className="mt-1 break-words">{s.message}</p>
           </details>
         )}
         <a href={again} className={MINT_BTN}>Scan again</a>
@@ -197,7 +196,7 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   return (
     <section
       aria-label="Your phone"
-      className="grid min-h-[26rem] place-items-center overflow-hidden rounded-lg border border-line bg-[#0b0f0e] p-6 text-white md:aspect-square"
+      className="grid min-h-[26rem] place-items-center overflow-hidden rounded-[28px] bg-pine p-6 text-on-pine md:aspect-square"
     >
       <div className="flex w-full max-w-sm flex-col items-center gap-5 text-center">{body}</div>
     </section>
@@ -208,15 +207,15 @@ const WORD: Record<StepMark, string> = { done: "Done", active: "Now", todo: "Not
 
 function MarkIcon({ mark, n }: { mark: StepMark; n: number }) {
   const base = "grid size-8 shrink-0 place-items-center rounded-full text-sm font-semibold";
-  if (mark === "done") return <span className={`${base} bg-mint text-[#0b0f0e]`}><Check className="size-4" /></span>;
-  if (mark === "stopped") return <span className={`${base} bg-coral text-[#0b0f0e]`}><Cross className="size-4" /></span>;
+  if (mark === "done") return <span className={`${base} bg-leaf text-btn-fg`}><Check className="size-4" /></span>;
+  if (mark === "stopped") return <span className={`${base} bg-coral text-btn-fg`}><Cross className="size-4" /></span>;
   if (mark === "active")
     return (
-      <span className={`${base} border-2 border-ink`}>
-        <span className="size-2.5 animate-pulse rounded-full bg-mint motion-reduce:animate-none" />
+      <span className={`${base} bg-wash ring-2 ring-leaf`}>
+        <span className="size-2.5 rounded-full bg-leaf" />
       </span>
     );
-  return <span className={`${base} border border-line text-ink-2`}>{n}</span>;
+  return <span className={`${base} bg-surface text-ink-2`}>{n}</span>;
 }
 
 function Steps({ s }: { s: FeedState }) {
@@ -238,7 +237,7 @@ function Steps({ s }: { s: FeedState }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-baseline justify-between gap-3">
                 <p className={mark === "todo" ? "text-ink-2" : "font-semibold"}>{step.label}</p>
-                <span className={`shrink-0 text-xs font-semibold ${mark === "todo" ? "sr-only" : mark === "done" ? "text-mint-ink" : "text-ink"}`}>
+                <span className={`shrink-0 text-sm font-semibold ${mark === "todo" ? "sr-only" : mark === "done" ? "text-leaf" : "text-ink"}`}>
                   {WORD[mark]}
                 </span>
               </div>
@@ -299,12 +298,12 @@ export default function ScanFlow({ kind, scanId, listingId, deepLink, qrSvg, moc
   return (
     <div className="flex flex-col gap-4">
       {mock && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-line bg-mint-wash px-4 py-2.5 text-sm text-ink">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-[20px] bg-amber-wash px-5 py-3 text-[15px] text-ink">
           <p>
             <span className="font-semibold">Demo:</span> no phone needed. This replays a recorded result.
           </p>
           {!isFinal(s.phase) && (
-            <button type="button" onClick={() => setSkip(true)} className="btn-secondary min-h-11 px-4 text-sm">
+            <button type="button" onClick={() => setSkip(true)} className="btn-primary min-h-11 px-5 text-sm">
               Skip to result
             </button>
           )}
@@ -315,11 +314,11 @@ export default function ScanFlow({ kind, scanId, listingId, deepLink, qrSvg, moc
         <section aria-label="Steps" className="flex flex-col gap-4">
           <Steps s={s} />
           {s.hint && (
-            <p className="rounded-md border border-line bg-surface p-3 text-sm" role="status">
+            <p className="rounded-[16px] bg-surface p-4 text-sm" role="status">
               {s.hint}
             </p>
           )}
-          <p className="font-mono text-xs text-ink-2">scan {scanId}</p>
+          <p className="text-sm text-ink-2 tabular-nums">Scan {scanId}</p>
           <p className="sr-only" aria-live="polite">
             {line && s.phase !== "uploading" ? `${title}. ${line}` : title}
           </p>

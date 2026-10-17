@@ -8,42 +8,50 @@ export interface SaleTile {
   itemCount: number;
 }
 
-const fmt = new Intl.DateTimeFormat("en-CA", { weekday: "short", hour: "numeric", minute: "2-digit" });
+const TZ = "America/Toronto";
+const day = new Intl.DateTimeFormat("en-CA", { weekday: "short", timeZone: TZ });
+const date = new Intl.DateTimeFormat("en-CA", { day: "numeric", timeZone: TZ });
+const month = new Intl.DateTimeFormat("en-CA", { month: "short", timeZone: TZ });
+const time = new Intl.DateTimeFormat("en-CA", { hour: "numeric", minute: "2-digit", timeZone: TZ });
 
-// A sale sign: object on the pad, a perforated tear line with two notches, then the details.
+// The neighbourhood noticeboard: one line per sale, the date set large like a hand-lettered sign, then what and where.
 export default function GarageSaleRail({ tiles }: { tiles: SaleTile[] }) {
   return (
-    <ul
-      aria-label="Garage sales"
-      className="-mx-4 flex list-none snap-x snap-mandatory gap-4 overflow-x-auto scroll-px-4 px-4 pb-3 pt-1 md:-mx-6 md:scroll-px-6 md:px-6 lg:mx-0 lg:scroll-px-0 lg:px-0"
-    >
-      {tiles.map(({ sale, seller, cover, itemCount }) => (
-        <li key={sale.id} className="w-64 shrink-0 snap-start">
-          <Link
-            href={`/sale/${sale.id}`}
-            className="group relative block rounded-lg border border-line-strong bg-surface transition-[border-color,box-shadow,transform] duration-200 hover:-translate-y-0.5 hover:border-ink hover:shadow-[var(--shadow-hover)] motion-reduce:hover:translate-y-0"
-          >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={cover} alt="" className="pad aspect-[4/3] w-full rounded-t-[calc(var(--r-lg)-1px)] object-contain p-3" />
-            <span aria-hidden className="relative block border-t-2 border-dashed border-line-strong">
-              <span className="absolute -left-[11px] -top-2.5 size-5 rounded-full border border-line-strong bg-bg [clip-path:inset(0_0_0_50%)]" />
-              <span className="absolute -right-[11px] -top-2.5 size-5 rounded-full border border-line-strong bg-bg [clip-path:inset(0_50%_0_0)]" />
-            </span>
-            <span className="block p-4 pt-3">
-              <span className="block truncate font-display text-lg font-bold leading-tight">{sale.name}</span>
-              <span className="block truncate text-sm text-ink-2">
-                {seller.name} · {sale.location.neighbourhood}
+    <ul aria-label="Garage sales" className="flex list-none flex-col gap-2 p-0">
+      {tiles.map(({ sale, seller, cover, itemCount }) => {
+        const start = new Date(sale.starts_at);
+        return (
+          <li key={sale.id}>
+            <Link
+              href={`/sale/${sale.id}`}
+              className="group grid grid-cols-[4.5rem_1fr] items-center gap-x-4 gap-y-2 rounded-[20px] bg-surface p-3 pr-4 transition-colors hover:bg-surface-2 sm:grid-cols-[5.5rem_1fr_auto] sm:gap-x-6 sm:p-4"
+            >
+              <span className="flex flex-col items-center rounded-[14px] bg-raised py-2 text-center leading-none">
+                <span className="text-sm font-semibold text-ink-2">{day.format(start)}</span>
+                <span className="font-display text-[2rem] leading-[1.05]">{date.format(start)}</span>
+                <span className="text-sm font-semibold text-leaf">{month.format(start)}</span>
               </span>
-              <span className="mt-3 flex items-center justify-between gap-2">
-                <span className="truncate font-mono text-xs text-ink-2">
-                  {fmt.format(new Date(sale.starts_at))} to {fmt.format(new Date(sale.ends_at))}
+              <span className="flex min-w-0 flex-col gap-0.5">
+                <span className="truncate text-lg font-semibold leading-snug group-hover:underline group-hover:underline-offset-4">
+                  {sale.name}
                 </span>
-                <span className="shrink-0 rounded-full bg-mint-wash px-2 py-0.5 font-mono text-xs text-mint-ink">{itemCount} items</span>
+                <span className="text-ink-2">
+                  {seller.name} in {sale.location.neighbourhood} · {time.format(start)} to {time.format(new Date(sale.ends_at))}
+                </span>
               </span>
-            </span>
-          </Link>
-        </li>
-      ))}
+              <span className="col-start-2 flex items-center gap-3 sm:col-start-3">
+                {/* The sale's first item: a glance at what is there. Phones skip it to keep the row short. */}
+                {/* eslint-disable-next-line @next/next/no-img-element -- scan frames from /public or storage */}
+                <img src={cover} alt="" className="hidden size-14 shrink-0 rounded-[12px] bg-raised object-contain p-1 sm:block" />
+                <span className="whitespace-nowrap text-sm font-semibold tabular-nums">
+                  {itemCount} {itemCount === 1 ? "item" : "items"}
+                  {sale.ships && <span className="block font-medium text-ink-2">Ships too</span>}
+                </span>
+              </span>
+            </Link>
+          </li>
+        );
+      })}
     </ul>
   );
 }

@@ -93,7 +93,7 @@ function Scene({
     };
   }, [id, live, src, autoRotate, interactive, maxPixelRatio, sharedPose]);
 
-  const pill = "pointer-events-none absolute rounded-full border border-line-strong bg-surface px-3 py-1 text-sm leading-tight text-ink";
+  const pill = "pointer-events-none absolute rounded-full bg-raised px-3 py-1.5 text-sm font-medium leading-tight text-ink";
   return (
     <div
       ref={host}
@@ -108,7 +108,7 @@ function Scene({
             onKeyDown: () => setTouched(true),
           }
         : { role: "img" })}
-      className={`relative h-full w-full overflow-hidden bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${className ?? ""}`}
+      className={`relative h-full w-full overflow-hidden bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus ${className ?? ""}`}
     >
       {poster && (
         // eslint-disable-next-line @next/next/no-img-element -- remote scan photo
@@ -131,7 +131,7 @@ function Scene({
             <button
               type="button"
               onClick={() => setPhase("loading")}
-              className="absolute left-1/2 top-1/2 min-h-11 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line-strong bg-surface px-4 text-sm font-semibold text-ink hover:bg-surface-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
+              className="absolute left-1/2 top-1/2 min-h-11 -translate-x-1/2 -translate-y-1/2 rounded-full bg-raised px-5 text-sm font-semibold text-ink hover:bg-surface focus-visible:outline focus-visible:outline-2 focus-visible:outline-focus"
             >
               Show 3D
             </button>

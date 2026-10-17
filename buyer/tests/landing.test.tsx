@@ -74,16 +74,17 @@ describe("JustListed", () => {
 
 // Renders the whole page (60-odd cards): about 1 s alone, slower on a busy machine.
 describe("Landing page", { timeout: 20_000 }, () => {
-  it("shows the intro strip, the shelves and the full grid", async () => {
+  it("shows the hero, the shelves, how Mint works and the full grid", async () => {
     await home();
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Second-hand finds, scanned and priced fairly.");
-    expect(screen.getByText("Every item is a 360° scan")).toBeInTheDocument();
-    expect(screen.getByText("Fair price, checked")).toBeInTheDocument();
-    for (const name of ["Recommended for you", "Great deals", "Garage sales near you", "Fresh scans"]) {
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Good finds from down the street.");
+    expect(screen.getByRole("link", { name: /^Browse \d+ items$/ })).toHaveAttribute("href", "#items-h");
+    expect(screen.getByText(/^A real Mint scan of a ThinkPad mouse/)).toBeInTheDocument();
+    for (const name of ["Picked for you", "Bought from a neighbour, seen from every side.", "Great deals", "Garage sales near you", "Everything for sale"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
     expect(screen.queryByRole("heading", { name: "Just listed" })).toBeNull();
-    expect(screen.getByRole("status")).toHaveTextContent(`${listings.length} items`);
+    // The hero's 3D view has its own "Loading 3D" status; the item count is the other one.
+    expect(screen.getAllByRole("status").some((el) => el.textContent === `${listings.length} items`)).toBe(true);
     expect(screen.queryByRole("search")).toBeNull(); // the header has the search
   });
 
@@ -105,7 +106,7 @@ describe("Landing page", { timeout: 20_000 }, () => {
 
   it("Recommended: one per category, no repeats from Great deals, nothing overpriced", async () => {
     await home();
-    const row = screen.getByRole("list", { name: "Recommended for you" });
+    const row = screen.getByRole("list", { name: "Picked for you" });
     const picks = itemHrefs(row);
     const deals = itemHrefs(screen.getByRole("list", { name: "Great deals" }));
     expect(picks.length).toBeGreaterThan(0);
@@ -119,7 +120,7 @@ describe("Landing page", { timeout: 20_000 }, () => {
     await home({ q: "headphones" });
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Results for “headphones”");
     expect(screen.queryByRole("heading", { name: "Great deals" })).toBeNull();
-    expect(screen.queryByRole("heading", { name: "Recommended for you" })).toBeNull();
+    expect(screen.queryByRole("heading", { name: "Picked for you" })).toBeNull();
     expect(screen.getByRole("list", { name: "Items for sale" })).toBeInTheDocument();
   });
 

@@ -55,16 +55,16 @@ export function countByStatus(rows: readonly DashRow[]): Record<RowStatus, numbe
 export const STATUS_WORD: Record<RowStatus, string> = { draft: "Draft", available: "Listed", reserved: "Reserved", sold: "Sold" };
 
 const PILL: Record<RowStatus, { cls: string; icon: string }> = {
-  draft: { cls: "bg-surface-2 text-ink border-dashed border-line-strong", icon: "M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4" },
-  available: { cls: "bg-mint-wash text-mint-ink border-transparent", icon: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01" },
-  reserved: { cls: "bg-amber/25 text-ink border-transparent", icon: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
-  sold: { cls: "bg-ink text-bg border-transparent", icon: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-12.5 0 2.5 2.5 5-5" },
+  draft: { cls: "bg-surface text-ink", icon: "M4 20h4L19 9l-4-4L4 16v4Zm9-13 4 4" },
+  available: { cls: "bg-wash text-leaf", icon: "M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8ZM7.5 7.5h.01" },
+  reserved: { cls: "bg-amber-wash text-amber", icon: "M12 7v5l3 2M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" },
+  sold: { cls: "bg-pine text-on-pine", icon: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Zm-12.5 0 2.5 2.5 5-5" },
 };
 
 export function StatusPill({ status }: { status: RowStatus }) {
   const p = PILL[status];
   return (
-    <span className={`inline-flex h-6 items-center gap-1 rounded-sm border px-1.5 text-xs font-semibold ${p.cls}`}>
+    <span className={`inline-flex h-7 items-center gap-1 rounded-full px-2.5 text-[13px] font-semibold ${p.cls}`}>
       <svg aria-hidden viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2.25" strokeLinecap="round" strokeLinejoin="round">
         <path d={p.icon} />
       </svg>
@@ -89,24 +89,24 @@ export default function ListingRow({ row }: { row: DashRow }) {
   const when = shortDate(row.date);
   const meta = [saleLine(row), when && `${row.status === "draft" ? "Saved" : "Listed"} ${when}`].filter(Boolean).join(" · ");
   return (
-    <li className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-3 gap-y-3 py-4 sm:grid-cols-[5rem_minmax(0,1fr)_auto] sm:items-center sm:gap-x-4">
+    <li className="grid grid-cols-[4.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 py-3 sm:grid-cols-[6rem_minmax(0,1fr)_auto] sm:items-center sm:gap-x-6">
       {row.thumb ? (
         // eslint-disable-next-line @next/next/no-img-element -- buyer-zone frames on the shared origin
-        <img src={row.thumb} alt="" loading="lazy" className="pad aspect-square w-full rounded-md object-contain" />
+        <img src={row.thumb} alt="" loading="lazy" className="pad aspect-square w-full rounded-[16px] object-contain p-1" />
       ) : (
-        <div aria-hidden className="pad aspect-square w-full rounded-md" />
+        <div aria-hidden className="pad aspect-square w-full rounded-[16px]" />
       )}
 
       <div className="flex min-w-0 flex-col gap-1">
-        <p className="truncate font-semibold">{row.title}</p>
+        <p className="truncate text-lg font-semibold">{row.title}</p>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="font-display text-[length:var(--t-lg)] font-bold">{formatPrice(row.price)}</span>
+          <span className="text-lg font-bold tabular-nums">{formatPrice(row.price)}</span>
           <PriceBadge price={row.price} reference={row.reference} />
         </div>
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-ink-2">
           <StatusPill status={row.status} />
           {meta && <p>{meta}</p>}
-          <span className="rounded-sm border border-line px-1.5 text-xs">{local ? "On this device" : "Demo data"}</span>
+          <span className={`rounded-full px-2.5 py-0.5 text-[13px] font-medium ${local ? "bg-surface text-ink" : "bg-amber-wash text-amber"}`}>{local ? "On this device" : "Demo data"}</span>
         </div>
       </div>
 

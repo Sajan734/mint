@@ -6,12 +6,8 @@ import SwiftUI
 /// Darkens and blurs the live camera behind a full-screen moment.
 private struct Backdrop: View {
     var body: some View {
-        ZStack {
-            Rectangle().fill(.ultraThinMaterial)
-            LinearGradient(colors: [Color.brandStageBg.opacity(0.92), Color.brandStageBg.opacity(0.7), Color.brandStageBg.opacity(0.95)],
-                           startPoint: .top, endPoint: .bottom)
-        }
-        .ignoresSafeArea()
+        // A solid pine field (no glass, no gradient: docs/design/DESIGN.md), like the website's phone panel.
+        Rectangle().fill(Color.brandStageBg.opacity(0.95)).ignoresSafeArea()
     }
 }
 
@@ -54,12 +50,12 @@ struct WaitingScreen: View {
                         .foregroundStyle(Color.brandMint)
                 }
                 Text("Ready when you are")
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
+                    .font(.mintSign(size: 32))
                     .padding(.top, 8)
                 Text("Point this phone at the **QR code** on the website\n(Scan an item, or Scan on a listing).")
-                    .font(.system(.body, design: .rounded))
+                    .font(.system(.body))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.75))
+                    .foregroundStyle(Color.brandOat.opacity(0.75))
                     .padding(.top, 10)
                 if session.link == .online {
                     linkStatus.padding(.top, 22)
@@ -67,28 +63,28 @@ struct WaitingScreen: View {
                 Spacer()
                 Button(action: session.scanWithoutDashboard) {
                     Label("Scan without the dashboard", systemImage: "viewfinder")
-                        .font(.system(.subheadline, design: .rounded).weight(.semibold))
+                        .font(.system(.subheadline).weight(.semibold))
                         .frame(maxWidth: .infinity, minHeight: 50)
                 }
-                .buttonStyle(.bordered)
-                .tint(.white)
+                .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                .tint(Color.brandOat)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Color.brandOat)
     }
 
     private var linkStatus: some View {
         let (color, text): (Color, String) = switch session.link {
         case .online: (.brandMint, "Connected · New product opens here by itself")
-        case .connecting: (.white.opacity(0.6), "Connecting to your dashboard…")
+        case .connecting: (Color.brandOat.opacity(0.6), "Connecting to your dashboard…")
         case .offline: (.brandAmber, "Can't reach your dashboard. Check the Wi-Fi.")
         case .notSetUp: (.brandAmber, "Dashboard link isn't set up on this phone")
         }
         return HStack(spacing: 8) {
-            Circle().fill(color).frame(width: 8, height: 8).shadow(color: color, radius: session.link == .online ? 5 : 0)
-            Text(text).font(.system(.footnote, design: .rounded).weight(.semibold))
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(text).font(.system(.footnote).weight(.semibold))
         }
         .chip()
         .animation(.easeInOut, value: session.link)
@@ -104,11 +100,11 @@ struct ReviewCard: View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
                 Text(session.passes.count == 1 ? "Pass saved" : "\(session.passes.count) passes saved")
-                    .font(.system(.title2, design: .rounded).weight(.heavy))
+                    .font(.mintSign(.title2))
                 Spacer()
                 if let last = session.passes.last {
                     Text(String(format: "%.0f s · %d frames", last.seconds, last.frames))
-                        .font(.system(.subheadline, design: .rounded)).foregroundStyle(.secondary).monospacedDigit()
+                        .font(.system(.subheadline)).foregroundStyle(Color.brandOatSoft).monospacedDigit()
                 }
             }
             ScrollView(.horizontal, showsIndicators: false) {
@@ -117,7 +113,7 @@ struct ReviewCard: View {
                         ZStack(alignment: .bottomLeading) {
                             Thumbnail(directory: p.directory, size: 58)
                             Text("\(p.pass)")
-                                .font(.system(.caption, design: .rounded).weight(.heavy))
+                                .font(.caption.weight(.heavy))
                                 .foregroundStyle(Color.brandStageBg)
                                 .frame(width: 20, height: 20)
                                 .background(Color.brandMint, in: Circle())
@@ -131,17 +127,17 @@ struct ReviewCard: View {
                     Label("Scan again", systemImage: "arrow.triangle.2.circlepath").fontWeight(.semibold)
                         .frame(maxWidth: .infinity, minHeight: 50)
                 }
-                .buttonStyle(.bordered)
-                .tint(.white)
+                .buttonStyle(.bordered).buttonBorderShape(.capsule)
+                .tint(Color.brandOat)
                 Button(action: session.finish) {
                     Label("Done", systemImage: "paperplane.fill").fontWeight(.bold)
                         .frame(maxWidth: .infinity, minHeight: 50)
                 }
-                .buttonStyle(.borderedProminent).tint(.brandMint).foregroundStyle(Color.brandStageBg)
+                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(.brandMint).foregroundStyle(Color.brandStageBg)
             }
             HStack {
                 Text("Flip it over or try another angle with **Scan again**.")
-                    .font(.footnote).foregroundStyle(.secondary)
+                    .font(.footnote).foregroundStyle(Color.brandOatSoft)
                 Spacer()
                 Button(role: .destructive, action: session.discardLastPass) {
                     Text("Discard pass \(session.passes.last?.pass ?? 1)").font(.footnote.weight(.semibold))
@@ -149,7 +145,7 @@ struct ReviewCard: View {
             }
         }
         .padding(18)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+        .background(Color.brandPine, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
     }
 }
 
@@ -179,29 +175,28 @@ struct SendingScreen: View {
             Backdrop()
             VStack(spacing: 26) {
                 ZStack {
-                    Circle().stroke(.white.opacity(0.12), lineWidth: 14)
+                    Circle().stroke(Color.brandOat.opacity(0.12), lineWidth: 14)
                     Circle().trim(from: 0, to: max(0.02, progress))
                         .stroke(Color.brandMint, style: StrokeStyle(lineWidth: 14, lineCap: .round))
                         .rotationEffect(.degrees(-90))
-                        .shadow(color: .brandMint.opacity(0.7), radius: 12)
                         .animation(.easeOut(duration: 0.3), value: progress)
                     VStack(spacing: 2) {
                         Text("\(Int(progress * 100))%")
-                            .font(.system(size: 50, weight: .heavy, design: .rounded)).monospacedDigit()
+                            .font(.mintNumber(size: 50)).monospacedDigit()
                             .contentTransition(.numericText(value: progress))
-                        Text("SENDING").font(.system(.caption, design: .rounded).weight(.bold)).tracking(2)
+                        Text("Sending").font(.subheadline.weight(.semibold))
                             .foregroundStyle(Color.brandMint)
                     }
                 }
                 .frame(width: 210, height: 210)
                 VStack(spacing: 6) {
-                    Text("Sending to Mint").font(.system(.title2, design: .rounded).weight(.heavy))
+                    Text("Sending to Mint").font(.mintSign(.title2))
                     Text("\(passes) pass\(passes == 1 ? "" : "es") · keep the app open")
-                        .font(.system(.subheadline, design: .rounded)).foregroundStyle(.white.opacity(0.65))
+                        .font(.system(.subheadline)).foregroundStyle(Color.brandOat.opacity(0.65))
                 }
             }
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Color.brandOat)
     }
 }
 
@@ -220,7 +215,6 @@ struct FinishedScreen: View {
                 ZStack {
                     Ripples().frame(width: 320, height: 320)
                     Circle().fill(Color.brandMint).frame(width: 118, height: 118)
-                        .shadow(color: .brandMint.opacity(0.8), radius: 30)
                     Image(systemName: "checkmark")
                         .font(.system(size: 54, weight: .heavy))
                         .foregroundStyle(Color.brandStageBg)
@@ -228,13 +222,13 @@ struct FinishedScreen: View {
                 .scaleEffect(appeared ? 1 : 0.4)
                 .opacity(appeared ? 1 : 0)
                 Text("You're done here")
-                    .font(.system(.title3, design: .rounded).weight(.semibold))
+                    .font(.system(.title3).weight(.semibold))
                     .foregroundStyle(Color.brandMint)
                     .padding(.top, 6)
                 HStack(spacing: 12) {
                     Image(systemName: "laptopcomputer").font(.system(size: 30, weight: .semibold))
                     Text(session.job?.isVerify == true ? "Look back at\nthe listing" : "Look back at\nyour computer")
-                        .font(.system(size: 34, weight: .heavy, design: .rounded))
+                        .font(.mintSign(size: 34))
                         .multilineTextAlignment(.leading)
                 }
                 .padding(.top, 10)
@@ -243,23 +237,23 @@ struct FinishedScreen: View {
                      : session.job?.fromDashboard == false
                      ? "Your scan is on its way. Open your dashboard to see it."
                      : "Your 3D scan and listing are being built there.")
-                    .font(.system(.body, design: .rounded))
+                    .font(.system(.body))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(Color.brandOat.opacity(0.7))
                     .padding(.top, 12)
                 Spacer()
                 Button(action: session.backToWaiting) {
                     Text("Next product").fontWeight(.bold).frame(maxWidth: .infinity, minHeight: 52)
                 }
-                .buttonStyle(.borderedProminent).tint(.brandMint).foregroundStyle(Color.brandStageBg)
+                .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(.brandMint).foregroundStyle(Color.brandStageBg)
                 Text("Or point this phone at the next QR code.")
-                    .font(.footnote).foregroundStyle(.white.opacity(0.5))
+                    .font(.footnote).foregroundStyle(Color.brandOat.opacity(0.5))
                     .padding(.top, 8)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Color.brandOat)
         .onAppear { withAnimation(.spring(response: 0.5, dampingFraction: 0.6).delay(0.1)) { appeared = true } }
     }
 }
@@ -279,37 +273,37 @@ struct FailedScreen: View {
                 Image(systemName: "exclamationmark.icloud.fill")
                     .font(.system(size: 54)).foregroundStyle(Color.brandAmber)
                 Text(session.passes.isEmpty ? "Something went wrong" : "Couldn't send it")
-                    .font(.system(.title, design: .rounded).weight(.heavy))
+                    .font(.mintSign(.title))
                 Text(message)
-                    .font(.system(.footnote, design: .rounded))
+                    .font(.system(.footnote))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.65))
+                    .foregroundStyle(Color.brandOat.opacity(0.65))
                     .lineLimit(4)
                 if !session.passes.isEmpty {
                     Text("Your \(session.passes.count == 1 ? "scan is" : "\(session.passes.count) passes are") saved on this phone.")
-                        .font(.system(.subheadline, design: .rounded)).foregroundStyle(.white.opacity(0.8))
+                        .font(.system(.subheadline)).foregroundStyle(Color.brandOat.opacity(0.8))
                 }
                 Spacer()
                 if !session.passes.isEmpty {
                     Button(action: session.retrySend) {
                         Label("Try again", systemImage: "arrow.clockwise").fontWeight(.bold).frame(maxWidth: .infinity, minHeight: 52)
                     }
-                    .buttonStyle(.borderedProminent).tint(.brandMint).foregroundStyle(Color.brandStageBg)
+                    .buttonStyle(.borderedProminent).buttonBorderShape(.capsule).tint(.brandMint).foregroundStyle(Color.brandStageBg)
                     if let zipURL {
                         ShareLink(item: zipURL) {
                             Label("Share the files", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity, minHeight: 48)
                         }
-                        .buttonStyle(.bordered).tint(.white)
+                        .buttonStyle(.bordered).buttonBorderShape(.capsule).tint(Color.brandOat)
                     }
                 }
                 Button("Back to start", action: session.backToWaiting)
-                    .font(.subheadline.weight(.semibold)).foregroundStyle(.white.opacity(0.7))
+                    .font(.subheadline.weight(.semibold)).foregroundStyle(Color.brandOat.opacity(0.7))
                     .padding(.top, 4)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
         }
-        .foregroundStyle(.white)
+        .foregroundStyle(Color.brandOat)
         .task {
             guard let id = session.job?.scanID, !session.passes.isEmpty else { return }
             let dir = VideoRecorder.folder(scanID: id)

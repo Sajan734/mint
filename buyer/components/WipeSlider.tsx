@@ -117,7 +117,7 @@ export default function WipeSlider({ run8, count, index, onIndex, flagged }: Wip
                 aria-pressed={i === index}
                 aria-label={c.length ? `${label}: ${c.map((x) => CATEGORY_WORDS[x]).join("; ")}` : label}
                 onClick={() => onIndex(i)}
-                className="flex w-24 flex-col gap-1 rounded-md border border-line bg-surface p-1 text-left text-xs transition-colors hover:border-ink aria-pressed:border-ink aria-pressed:ring-1 aria-pressed:ring-ink md:w-full"
+                className="flex w-24 flex-col gap-1 rounded-md bg-surface p-1 text-left text-xs transition-colors hover:border-ink aria-pressed:border-ink aria-pressed:ring-1 aria-pressed:ring-ink md:w-full"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={pairSrc(run8, i, "b")} alt="" loading="lazy" draggable={false} className="aspect-[960/541] w-full rounded-sm bg-surface-2 object-cover" />

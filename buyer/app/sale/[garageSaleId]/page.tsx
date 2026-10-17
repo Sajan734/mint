@@ -20,7 +20,7 @@ export default async function SalePage({ params }: { params: Promise<{ garageSal
   const total = open.reduce((n, m) => n + m.listing.price_cad, 0);
   return (
     <>
-      <div className="-mx-4 md:-mx-6 lg:-mx-8">
+      <div>
         <GarageSaleHeader sale={sale} seller={seller} total={items.length} available={open.length} />
       </div>
       <section className="py-8 md:py-12">

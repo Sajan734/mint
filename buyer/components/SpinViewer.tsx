@@ -205,21 +205,19 @@ const box: CSSProperties = {
   aspectRatio: "1 / 1",
   width: "100%",
   overflow: "hidden",
-  backgroundColor: "var(--surface-2)",
-  backgroundImage: "var(--pad)",
+  backgroundColor: "var(--surface)",
   borderRadius: "var(--r-md)",
 };
-// Solid pills (surface + ink) keep contrast on cream frames in both themes.
+// Paper pills (raised + ink) keep contrast on the shelf in both themes (docs/design/DESIGN.md §4).
 const pill: CSSProperties = {
   position: "absolute",
-  fontSize: "var(--t-xs)",
-  fontFamily: "var(--font-dm-mono), ui-monospace, monospace",
+  fontSize: "var(--t-sm)",
+  fontFamily: "var(--font-sans)",
   fontWeight: 500,
   lineHeight: 1,
   color: "var(--ink)",
-  background: "var(--surface)",
-  border: "1px solid var(--line-strong)",
-  padding: "5px var(--sp-2)",
+  background: "var(--raised)",
+  padding: "7px var(--sp-3)",
   borderRadius: 999,
   pointerEvents: "none",
 };

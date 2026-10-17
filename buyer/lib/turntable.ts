@@ -189,5 +189,5 @@ export function renderTurntableFrame(shape: Shape, palette: PaletteName, n: numb
     .filter((x): x is { z: number; d: string; col: string } => x !== null)
     .sort((a, b) => a.z - b.z || (a.d < b.d ? -1 : 1));
   const polys = drawn.map((d) => `<polygon points="${d.d}" fill="rgb(${d.col})" stroke="rgb(${d.col})" stroke-width="0.6" stroke-linejoin="round"/>`).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400"><defs><filter id="b" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="7"/></filter></defs><rect width="400" height="400" fill="#FAF7F2"/><ellipse cx="200" cy="304" rx="170" ry="34" fill="#EFE8DA"/><ellipse cx="205" cy="306" rx="${f1(S * shadow * 0.62)}" ry="${f1(S * shadow * 0.16)}" fill="#2F3438" opacity="0.22" filter="url(#b)"/>${polys}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400" width="400" height="400"><defs><filter id="b" x="-30%" y="-100%" width="160%" height="300%"><feGaussianBlur stdDeviation="7"/></filter></defs><ellipse cx="200" cy="304" rx="170" ry="34" fill="#15302A" opacity="0.05"/><ellipse cx="205" cy="306" rx="${f1(S * shadow * 0.62)}" ry="${f1(S * shadow * 0.16)}" fill="#2F3438" opacity="0.22" filter="url(#b)"/>${polys}</svg>`;
 }

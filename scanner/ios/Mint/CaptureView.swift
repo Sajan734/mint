@@ -134,15 +134,14 @@ struct ScannerHUD: View {
             case .ready:
                 HStack(spacing: 7) {
                     Circle().fill(session.paperSeen ? Color.brandMint : Color.brandAmber).frame(width: 8, height: 8)
-                        .shadow(color: session.paperSeen ? .brandMint : .clear, radius: 5)
-                    Text(session.paperSeen ? "PAPER LOCKED" : "FINDING PAPER")
-                        .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
+                    Text(session.paperSeen ? "Paper found" : "Finding the paper")
+                        .font(.footnote.weight(.semibold))
                     if session.nextPass > 1 { passTag(session.nextPass) }
                 }
                 .chip()
             default:
-                Label(session.passes.count > 1 ? "\(session.passes.count) PASSES" : "PASS SAVED", systemImage: "checkmark.seal.fill")
-                    .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
+                Label(session.passes.count > 1 ? "\(session.passes.count) passes" : "Pass saved", systemImage: "checkmark.seal.fill")
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.brandMint)
                     .chip()
             }
@@ -151,7 +150,7 @@ struct ScannerHUD: View {
     }
 
     private func passTag(_ n: Int) -> some View {
-        Text("PASS \(n)").font(.system(.caption, design: .rounded).weight(.heavy)).tracking(1.2).foregroundStyle(Color.brandMint)
+        Text("Pass \(n)").font(.footnote.weight(.bold)).foregroundStyle(Color.brandMint)
     }
 
     // What this scan is for.
@@ -159,11 +158,11 @@ struct ScannerHUD: View {
         if let job = session.job {
             HStack(spacing: 6) {
                 Image(systemName: job.isVerify ? "checkmark.shield.fill" : (job.fromDashboard ? "laptopcomputer" : "bolt.fill"))
-                Text(job.isVerify ? "VERIFY · MATCHING THE LISTING"
-                     : job.fromDashboard ? (job.title.map { "NEW PRODUCT · \($0.uppercased())" } ?? "NEW PRODUCT") : "QUICK SCAN")
+                Text(job.isVerify ? "Verify · matching the listing"
+                     : job.fromDashboard ? (job.title.map { "New product · \($0)" } ?? "New product") : "Quick scan")
                     .lineLimit(1)
             }
-            .font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.1)
+            .font(.footnote.weight(.semibold))
             .foregroundStyle(job.isVerify ? Color.brandMint : .white.opacity(0.8))
         }
     }
@@ -175,7 +174,7 @@ struct ScannerHUD: View {
                 if session.passes.isEmpty { session.cancelJob() } else { confirmCancel = true }
             } label: {
                 Image(systemName: "xmark").font(.system(size: 17, weight: .bold))
-                    .frame(width: 50, height: 50).background(.ultraThinMaterial, in: Circle())
+                    .frame(width: 50, height: 50).background(Color.brandPine.opacity(0.9), in: Circle()).foregroundStyle(Color.brandOat)
             }
             .opacity(session.phase == .ready ? 1 : 0)
             .disabled(session.phase != .ready)
@@ -227,7 +226,7 @@ struct Brackets: View {
                 l.stroke(path, with: .color(colour.opacity(0.7 * pulse * vis)), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
             }
             ctx.stroke(path, with: .color(colour.opacity(vis)), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
-            ctx.draw(Text(session.isRecording ? "SCANNING" : "ITEM").font(.system(size: 11, weight: .heavy, design: .rounded))
+            ctx.draw(Text(session.isRecording ? "Scanning" : "Item").font(.system(size: 13, weight: .semibold))
                         .foregroundColor(colour.opacity(vis)),
                      at: CGPoint(x: r.minX + 2, y: r.minY - 12), anchor: .leading)
         }
@@ -304,18 +303,17 @@ private struct CoverageRing: View {
         case .recording:
             let done = session.percent >= 100
             VStack(spacing: 1) {
-                (Text("\(session.percent)").font(.system(size: 48, weight: .heavy, design: .rounded)).monospacedDigit()
-                    + Text("%").font(.system(size: 22, weight: .bold, design: .rounded)))
-                    .foregroundStyle(done ? Color.brandMint : .white)
-                    .shadow(color: done ? .brandMint.opacity(0.6) : .clear, radius: 12)
+                (Text("\(session.percent)").font(.mintNumber(size: 48)).monospacedDigit()
+                    + Text("%").font(.mintNumber(size: 22)))
+                    .foregroundStyle(done ? Color.brandMint : Color.brandOat)
                     .contentTransition(.numericText(value: Double(session.percent)))
                     .animation(.snappy(duration: 0.25), value: session.percent)
-                Text(done ? "FULL LAP" : "OF A LAP")
-                    .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.5)
+                Text(done ? "Full lap" : "of a lap")
+                    .font(.subheadline.weight(.semibold))
                     .foregroundStyle(Color.brandMint)
                 HStack(spacing: 5) {
                     RoundedRectangle(cornerRadius: 2.5).fill(Color.brandRed).frame(width: 10, height: 10)
-                    Text("TAP TO STOP").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.1)
+                    Text("Tap to stop").font(.footnote.weight(.semibold))
                 }
                 .foregroundStyle(.white.opacity(0.7))
                 .padding(.top, 6)
@@ -324,16 +322,15 @@ private struct CoverageRing: View {
             ProgressView().tint(.white).scaleEffect(1.3)
         default:
             ZStack {
-                Circle().fill(.white).frame(width: 128, height: 128)
+                Circle().fill(Color.brandMint).frame(width: 128, height: 128)
                 VStack(spacing: 0) {
-                    Text("Scan").font(.system(size: 26, weight: .heavy, design: .rounded))
+                    Text("Scan").font(.mintSign(size: 28))
                     if session.nextPass > 1 {
-                        Text("PASS \(session.nextPass)").font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.2)
+                        Text("Pass \(session.nextPass)").font(.footnote.weight(.semibold))
                     }
                 }
-                .foregroundStyle(Color.brandStageBg)
+                .foregroundStyle(Color.brandPine)
             }
-            .shadow(color: .brandMint.opacity(0.5), radius: 18)
         }
     }
 }
@@ -345,10 +342,10 @@ private struct Caption: View {
         TimelineView(.periodic(from: .now, by: 0.25)) { ctx in
             let (text, symbol) = content(ctx.date)
             Label(text, systemImage: symbol)
-                .font(.system(.headline, design: .rounded))
-                .foregroundStyle(.white)
+                .font(.headline)
+                .foregroundStyle(Color.brandOat)
                 .padding(.horizontal, 18).padding(.vertical, 11)
-                .background(.ultraThinMaterial, in: Capsule())
+                .background(Color.brandPine.opacity(0.9), in: Capsule())
                 .id(text)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
         }
@@ -379,14 +376,20 @@ private struct Caption: View {
 struct MintMark: View {
     var body: some View {
         HStack(spacing: 6) {
-            Circle().fill(Color.brandMint).frame(width: 10, height: 10).shadow(color: .brandMint, radius: 6)
-            Text("mint").font(.system(size: 28, weight: .heavy, design: .rounded)).foregroundStyle(.white)
+            // The Mint seal (docs/design/DESIGN.md): pine disc, spark scan ring and dot, then the name in the serif.
+            ZStack {
+                Circle().fill(Color.brandPine)
+                Circle().stroke(Color.brandMint, style: StrokeStyle(lineWidth: 2.2, lineCap: .round, dash: [3, 2.4])).padding(7)
+                Circle().fill(Color.brandMint).frame(width: 7, height: 7)
+            }
+            .frame(width: 30, height: 30)
+            Text("mint").font(.mintSign(size: 28)).foregroundStyle(Color.brandOat)
         }
     }
 }
 
 extension View {
     func chip() -> some View {
-        padding(.horizontal, 12).padding(.vertical, 8).background(.ultraThinMaterial, in: Capsule())
+        padding(.horizontal, 12).padding(.vertical, 8).background(Color.brandPine.opacity(0.9), in: Capsule())
     }
 }

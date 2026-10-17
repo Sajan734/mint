@@ -54,8 +54,9 @@ describe("display components", () => {
     expect(screen.getByText("$20")).toBeInTheDocument();
     expect(screen.getByText("Great price")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
-    expect(screen.getByText("12 views")).toBeInTheDocument();
-    // Removed from the card (PLAN_UX 2.1): description, condition pill, Reserve, seller footer.
+    // Removed from the card (PLAN_UX 2.1, docs/design/DESIGN.md §4): description, condition pill, Reserve, seller
+    // footer, and the scan-views counter.
+    expect(screen.queryByText(/\d+ views/)).toBeNull();
     expect(screen.queryByText(/A nice pot/)).toBeNull();
     expect(screen.queryByText("Light wear")).toBeNull();
     expect(screen.queryByRole("link", { name: "Reserve" })).toBeNull();

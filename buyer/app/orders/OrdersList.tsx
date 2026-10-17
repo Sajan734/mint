@@ -26,7 +26,7 @@ export default function OrdersList({ seed, items }: { seed: Order[]; items: Reco
               <li key={o.id}>
                 <Link
                   href={`/orders/${o.id}`}
-                  className="flex items-center gap-4 rounded-md border border-line bg-surface p-3 hover:border-ink-2 md:p-4"
+                  className="flex items-center gap-4 rounded-md bg-surface p-3 hover:border-ink-2 md:p-4"
                 >
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   {it?.thumb ? <img src={it.thumb} alt="" className="size-16 rounded-sm bg-surface-2 object-cover" /> : <span className="size-16 rounded-sm bg-surface-2" aria-hidden />}

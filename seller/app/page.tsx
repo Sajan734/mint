@@ -26,7 +26,7 @@ export default function Dashboard() {
     <div className="flex flex-col gap-8">
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div className="flex flex-col gap-1">
-          <h1 className="text-[length:var(--t-2xl)] font-bold">Your listings</h1>
+          <h1 className="text-[2.25rem] md:text-[3rem]">Your listings</h1>
           <p className="text-ink-2">{SELLER_LINE}</p>
         </div>
         {rows.length > 0 && (
@@ -37,7 +37,7 @@ export default function Dashboard() {
       </header>
 
       {rows.length === 0 ? (
-        <section className="flex flex-col items-start gap-4 rounded-lg border border-line bg-surface p-6">
+        <section className="flex flex-col items-start gap-5 rounded-[28px] bg-surface p-8">
           <p className="text-[length:var(--t-lg)]">Nothing listed yet. Scan something to sell it.</p>
           <a href={NEW_SCAN_HREF} className="btn-primary">
             New listing
@@ -50,12 +50,12 @@ export default function Dashboard() {
           </h2>
           <ul aria-label="Listing counts" className="flex flex-wrap gap-2">
             {CHIPS.filter(([s]) => counts[s] > 0).map(([s, word]) => (
-              <li key={s} className="rounded-full border border-line bg-surface px-3 py-1 text-sm font-semibold">
+              <li key={s} className="rounded-full bg-surface px-3 py-1 text-sm font-semibold">
                 {counts[s]} {counts[s] === 1 ? STATUS_WORD[s] : word}
               </li>
             ))}
           </ul>
-          <ul className="divide-y divide-line border-y border-line">
+          <ul className="flex flex-col gap-2">
             {rows.map((r) => (
               <ListingRow key={r.id} row={r} />
             ))}
@@ -66,24 +66,24 @@ export default function Dashboard() {
       {scans.length > 0 && (
         <section aria-labelledby="scanned" className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
-            <h2 id="scanned" className="text-[length:var(--t-lg)] font-bold">
+            <h2 id="scanned" className="text-[length:var(--t-xl)]">
               Scanned, listing not written yet
             </h2>
             <p className="text-sm text-ink-2">Real 3D scans. The listing agent has not written them up yet.</p>
           </div>
           <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
             {scans.map((s) => (
-              <li key={s.id} className="flex flex-col gap-2 rounded-lg border border-line bg-surface p-2">
+              <li key={s.id} className="flex flex-col gap-2.5">
                 {s.images[0] ? (
                   // eslint-disable-next-line @next/next/no-img-element -- buyer-zone demo files on the shared origin
-                  <img src={s.images[0]} alt={s.name} loading="lazy" className="pad aspect-square w-full rounded-md object-contain" />
+                  <img src={s.images[0]} alt={s.name} loading="lazy" className="pad aspect-square w-full rounded-[16px] object-contain p-2" />
                 ) : (
-                  <div aria-hidden className="pad aspect-square w-full rounded-md" />
+                  <div aria-hidden className="pad aspect-square w-full rounded-[16px]" />
                 )}
-                <div className="flex flex-col gap-0.5 px-1 pb-1">
+                <div className="flex flex-col gap-0.5 px-0.5">
                   <p className="font-semibold">{s.name}</p>
-                  {s.note && <p className="text-xs text-ink-2">{s.note}</p>}
-                  <p className="text-xs text-ink-2">Waiting for the listing agent</p>
+                  {s.note && <p className="text-sm text-ink-2">{s.note}</p>}
+                  <p className="text-sm text-ink-2">Waiting for the listing agent</p>
                 </div>
               </li>
             ))}

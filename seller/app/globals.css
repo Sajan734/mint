@@ -1,31 +1,44 @@
 @import "tailwindcss";
 
+/* Mint design system: docs/design/DESIGN.md (oat canvas, pine ink, mint-leaf actions; Fraunces + Figtree).
+   The old names (mint, mint-ink, mint-wash, surface, line) are kept as aliases so every component follows. */
 :root {
-  --bg: #faf7f2;
-  --surface: #fffefc;
-  --surface-2: #f0ece4;
-  --line: #e1dcd2;
-  --ink: #0b0f0e;
-  --ink-2: #4a5552;
-  --mint: #3ddc97;
-  --mint-ink: #1b6b49;
-  --mint-wash: #ddf6ea;
-  --focus: #2f6fd0;
-  --amber: #f5b53f;
-  --coral: #ff6b5a;
-  --slate: #8a9499;
-  --line-strong: #bdb6a8;
-  --btn-bg: var(--ink);
-  --btn-fg: var(--bg);
-  --pad: radial-gradient(ellipse 70% 22% at 50% 86%, oklch(0.2 0.02 85 / 0.08), transparent 70%);
+  --bg: #f1efe9; /* oat */
+  --surface: #e8e5de; /* shelf: one tone step up */
+  --surface-2: #dedad1; /* deeper shelf: hover, selected */
+  --raised: #ffffff; /* paper: only what floats */
+  --line: #dcd8ce; /* form fields and real tables only */
+  --line-strong: #c4beb1;
+  --ink: #15302a; /* pine ink */
+  --ink-2: #4a5953;
+  --leaf: #0b6b4c; /* every action */
+  --leaf-press: #085a40;
+  --pine: #163a30; /* deep field */
+  --on-pine: #f1efe9;
+  --on-pine-2: #b9c2bc;
+  --wash: #d6ebdf; /* light field */
+  --spark: #3ddc97; /* brand mint: on pine only */
+  --amber: #7a4a00;
+  --amber-wash: #f2e1b8;
+  --coral: #a33a25;
+  --coral-wash: #f4d8cf;
+  --slate: #6f7c77;
+  --mint: var(--spark);
+  --mint-ink: var(--leaf);
+  --mint-wash: var(--wash);
+  --focus: var(--leaf);
+  --btn-bg: var(--leaf);
+  --btn-fg: #ffffff;
+  --btn-press: var(--leaf-press);
+  --pad: none;
 
-  --t-xs: 0.75rem;
+  --t-xs: 0.8125rem;
   --t-sm: 0.875rem;
   --t-md: 1rem;
   --t-lg: 1.125rem;
-  --t-xl: 1.5rem;
+  --t-xl: 1.625rem;
   --t-2xl: 2rem;
-  --t-3xl: 3rem;
+  --t-3xl: clamp(2.75rem, 6.2vw, 5.75rem);
 
   --sp-1: 4px;
   --sp-2: 8px;
@@ -38,76 +51,98 @@
   --sp-9: 96px;
 
   --r-sm: 8px;
-  --r-md: 14px;
-  --r-lg: 22px;
+  --r-md: 16px;
+  --r-lg: 24px;
 
-  --shadow-hover: 0 8px 24px oklch(0.2 0.02 170 / 0.08);
-  --shadow-sheet: 0 -12px 40px oklch(0.2 0.02 170 / 0.18);
+  --shadow-float: 0 1px 2px rgb(21 48 42 / 0.08), 0 12px 32px rgb(21 48 42 / 0.16);
+  --shadow-hover: none;
+  --shadow-sheet: var(--shadow-float);
+  --scrim: rgb(21 48 42 / 0.45);
 
   --dur-feedback: 120ms;
-  --dur-state: 200ms;
+  --dur-state: 220ms;
   --dur-sheet: 320ms;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0b0f0e;
-    --surface: #131a18;
-    --surface-2: #1c2623;
-    --line: #2b3733;
-    --ink: #f1eee8;
-    --ink-2: #b0bab6;
-    --mint-ink: #5be6a8;
-    --mint-wash: #123a2a;
-    --focus: #7fb0f5;
-    --shadow-hover: none;
-    --shadow-sheet: none;
-    --line-strong: #4d5f59;
-    --btn-bg: #3ddc97;
-    --btn-fg: #0b0f0e;
-    --pad: radial-gradient(ellipse 70% 22% at 50% 86%, oklch(0 0 0 / 0.35), transparent 70%);
+    --bg: #0f201b;
+    --surface: #17302a;
+    --surface-2: #1f3b34;
+    --raised: #17302a;
+    --line: #2a453d;
+    --line-strong: #3d5a51;
+    --ink: #edebe4;
+    --ink-2: #a9b8b1;
+    --leaf: #3ddc97;
+    --leaf-press: #5be6aa;
+    --pine: #0a1814;
+    --wash: #123a2a;
+    --amber: #f5c66a;
+    --amber-wash: #3a2a0c;
+    --coral: #ff9a84;
+    --coral-wash: #3d1a12;
+    --slate: #8fa09a;
+    --btn-fg: #0f201b;
+    --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45);
+    --scrim: rgb(0 0 0 / 0.6);
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #0b0f0e;
-  --surface: #131a18;
-  --surface-2: #1c2623;
-  --line: #2b3733;
-  --ink: #f1eee8;
-  --ink-2: #b0bab6;
-  --mint-ink: #5be6a8;
-  --mint-wash: #123a2a;
-  --focus: #7fb0f5;
-  --shadow-hover: none;
-  --shadow-sheet: none;
-  --line-strong: #4d5f59;
-  --btn-bg: #3ddc97;
-  --btn-fg: #0b0f0e;
-  --pad: radial-gradient(ellipse 70% 22% at 50% 86%, oklch(0 0 0 / 0.35), transparent 70%);
+  --bg: #0f201b;
+  --surface: #17302a;
+  --surface-2: #1f3b34;
+  --raised: #17302a;
+  --line: #2a453d;
+  --line-strong: #3d5a51;
+  --ink: #edebe4;
+  --ink-2: #a9b8b1;
+  --leaf: #3ddc97;
+  --leaf-press: #5be6aa;
+  --pine: #0a1814;
+  --wash: #123a2a;
+  --amber: #f5c66a;
+  --amber-wash: #3a2a0c;
+  --coral: #ff9a84;
+  --coral-wash: #3d1a12;
+  --slate: #8fa09a;
+  --btn-fg: #0f201b;
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45);
+  --scrim: rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
   --color-surface-2: var(--surface-2);
+  --color-raised: var(--raised);
   --color-line: var(--line);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
+  --color-leaf: var(--leaf);
+  --color-leaf-press: var(--leaf-press);
+  --color-pine: var(--pine);
+  --color-on-pine: var(--on-pine);
+  --color-on-pine-2: var(--on-pine-2);
+  --color-wash: var(--wash);
+  --color-spark: var(--spark);
   --color-mint: var(--mint);
   --color-mint-ink: var(--mint-ink);
   --color-mint-wash: var(--mint-wash);
   --color-focus: var(--focus);
   --color-amber: var(--amber);
+  --color-amber-wash: var(--amber-wash);
   --color-coral: var(--coral);
+  --color-coral-wash: var(--coral-wash);
   --color-slate: var(--slate);
   --color-line-strong: var(--line-strong);
   --color-btn-bg: var(--btn-bg);
   --color-btn-fg: var(--btn-fg);
-  --font-display: var(--font-bricolage), system-ui, sans-serif;
+  --font-display: var(--font-fraunces), Georgia, serif;
   --font-sans: var(--font-figtree), system-ui, sans-serif;
-  --font-mono: var(--font-dm-mono), ui-monospace, monospace;
+  --font-mono: var(--font-figtree), system-ui, sans-serif;
   --radius-sm: var(--r-sm);
   --radius-md: var(--r-md);
   --radius-lg: var(--r-lg);
@@ -123,85 +158,137 @@
   }
 }
 
-body {
-  background: var(--bg);
-  color: var(--ink);
-  font-family: var(--font-sans);
-  font-size: var(--t-md);
-  line-height: 1.5;
+/* Base and component rules sit in Tailwind's layers, so a utility class on an element always wins over them. */
+@layer base {
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    font-size: var(--t-md);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  html {
+    scroll-padding-top: 5rem;
+    scroll-behavior: smooth;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  /* Signs: Fraunces at its softest. Card and panel titles (h3 and below) stay in Figtree. */
+  h1,
+  h2,
+  .font-display {
+    font-family: var(--font-display);
+    font-variation-settings: "SOFT" 100, "WONK" 0;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.08;
+    text-wrap: balance;
+  }
+  h3 {
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  p {
+    text-wrap: pretty;
+  }
+
+  ::selection {
+    background: var(--wash);
+    color: var(--ink);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--focus);
+    outline-offset: 2px;
+  }
+
+  /* Skip-link targets take focus only so Tab continues from there; they are not controls, so no ring. */
+  [tabindex="-1"]:focus { outline: none; }
 }
 
-html {
-  scroll-padding-top: 5rem;
-  scrollbar-color: var(--line-strong) transparent;
+@layer components {
+  /* Buttons are full pills that press in (DESIGN.md §4). */
+  .btn-primary,
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sp-2);
+    min-height: 3rem;
+    padding: 0 var(--sp-5);
+    border-radius: 999px;
+    font-weight: 600;
+    transition: background-color var(--dur-feedback) var(--ease), transform var(--dur-feedback) var(--ease);
+  }
+  .btn-primary {
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+  }
+  .btn-primary:hover { background: var(--btn-press); }
+  .btn-secondary {
+    background: var(--surface);
+    color: var(--ink);
+  }
+  .btn-secondary:hover { background: var(--surface-2); }
+  .btn-primary:active,
+  .btn-secondary:active { transform: scale(0.97); }
+
+  /* Form fields: a shelf fill, no outline at rest, leaf ring on focus. */
+  .field {
+    width: 100%;
+    border-radius: 12px;
+    background: var(--surface);
+    color: var(--ink);
+    transition: background-color var(--dur-feedback) var(--ease);
+  }
+  .field:hover { background: var(--surface-2); }
+  .field::placeholder { color: var(--ink-2); }
+  .field:focus-visible { outline: 2px solid var(--focus); outline-offset: 0; background: var(--raised); }
+
+  /* "Skip to content": the first Tab stop on every page, hidden until it has focus. */
+  .skip-link {
+    position: absolute;
+    left: var(--sp-4);
+    top: -100px;
+    z-index: 50;
+    padding: var(--sp-2) var(--sp-4);
+    border-radius: 999px;
+    background: var(--btn-bg);
+    color: var(--btn-fg);
+    font-weight: 600;
+  }
+  .skip-link:focus { top: var(--sp-2); }
+
+  /* Image wells: the shelf the scanned object stands on. Flat. */
+  .pad { background-color: var(--surface); }
 }
 
-h1,
-h2,
-h3 {
-  font-family: var(--font-display);
-  line-height: 1.15;
-  text-wrap: balance;
+/* Entrances (DESIGN.md §9): the parts of a section rise in as it scrolls into view. Only where the browser can tie
+   the animation to scrolling, so nothing stays hidden without it. */
+@keyframes rise {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: none; }
 }
-
-::selection {
-  background: var(--mint);
-  color: #0b0f0e;
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .rise > * {
+      animation: rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 50%;
+    }
+  }
+  .rise-load > * {
+    animation: rise 600ms var(--ease) both;
+  }
+  .rise-load > *:nth-child(2) { animation-delay: 70ms; }
+  .rise-load > *:nth-child(3) { animation-delay: 140ms; }
+  .rise-load > *:nth-child(4) { animation-delay: 210ms; }
 }
-
-/* Primary action: ink on paper, mint in dark (DESIGN.md). */
-.btn-primary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.75rem;
-  padding: 0 var(--sp-5);
-  border-radius: var(--r-md);
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  font-weight: 600;
-  transition: opacity var(--dur-feedback) var(--ease), transform var(--dur-feedback) var(--ease);
-}
-.btn-primary:hover { opacity: 0.88; }
-.btn-primary:active { transform: translateY(1px); }
-
-.btn-secondary {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 2.75rem;
-  padding: 0 var(--sp-5);
-  border-radius: var(--r-md);
-  border: 1px solid var(--line-strong);
-  background: var(--surface);
-  color: var(--ink);
-  font-weight: 600;
-  transition: border-color var(--dur-feedback) var(--ease);
-}
-.btn-secondary:hover { border-color: var(--ink); }
-
-/* "Skip to content": the first Tab stop on every page, hidden until it has focus. */
-.skip-link {
-  position: absolute;
-  left: var(--sp-4);
-  top: -100px;
-  z-index: 50;
-  padding: var(--sp-2) var(--sp-4);
-  border-radius: var(--r-md);
-  background: var(--btn-bg);
-  color: var(--btn-fg);
-  font-weight: 600;
-}
-.skip-link:focus { top: var(--sp-2); }
-/* Skip-link targets take focus only so Tab continues from there; they are not controls, so no ring. */
-[tabindex="-1"]:focus { outline: none; }
-
-/* Turntable pad: soft ground shadow under every scanned object. */
-.pad { background-color: var(--surface-2); background-image: var(--pad); }
-
-:focus-visible {
-  outline: 2px solid var(--focus);
-  outline-offset: 2px;
+@media print {
+  .rise > *,
+  .rise-load > * { animation: none !important; }
 }
 
 @media (prefers-reduced-motion: reduce) {
