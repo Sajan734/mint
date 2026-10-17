@@ -31,8 +31,8 @@ class Settings:
     jev_wait_for_s: int = 50
     judge_stage_cap_s: int = 120
     request_cap_s: int = 180
-    groq_model_main: str = "llama-3.3-70b-versatile"
-    groq_model_fast: str = "llama-3.1-8b-instant"
+    groq_model_main: str = "openai/gpt-oss-120b"
+    groq_model_fast: str = "openai/gpt-oss-20b"
     groq_timeout_s: int = 12
     groq_max_retries: int = 0
     advise_cap_s: int = 30

@@ -162,7 +162,7 @@ class NextStep(Strict):
     message_to_seller: Annotated[str, Field(max_length=1200)] | None
     refund_request: Annotated[str, Field(max_length=1200)] | None
     cited_views: list[Label]
-    drafted_by: str  # "groq:llama-3.3-70b-versatile" | "template"
+    drafted_by: str  # "groq:openai/gpt-oss-120b" | "template"
     is_template: bool
 
 
