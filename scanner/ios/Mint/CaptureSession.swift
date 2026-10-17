@@ -64,9 +64,6 @@ final class CaptureSession: NSObject, ObservableObject {
     /// How far the paper has turned this pass (radians, clockwise from above), eased for display: the ring's
     /// bright spot sits at this angle (clockwise from the top), on the side the camera is looking at now.
     @Published private(set) var ringTurn: Double = 0
-    /// The item's box on screen (view points, eased), and whether it's in view right now.
-    @Published private(set) var itemBox: CGRect?
-    @Published private(set) var itemVisible = false
     @Published private(set) var lapCompletedAt: Date?
     /// The sheet's edges were read in the last moment (false: no paper, or hands covering it).
     @Published private(set) var paperSeen = false
@@ -87,10 +84,6 @@ final class CaptureSession: NSObject, ObservableObject {
     private var lastObservation: TimeInterval?
     private var lastPaperAt = Date.distantPast
     private var fullSlices = 0
-    private var targetBox: CGRect?
-    private var pendingBox: CGRect?
-    private var pendingCount = 0
-    private var lastItemAt = Date.distantPast
     private var previewing = false   // Debug screen previews only
     private var reportedTenth = -1
     private var exposureLocked = false
@@ -391,8 +384,8 @@ final class CaptureSession: NSObject, ObservableObject {
 
     // MARK: - Measuring
 
-    /// 30 Hz: the size limit on a pass, whether the paper and item are in view, and easing the item's box
-    /// and the ring's turn towards the latest readings (which come ~8 times a second).
+    /// 30 Hz: the size limit on a pass, whether the paper is in view, and easing the ring's turn towards the
+    /// latest reading (they come ~8 times a second).
     private func onTick() {
         // Watchdog: frames normally arrive 30–60 times a second. None for 1.5 s (and not just started) = frozen.
         let now = Date()
@@ -401,17 +394,6 @@ final class CaptureSession: NSObject, ObservableObject {
         if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.maxPassSeconds { stopPass() }
         let seen = Date().timeIntervalSince(lastPaperAt) < 0.6
         if seen != paperSeen { paperSeen = seen }
-        let visible = Date().timeIntervalSince(lastItemAt) < 0.9
-        if visible != itemVisible { itemVisible = visible }
-        if let target = targetBox {
-            if let box = itemBox {
-                let k: CGFloat = 0.3
-                itemBox = CGRect(x: box.minX + (target.minX - box.minX) * k, y: box.minY + (target.minY - box.minY) * k,
-                                 width: box.width + (target.width - box.width) * k, height: box.height + (target.height - box.height) * k)
-            } else {
-                itemBox = target
-            }
-        }
         // The ring follows the paper while recording, then stays where the paper stopped.
         let goal = Double(turn.turned)
         if phase == .recording, lapCompletedAt == nil, !previewing, abs(goal - ringTurn) > 0.0005 { ringTurn += (goal - ringTurn) * 0.3 }
@@ -421,10 +403,7 @@ final class CaptureSession: NSObject, ObservableObject {
     /// turned, which while recording fills the coverage.
     private func apply(_ sight: PaperReader.Sight) {
         if let code = sight.code { follow(code) }
-        if let box = sight.itemBox {
-            track(box)
-            aimCamera(at: box)
-        }
+        if let box = sight.itemBox { aimCamera(at: box) }
         guard let reading = sight.paper, turn.update(reading, time: sight.timestamp) else { return }
         lastPaperAt = Date()
         // Once the lap is done the measurement stops: hand-held touch-ups (walking round, other heights)
@@ -445,35 +424,6 @@ final class CaptureSession: NSObject, ObservableObject {
         CameraLock.aim(at: centre)
         lastAim = centre
         lastAimAt = Date()
-    }
-
-    /// The item's box from a reading, on screen. The paper finder only ever reports what the sheet
-    /// encloses, but a sudden jump (a hand, a shadow) has to repeat 3 times before the brackets follow.
-    private func track(_ sensorBox: CGRect) {
-        guard let frame = arView.session.currentFrame else { return }
-        let size = arView.bounds.size
-        guard size.width > 0 else { return }
-        let toView = frame.displayTransform(for: .portrait, viewportSize: size)
-        let corners = [CGPoint(x: sensorBox.minX, y: sensorBox.minY), CGPoint(x: sensorBox.maxX, y: sensorBox.minY),
-                       CGPoint(x: sensorBox.minX, y: sensorBox.maxY), CGPoint(x: sensorBox.maxX, y: sensorBox.maxY)]
-            .map { $0.applying(toView) }.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
-        let xs = corners.map(\.x), ys = corners.map(\.y)
-        // In screen coordinates: the camera preview is letterboxed to the sensor's 4:3 (CaptureView), so it no
-        // longer starts at the top of the screen where the brackets' overlay does.
-        let origin = arView.convert(CGPoint.zero, to: nil)
-        let box = CGRect(x: xs.min()! + origin.x, y: ys.min()! + origin.y, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
-        let area = box.width * box.height / (size.width * size.height)
-        guard area > 0.002, area < 0.5 else { return }
-        func far(_ a: CGRect, _ b: CGRect) -> Bool { hypot(a.midX - b.midX, a.midY - b.midY) > 0.25 * size.width }
-        if let target = targetBox, Date().timeIntervalSince(lastItemAt) < 1.5, far(box, target) {
-            if let p = pendingBox, !far(box, p) { pendingCount += 1 } else { pendingCount = 1 }
-            pendingBox = box
-            guard pendingCount >= 3 else { return }
-        }
-        pendingBox = nil
-        pendingCount = 0
-        targetBox = box
-        lastItemAt = Date()
     }
 
     private func publishCoverage() {
@@ -503,8 +453,6 @@ final class CaptureSession: NSObject, ObservableObject {
         let fake = VideoRecorder.Summary(directory: URL(fileURLWithPath: "/nonexistent"), scanID: job!.scanID, pass: 1,
                                          seconds: 23, frames: 690, megabytes: 23)
         lastPaperAt = .distantFuture
-        lastItemAt = .distantFuture
-        targetBox = CGRect(x: 125, y: 330, width: 150, height: 120)
         // Made-up coverage: the paper turned `deg` clockwise, so sides −deg…0 have been seen.
         let fill = { (deg: Double) in
             self.ticks = (0..<Self.tickCount).map { i in

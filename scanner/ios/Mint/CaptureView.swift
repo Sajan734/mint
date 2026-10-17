@@ -82,7 +82,7 @@ private struct CameraView: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 }
 
-// MARK: - The scanner: brackets on the item while it's being found, and the coverage ring round the scan button
+// MARK: - The scanner: the live camera, and the coverage ring round the scan button
 
 struct ScannerHUD: View {
     @ObservedObject var session: CaptureSession
@@ -96,15 +96,6 @@ struct ScannerHUD: View {
                            startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
-
-            GeometryReader { geo in
-                TimelineView(.animation) { ctx in
-                    Brackets(session: session, time: ctx.date,
-                             offset: CGPoint(x: geo.safeAreaInsets.leading, y: geo.safeAreaInsets.top))
-                }
-                .ignoresSafeArea()
-            }
-            .allowsHitTesting(false)
 
             VStack(spacing: 10) {
                 topBar
@@ -130,7 +121,7 @@ struct ScannerHUD: View {
         }
     }
 
-    // Top: the mark, and what the scanner sees (paper locked) or the recording clock.
+    // Top: the mark, and the recording clock (or the pass about to start, or the passes saved).
     private var topBar: some View {
         HStack {
             MintMark(ink: .white)
@@ -148,14 +139,7 @@ struct ScannerHUD: View {
                     .chip()
                 }
             case .ready:
-                HStack(spacing: 7) {
-                    Circle().fill(session.paperSeen ? Color.brandMint : Color.brandAmber).frame(width: 8, height: 8)
-                        .shadow(color: session.paperSeen ? .brandMint : .clear, radius: 5)
-                    Text(session.paperSeen ? "PAPER LOCKED" : "FINDING PAPER")
-                        .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
-                    if session.nextPass > 1 { passTag(session.nextPass) }
-                }
-                .chip()
+                if session.nextPass > 1 { passTag(session.nextPass).chip() }
             default:
                 Label(session.passes.count > 1 ? "\(session.passes.count) PASSES" : "PASS SAVED", systemImage: "checkmark.seal.fill")
                     .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.2)
@@ -209,46 +193,6 @@ struct ScannerHUD: View {
             Color.clear.frame(width: 50, height: 50)
         }
         .foregroundStyle(.white)
-    }
-}
-
-/// Corner brackets on the item (what the sheet of paper encloses): they show it's been found, and stay
-/// until the lap is about half covered, then fade away for the rest of the pass.
-struct Brackets: View {
-    @ObservedObject var session: CaptureSession
-    let time: Date
-    let offset: CGPoint   // view (safe area) → canvas (full screen)
-
-    static let hideAtPercent = 50
-
-    var body: some View {
-        let shown = session.phase == .ready || (session.isRecording && session.percent < Self.hideAtPercent)
-        Canvas { ctx, _ in
-            guard let box = session.itemBox?.offsetBy(dx: offset.x, dy: offset.y) else { return }
-            let t = time.timeIntervalSinceReferenceDate
-            let vis = session.itemVisible ? 1.0 : 0.3
-            let r = box.insetBy(dx: -16, dy: -16)
-            let len = min(30, r.width / 3.5, r.height / 3.5)
-            var path = Path()
-            for (c, dx, dy) in [(CGPoint(x: r.minX, y: r.minY), 1.0, 1.0), (CGPoint(x: r.maxX, y: r.minY), -1.0, 1.0),
-                                (CGPoint(x: r.minX, y: r.maxY), 1.0, -1.0), (CGPoint(x: r.maxX, y: r.maxY), -1.0, -1.0)] {
-                path.move(to: CGPoint(x: c.x + dx * len, y: c.y))
-                path.addLine(to: c)
-                path.addLine(to: CGPoint(x: c.x, y: c.y + dy * len))
-            }
-            let colour = session.isRecording ? Color.brandMint : .white
-            let pulse = 0.75 + 0.25 * sin(t * (session.isRecording ? 4 : 2))
-            ctx.drawLayer { l in
-                l.addFilter(.blur(radius: 6))
-                l.stroke(path, with: .color(colour.opacity(0.7 * pulse * vis)), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
-            }
-            ctx.stroke(path, with: .color(colour.opacity(vis)), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
-            ctx.draw(Text(session.isRecording ? "SCANNING" : "ITEM").font(.system(size: 11, weight: .heavy, design: .rounded))
-                        .foregroundColor(colour.opacity(vis)),
-                     at: CGPoint(x: r.minX + 2, y: r.minY - 12), anchor: .leading)
-        }
-        .opacity(shown ? 1 : 0)
-        .animation(.easeOut(duration: 0.6), value: shown)
     }
 }
 
@@ -375,8 +319,8 @@ private struct Caption: View {
         switch session.phase {
         case .ready:
             if session.passes.isEmpty {
-                if session.job?.isVerify == true && !session.itemVisible { return ("Put the item you're buying on the paper", "checkmark.shield") }
-                return session.itemVisible ? ("Item found · tap to start", "viewfinder") : ("Put the item on a sheet of paper", "doc")
+                if session.job?.isVerify == true { return ("Line up the item you're buying", "checkmark.shield") }
+                return ("Line up the item · tap Scan", "viewfinder")
             }
             return ("Pass \(session.nextPass) · flip it or try another angle", "arrow.uturn.down")
         case .recording:
@@ -384,8 +328,8 @@ private struct Caption: View {
             let left = Int((CaptureSession.maxPassSeconds - t).rounded(.up))
             if left <= 8 { return ("Wrapping up in \(left) s", "timer") }
             if session.lapCompletedAt != nil { return ("Full lap · touch up, then tap stop", "checkmark.seal") }
-            if !session.paperSeen { return ("Keep the paper in view", "viewfinder") }
-            return ("Turn the paper clockwise", "arrow.clockwise")
+            if !session.paperSeen { return ("Keep the item in view", "viewfinder") }
+            return ("Turn it slowly clockwise", "arrow.clockwise")
         case .saving: return ("Saving pass \(session.nextPass)…", "seal")
         default: return ("", "")
         }
