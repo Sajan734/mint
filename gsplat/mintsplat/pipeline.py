@@ -138,6 +138,8 @@ def run(models, videos: bytes | list[bytes], cfg: dict, on_event=None) -> dict:
             for name, data in images:
                 out["files"][f"views/{name}"] = data
             out["files"]["views/views.json"] = json.dumps(meta, indent=1).encode()
+            for name, data in views_mod.spin_frames(clean0, sh_deg):
+                out["files"][f"views/spin/{name}"] = data
     out["sizes_mb"] = {k: round(len(v) / 1e6, 2) for k, v in out["files"].items() if k.startswith("splat.")}
     print(f"sizes: {out['sizes_mb']}", flush=True)
     print(f"cleanup: {cstats}", flush=True)

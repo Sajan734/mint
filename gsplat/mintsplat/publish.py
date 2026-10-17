@@ -7,6 +7,7 @@ Published layout (public `assets` bucket, readable without a key):
   splats/{scan_id}.spz      the splat (SPZ v3)
   splats/{scan_id}.json     manifest
   views/{scan_id}/          8 reference views (transparent + grey PNG each) + views.json (cameras)
+                            + spin/f00..f23.webp (turntable for the website's spin viewer)
   splats/index.json         every published scan, newest first (listing/ingest.py polls this)
 The .spz is the only splat format that leaves the GPU: ~10x smaller than a PLY, and listing/ renders it directly.
 """
@@ -16,16 +17,21 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 SCANS, ASSETS = "scans", "assets"
+VIDEO_EXTS = (".mp4", ".mov", ".m4v")
+TOP_NAMES, BOTTOM_NAMES = ("top", "video"), ("bottom",)  # video.mp4 is what the iOS app uploads
+CONTENT_TYPES = {".json": "application/json", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg"}
 
 
 def fetch_inputs(sb, scan_id: str) -> tuple[list[str], list[bytes], dict]:
-    """scans/{scan_id}/top.* (required) and bottom.* (optional) -> (names, video bytes, io timings)."""
+    """scans/{scan_id}/top.* or video.* (required) and bottom.* (optional) -> (names, video bytes, io timings).
+    Other files the phone uploads next to the video (poses.jsonl, capture.json, thumb.jpg) are ignored."""
     t0 = time.perf_counter()
     names = sb.list(SCANS, scan_id)
-    pick = lambda role: next((n for n in sorted(names) if n.startswith(role + ".")), None)  # noqa: E731
-    keys = [k for k in (pick("top"), pick("bottom")) if k]
-    if not keys or not keys[0].startswith("top."):
-        raise FileNotFoundError(f"no scans/{scan_id}/top.* uploaded (found {names})")
+    videos = sorted(n for n in names if n.lower().endswith(VIDEO_EXTS))
+    pick = lambda roles: next((n for n in videos if n.rsplit(".", 1)[0] in roles), None)  # noqa: E731
+    keys = [k for k in (pick(TOP_NAMES), pick(BOTTOM_NAMES)) if k]
+    if not keys or keys[0].rsplit(".", 1)[0] not in TOP_NAMES:
+        raise FileNotFoundError(f"no scans/{scan_id}/video.mp4 or top.* uploaded (found {names})")
     with ThreadPoolExecutor(2) as ex:
         videos = list(ex.map(lambda k: sb.download(SCANS, f"{scan_id}/{k}"), keys))
     io = {"download_s": round(time.perf_counter() - t0, 2), "download_mb": round(sum(map(len, videos)) / 1e6, 1)}
@@ -38,7 +44,7 @@ def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dic
     t0 = time.perf_counter()
     folder = f"views/{scan_id}"
     targets = [(f"splats/{scan_id}.spz", files.pop("splat.spz"), "application/octet-stream")]
-    targets += [(f"{folder}/{k.split('/', 1)[1]}", v, "application/json" if k.endswith(".json") else "image/png")
+    targets += [(f"{folder}/{k.split('/', 1)[1]}", v, CONTENT_TYPES["." + k.rsplit(".", 1)[-1]])
                 for k, v in files.items() if k.startswith("views/")]
     with ThreadPoolExecutor(8) as ex:
         urls = dict(zip([p for p, _, _ in targets], ex.map(lambda x: sb.upload(ASSETS, *x), targets)))
@@ -54,6 +60,7 @@ def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dic
             {"name": v["name"], "azimuth_deg": v["azimuth_deg"], "elevation_deg": v["elevation_deg"],
              "transparent_url": urls[f"{folder}/{v['files']['transparent']}"],
              "grey_url": urls[f"{folder}/{v['files']['grey']}"]} for v in meta["views"]]},
+        "spin_urls": [urls[p] for p in sorted(p for p in urls if p.startswith(f"{folder}/spin/"))],
         "metric_scale": None,  # video-only scans are not metric yet
         "frame": "scan frame: +Y up, +X along the object's long axis, origin under the object, right-handed (SPZ's RUB)",
         "gaussians": res["gaussians"]["after"], "sizes_mb": res["sizes_mb"],

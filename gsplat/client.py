@@ -4,9 +4,12 @@
     python client.py run orbit.mp4 [--name x]   # mp4 -> out/<name>/splat.spz on the warm container
     python client.py run orbit.mp4 orbit_reverse.mp4 --name merged   # top + flipped-over bottom
     python client.py cold [--gpu H100]          # back to scale-to-zero after the demo
-    python client.py scan orbit.mp4 [orbit_reverse.mp4] [--gpu H100]
-        # end-to-end through Supabase, like the phone: signed upload URLs (no key on the client) ->
-        # PUT videos -> run_scan(scan_id) -> .spz + 8 cube views + manifest in Storage, events on Realtime
+    python client.py scan orbit.mp4
+        # the live pipeline end to end, exactly like the iPhone: the scan-upload Edge Function signs
+        # scans/{id}/video.mp4 (no key on the client) -> PUT -> the Supabase webhook starts run_scan on an H100
+        # -> splat + views -> listing/ (Jev) -> assets/listings/{id}.json, which the website shows. Times each hop.
+    python client.py scan orbit.mp4 orbit_reverse.mp4 [--gpu H100]
+        # top + bottom (the app doesn't capture a bottom yet): signed uploads, then run_scan is started directly
 
 Use the same --gpu for warm, run and cold: each GPU type is its own pool of containers.
 Warm H100: one video ~24-28 s, top + bottom ~35 s (training resolution is set automatically; see README).
@@ -16,6 +19,7 @@ Warm H100: one video ~24-28 s, top + bottom ~35 s (training resolution is set au
 import argparse
 import json
 import time
+import urllib.error
 import urllib.request
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -24,6 +28,9 @@ from pathlib import Path
 import modal
 
 APP, CLS = "mint-gsplat", "Splatter"
+SUPABASE_URL = "https://jpanyhsifoxxiizkgjno.supabase.co"  # public project URL, not a secret
+PUBLIC = f"{SUPABASE_URL}/storage/v1/object/public/assets"
+UPLOAD_FN = f"{SUPABASE_URL}/functions/v1/scan-upload"  # the iOS app's signer (scanner/supabase), needs no key
 
 
 def save(res: dict, out_dir: Path, wall: float) -> None:
@@ -48,26 +55,51 @@ def put(url: str, path: Path) -> float:
     return time.perf_counter() - t0
 
 
-def scan(splatter, videos: list[Path], scale: float) -> dict:
+def get_json(url: str) -> dict | None:
+    """A public object, never from a cache; None until it exists."""
+    try:
+        with urllib.request.urlopen(f"{url}?t={time.time_ns()}", timeout=10) as r:
+            return json.loads(r.read())
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        return None
+
+
+def phone_upload(scan_id: str, video: Path) -> None:
+    """What the iOS app does: ask the scan-upload Edge Function for a signed URL, PUT the video."""
+    body = json.dumps({"scan_id": scan_id, "files": ["video.mp4"]}).encode()
+    req = urllib.request.Request(UPLOAD_FN, data=body, method="POST", headers={"Content-Type": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as r:
+        signed = json.loads(r.read())["uploads"][0]["signed_url"]
+    put(signed, video)
+
+
+def scan(splatter, videos: list[Path], scale: float, timeout_s: float = 600) -> dict:
     scan_id = str(uuid.uuid4())
-    names = [f"{role}{p.suffix.lower()}" for role, p in zip(("top", "bottom"), videos)]
-    t: dict[str, float] = {}
+    t: dict[str, float] = {"upload_mb": sum(p.stat().st_size for p in videos) / 1e6}
+    start = time.perf_counter()
+    if len(videos) == 1:  # the phone's path: the Supabase webhook starts the pipeline when the upload lands
+        phone_upload(scan_id, videos[0])
+        t["uploaded_s"] = time.perf_counter() - start
+    else:
+        names = [f"{role}{p.suffix.lower()}" for role, p in zip(("top", "bottom"), videos)]
+        urls = modal.Function.from_name("mint-supabase", "sign_uploads").remote(scan_id, names)  # supabase_setup/
+        with ThreadPoolExecutor(len(videos)) as ex:  # both videos in parallel, as the app would
+            list(ex.map(lambda nv: put(urls[nv[0]], nv[1]), zip(names, videos)))
+        t["uploaded_s"] = time.perf_counter() - start
+        splatter.run_scan.spawn(scan_id, None, {"train": {"train_scale": scale or None}})
+    print(f"scan {scan_id}: uploaded in {t['uploaded_s']:.1f} s, waiting for the pipeline ...", flush=True)
 
-    t0 = time.perf_counter()
-    urls = modal.Function.from_name("mint-supabase", "sign_uploads").remote(scan_id, names)  # supabase_setup/
-    t["sign_urls_s"] = time.perf_counter() - t0
-
-    t0 = time.perf_counter()
-    with ThreadPoolExecutor(len(videos)) as ex:  # both videos in parallel, as the app would
-        list(ex.map(lambda nv: put(urls[nv[0]], nv[1]), zip(names, videos)))
-    t["upload_s"] = time.perf_counter() - t0
-    t["upload_mb"] = sum(p.stat().st_size for p in videos) / 1e6
-
-    t0 = time.perf_counter()
-    manifest = splatter.run_scan.remote(scan_id, None, {"train": {"train_scale": scale or None}})
-    t["run_scan_wall_s"] = time.perf_counter() - t0
-    manifest["client_timings"] = {k: round(v, 2) for k, v in t.items()}
-    return manifest
+    manifest = listing = None  # watch the public bucket, as the website does
+    while time.perf_counter() - start < timeout_s and listing is None:
+        time.sleep(1.0)
+        if manifest is None and (manifest := get_json(f"{PUBLIC}/splats/{scan_id}.json")):
+            t["splat_published_s"] = time.perf_counter() - start
+            print(f"  splat published at {t['splat_published_s']:.1f} s", flush=True)
+        if (listing := get_json(f"{PUBLIC}/listings/{scan_id}.json")):
+            t["listing_published_s"] = time.perf_counter() - start
+            print(f"  listing {listing['status']} at {t['listing_published_s']:.1f} s", flush=True)
+    return {"scan_id": scan_id, "client_timings": {k: round(v, 2) for k, v in t.items()},
+            "website_path": f"/listing/{scan_id}", "manifest": manifest, "listing": listing}
 
 
 def main():
@@ -103,9 +135,14 @@ def main():
         m = scan(splatter, videos, args.scale)
         out = Path("out") / f"scan_{m['scan_id'][:8]}"
         out.mkdir(parents=True, exist_ok=True)
-        (out / "manifest.json").write_text(json.dumps(m, indent=2))
-        print(json.dumps(m, indent=2))
-        print(f"\nmanifest saved to {out}/manifest.json")
+        (out / "scan.json").write_text(json.dumps(m, indent=2))
+        print(json.dumps({k: m[k] for k in ("scan_id", "client_timings", "website_path")}, indent=2))
+        if m["manifest"]:
+            print("server stage timings (ms):", json.dumps(m["manifest"]["stage_timings_ms"]))
+        if m["listing"]:
+            print("listing:", m["listing"]["status"], m["listing"].get("error") or "",
+                  json.dumps(m["listing"].get("timings_ms", {})))
+        print(f"\nsaved to {out}/scan.json")
     else:
         src = Path(args.video)
         t0 = time.perf_counter()

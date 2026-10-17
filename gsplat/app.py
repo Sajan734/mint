@@ -22,22 +22,26 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root: sh
 CUDA_ARCHS = "8.0;8.6;8.9;9.0"
 
 
-def _has_supabase() -> bool:
-    """Whether the `mint-supabase` secret exists. Only storage mode (run_scan) needs it, so dev runs and
-    deploys still work before it is created. Decided once where the app is defined (locally) and baked
-    into the image env, so the container sees the same answer: re-checking in the container would
-    change the function's dependency count and break start-up. Redeploy after creating the secret."""
+def _has_secret(name: str, env: str, what: str) -> bool:
+    """Whether a Modal secret exists. Only storage mode needs `mint-supabase` (and the listing step `mint-listing`),
+    so dev runs and deploys still work before they are created. Decided once where the app is defined (locally) and
+    baked into the image env, so the container sees the same answer: re-checking in the container would change the
+    function's dependency count and break start-up. Redeploy after creating a secret."""
     if not modal.is_local():
-        return os.environ.get("MINT_SUPABASE") == "1"
+        return os.environ.get(env) == "1"
     try:
-        modal.Secret.from_name("mint-supabase").hydrate()
+        modal.Secret.from_name(name).hydrate()
         return True
     except modal.exception.NotFoundError:
-        print("note: Modal secret `mint-supabase` not found: storage mode (run_scan) disabled", file=sys.stderr)
+        print(f"note: Modal secret `{name}` not found: {what} disabled", file=sys.stderr)
         return False
 
 
-HAS_SUPABASE = _has_supabase()
+HAS_SUPABASE = _has_secret("mint-supabase", "MINT_SUPABASE", "storage mode (run_scan, on_upload)")
+HAS_LISTING = _has_secret("mint-listing", "MINT_LISTING", "the listing step after the splat (Jev + Gemini)")
+LISTING_DIR = Path(__file__).resolve().parent.parent / "listing"
+LIVE_GPU = "H100"  # scans started by the upload webhook
+FLAGS = {"MINT_SUPABASE": "1" if HAS_SUPABASE else "0", "MINT_LISTING": "1" if HAS_LISTING else "0"}
 
 # The first layers match the legacy image exactly so Modal reuses the cached build
 # (the gsplat CUDA compile takes minutes). Add new layers at the end.
@@ -65,16 +69,27 @@ image = (
     .pip_install("cmake>=3.24", "ninja")
     .apt_install("zlib1g-dev")
     .run_commands("pip install 'spz @ git+https://github.com/nianticlabs/spz.git@affd0ecea7fbb4c265ee119475af7ee5b2997482'")
-    .env({"MINT_SUPABASE": "1" if HAS_SUPABASE else "0"})
+    # listing/ (Jev + Gemini) runs in this container after the splat; numpy stays < 2 for the stack above
+    .pip_install("numpy<2", "typesafe-sdk==0.7.5", "google-genai>=1.0", "pydantic>=2.7,<3", "python-dotenv>=1.0",
+                 "httpx>=0.27")
+    .env(FLAGS)
     .add_local_python_source("mintsplat", "supabase_setup")
+    .add_local_dir(LISTING_DIR, "/listing", ignore=[".env", ".venv", "runs", "samples", "demo_cache", "fixtures",
+                                                    "tests", "scripts", "**/__pycache__", ".pytest_cache"])
 )
 
 app = modal.App("mint-gsplat", image=image)
 models_vol = modal.Volume.from_name("mint-models", create_if_missing=True)
 SECRETS = ([modal.Secret.from_name("mint-supabase", required_keys=["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])]
            if HAS_SUPABASE else [])
+LISTING_SECRETS = ([modal.Secret.from_name("mint-listing", required_keys=["TYPESAFE_API_KEY", "GEMINI_API_KEY",
+                                                                           "SERPER_API_KEY"])]
+                   if HAS_LISTING else [])
+jobs = modal.Dict.from_name("mint-scan-jobs", create_if_missing=True)  # scan_id -> claimed at, so each runs once
+
+
 @app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol},
-         secrets=SECRETS, timeout=900, scaledown_window=300)
+         secrets=SECRETS + LISTING_SECRETS, timeout=900, scaledown_window=300)
 class Splatter:
     @modal.enter()
     def load(self):
@@ -104,8 +119,11 @@ class Splatter:
     def run_scan(self, scan_id: str, batch_id: str | None = None, cfg: dict | None = None) -> dict:
         """Storage mode. Reads scans/{scan_id}/top.* (+ bottom.* if present) from Supabase, writes
         assets/splats/{scan_id}.spz + .json (manifest), assets/views/{scan_id}/ (8 reference views + views.json),
-        refreshes assets/splats/index.json (newest first; what listing/ingest.py polls without a key), and
-        broadcasts `stage` / `passport_ready`        on Realtime channel batch:{batch_id}. mint-api calls this with .spawn() after upload."""
+        refreshes assets/splats/index.json (newest first; what listing/ingest.py polls without a key), then runs
+        the listing pipeline (listing/, Jev + Gemini) and publishes assets/listings/{scan_id}.json + index.json for
+        the website. Broadcasts `stage` / `passport_ready` / `listing_ready` on Realtime channel batch:{batch_id}.
+        Started by on_upload (the Supabase webhook) when the phone's video lands; cfg {"listing": False} skips it."""
+        from mintsplat.market import list_scan
         from mintsplat.pipeline import run
         from mintsplat.publish import fetch_inputs, publish
         from supabase_setup.storage import Events, Supabase
@@ -121,12 +139,49 @@ class Splatter:
                       {**(cfg or {}), "ply": False, "debug": False, "views": True}, on_event=ev.stage_hook(scan_id))
             manifest = publish(sb, scan_id, batch_id, keys, res, io)
             ev.send("passport_ready", manifest)
+            if HAS_LISTING and (cfg or {}).get("listing", True):
+                ev.send("stage", {"scan_id": scan_id, "stage": "7_listing", "status": "started", "ms": 0})
+                doc = list_scan(sb, scan_id, manifest, res["files"]["splat.spz"], cfg)
+                ev.send("stage", {"scan_id": scan_id, "stage": "7_listing", "status": doc["status"],
+                                  "ms": doc.get("timings_ms", {}).get("listing_pipeline", 0)})
+                ev.send("listing_ready" if doc["status"] == "listed" else f"listing_{doc['status']}", doc)
+                manifest = {**manifest, "listing": doc}
             return manifest
         except Exception as e:
             ev.send("error", {"stage": "splat", "message": str(e)[:300], "scan_id": scan_id})
             raise
         finally:
             ev.close()
+
+
+hook_image = (modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]").env(FLAGS)
+              .add_local_python_source("supabase_setup"))
+
+
+@app.function(image=hook_image, secrets=SECRETS, timeout=60)
+@modal.fastapi_endpoint(method="POST")
+def on_upload(body: dict) -> dict:
+    """Supabase webhook (supabase_setup/webhook.sql): a file landed in Storage. For scans/{uuid}/video.mp4 (what the
+    iOS app uploads) it starts Splatter.run_scan on an H100 and returns at once. The URL is public, so it only acts
+    on a video that really is in the bucket, and only once per scan (Dict `mint-scan-jobs`)."""
+    import re
+
+    from supabase_setup.storage import SCANS, Supabase
+
+    rec = body.get("record") or body  # a Database Webhook payload, or {bucket_id, name} from the trigger
+    bucket, name = rec.get("bucket_id"), str(rec.get("name") or "")
+    scan_id, _, file = name.partition("/")
+    uuid = r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"
+    if bucket != SCANS or file != "video.mp4" or not re.fullmatch(uuid, scan_id):
+        return {"ok": True, "ignored": f"{bucket}/{name}"}
+    if not HAS_SUPABASE:
+        return {"ok": False, "error": "Modal secret mint-supabase missing; create it and redeploy"}
+    if file not in Supabase().list(SCANS, scan_id):
+        return {"ok": False, "error": f"scans/{name} not found"}
+    if not jobs.put(scan_id, time.time(), skip_if_exists=True):
+        return {"ok": True, "duplicate": scan_id}
+    call = modal.Cls.from_name("mint-gsplat", "Splatter").with_options(gpu=LIVE_GPU)().run_scan.spawn(scan_id)
+    return {"ok": True, "scan_id": scan_id, "call_id": call.object_id}
 
 
 @app.local_entrypoint()
