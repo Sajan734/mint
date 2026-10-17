@@ -310,6 +310,9 @@ def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
 def test_seller_name_reaches_reference_price(tmp_path, monkeypatch):
     import stages.reference_price as rp
     from gemini import GeminiReply
+    from stages.identify import GEMINI
+
+    monkeypatch.setitem(GEMINI, "search_grounding", True)  # the grounded answer is the one the test checks
 
     prompts = []
 

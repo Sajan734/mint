@@ -95,8 +95,11 @@ Run the two pipeline checks and the tests after every change. They must still pa
 ## Gemini
 
 - Use the `google-genai` SDK.
+- Every Gemini call (identify, listing_text, reference_price, highlight) uses `GEMINI["model"]` in `stages/identify.py`, currently `gemini-3.5-flash-lite`, read through `gemini_model()`. That is the only setting: `GEMINI_MODEL` in the environment is ignored with a warning (it used to put local runs on gemini-3.8-flash while the Modal container ran gemini-3.5-flash).
+- Search grounding for `reference_price` is off (`GEMINI["search_grounding"]`): the free-tier project gets 0 grounding requests a day on Gemini 3 and newer, and the Gemini 2.5 models that have grounding return 404 for new projects. So every new price is a model estimate (basis `llm_estimate`), which the deal rating treats as lower confidence. Turn it on once billing is set up.
 - Always pass a response schema built from the matching model in `contracts.py`. Never parse free text.
-- `identify` sends all 12 views in one call. `highlight` sends every flagged view in one call too: the team key is on the free tier (20 requests per model per project per day, shared with the live scan pipeline in `gsplat/`), so don't add per-view Gemini calls. A listing makes 3 Gemini calls (identify, listing_text, reference_price), plus 1 for the highlight when a defect is noted, plus up to 2 fallbacks (listing_text retry, ungrounded price).
+- `identify` sends all 12 views in one call; `highlight` sends every flagged view in one call too. Don't add per-view Gemini calls. A listing makes 3 Gemini calls (identify, listing_text, reference_price), plus 1 for the highlight when a defect is noted, plus 1 listing_text retry when its text fails the checks.
+- The key belongs to the AI Studio project htv11 (free tier). Its limits are per project (every key, the live scan pipeline in `gsplat/` and anyone else on it share them) and reset at midnight Pacific: gemini-3.5-flash-lite 15 requests/min, 250K input tokens/min, 500 requests/day, so about 125 listings a day at 4 calls each. Check usage at aistudio.google.com/rate-limit.
 - Never invent brand or model. If the images don't support it, return null. Brand must be backed by `visible_text`.
 - `listing_text` never mentions price or condition.
 

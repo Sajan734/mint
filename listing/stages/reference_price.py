@@ -2,6 +2,7 @@
 
 Fixture items that have stubs/reference_price.json stay offline. Anything else runs this chain and never fails:
   1. search-grounded Gemini answer (counts only if Google Search returned sources) -> basis "new_retail"
+     (only when GEMINI["search_grounding"] is on: our free-tier project can't use Search grounding at all)
   2. ungrounded Gemini estimate                                                     -> basis "llm_estimate"
   3. per-category default from CATEGORY_DEFAULTS                                    -> basis "llm_estimate"
 Any error or implausible amount falls through to the next source. The source used opens the note and is
@@ -22,6 +23,7 @@ from contracts import Identity, ReferencePrice, RunContext
 from gemini import contract_schema, generate_json
 from stages._fixture import has_stub, load_stub
 from stages.baseline_lookup import baseline_query
+from stages.identify import GEMINI
 
 PRICE_LOOKUP = {
     "min_cad": 5.0,  # anything outside the absolute range is implausible
@@ -186,7 +188,7 @@ async def look_up(identity: Identity, seller_name: str | None) -> tuple[Referenc
     query = baseline_query(identity, seller_name)
     seller_typed = bool(seller_name and seller_name.strip())
     log: dict[str, Any] = {"query": query, "seller_typed": seller_typed, "attempts": []}
-    for source in (GROUNDED, UNGROUNDED):
+    for source in (GROUNDED, UNGROUNDED) if GEMINI["search_grounding"] else (UNGROUNDED,):
         price, attempt = await ask(source, identity, query, seller_typed)
         log["attempts"].append(attempt)
         if price is not None:

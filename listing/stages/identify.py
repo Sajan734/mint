@@ -8,9 +8,11 @@ Unbacked values become null. A product name typed by the seller still takes prio
 from __future__ import annotations
 
 import asyncio
+import functools
 import io
 import json
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -25,7 +27,14 @@ from stages._fixture import has_stub, load_stub
 LISTING_ROOT = Path(__file__).resolve().parent.parent
 
 GEMINI = {
-    "model": "gemini-3.5-flash",  # GEMINI_MODEL in the environment overrides this
+    # The one model every Gemini call in listing/ uses (identify, listing_text, reference_price, highlight). Set here
+    # only: a GEMINI_MODEL in the environment is ignored, because it differed per machine (the local .env vs the
+    # Modal secret) and quietly put stages on models nobody chose. The free tier's daily limit is per model.
+    "model": "gemini-3.5-flash-lite",
+    # Google Search grounding for reference_price's looked-up new price. Off: our free-tier project (htv11) gets 0
+    # grounding requests a day on Gemini 3 and newer, and the Gemini 2.5 models that have grounding are "no longer
+    # available to new users" (404), so the attempt could only fail and waste requests. Turn on with billing.
+    "search_grounding": False,
     "temperature": 0.0,
     "timeout_s": 60,
     "max_retries": 1,
@@ -202,12 +211,27 @@ def _api_key() -> str:
     return key
 
 
+@functools.cache
+def _warn_ignored_model(value: str) -> None:
+    print(f"[gemini] ignoring GEMINI_MODEL={value} from the environment: every listing stage uses "
+          f"{GEMINI['model']}, set in listing/stages/identify.py. Remove GEMINI_MODEL from .env.", file=sys.stderr)
+
+
+def gemini_model() -> str:
+    """The Gemini model for every listing stage: GEMINI["model"], whatever GEMINI_MODEL says."""
+    other = os.environ.get("GEMINI_MODEL", "").strip()
+    if other and other != GEMINI["model"]:
+        _warn_ignored_model(other)
+    return GEMINI["model"]
+
+
 async def call_gemini(views: Views, model: str | None = None) -> GeminiResult:
+    """`model` is for experiments (scripts/try_identify.py --model); the pipeline always uses gemini_model()."""
     from google import genai
     from google.genai import errors, types
 
     key = _api_key()
-    model = model or os.environ.get("GEMINI_MODEL") or GEMINI["model"]
+    model = model or gemini_model()
     contents, image_notes = build_contents(views)
     config = types.GenerateContentConfig(
         system_instruction=SYSTEM_PROMPT,
