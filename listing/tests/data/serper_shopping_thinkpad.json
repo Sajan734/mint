@@ -1,0 +1,144 @@
+{
+ "_note": "Real Serper /shopping response (gl=ca, q='Lenovo ThinkPad wireless mouse', 2026-10-17), first 20 results, image URLs and ratings removed.",
+ "shopping": [
+  {
+   "title": "Lenovo ThinkPad Essential Wireless Mouse 4x30m56887",
+   "source": "Lenovo",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:12259115911837795134,gpcid:2371083047892589137,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$26.99",
+   "position": 1
+  },
+  {
+   "title": "Lenovo ThinkPad Bluetooth Silent Mouse",
+   "source": "Amazon CA",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:6865935612117040023,gpcid:1076790480204769390,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$41.20",
+   "position": 2
+  },
+  {
+   "title": "Lenovo ThinkPad USB-C Wireless Compact Mouse",
+   "source": "Best Buy Canada Marketplace",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:4475170003757252343,gpcid:8637248847540763062,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$47.38",
+   "position": 3
+  },
+  {
+   "title": "Lenovo ThinkPad Bluetooth Presenter Mouse",
+   "source": "Lenovo",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:18235920998423579783,gpcid:13722244830099730188,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$124.99",
+   "position": 4
+  },
+  {
+   "title": "Lenovo Thinkpad Esential Wireless mouse 4x30m56888",
+   "source": "Collège de l'Île",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:18274301094054117703,gpcid:15042937518357382685,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$36.73",
+   "position": 5
+  },
+  {
+   "title": "Lenovo 540 USB-C Compact Wireless Mouse",
+   "source": "Canada Computers & Electronics",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:8613102282254878256,gpcid:10117347677199294576,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$24.99",
+   "position": 6
+  },
+  {
+   "title": "Lenovo 400 Wireless Mouse gy50r91293",
+   "source": "Amazon CA",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:14763122951808282470,gpcid:328319219981102501,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$26.00",
+   "position": 7
+  },
+  {
+   "title": "Lenovo 700 Multi-Device Wireless Mouse",
+   "source": "lenovo.com",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:6122035586637882891,gpcid:17614921471183487879,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$35.99",
+   "position": 8
+  },
+  {
+   "title": "Lenovo 900 Multi-Device Wireless Mouse Us/ca",
+   "source": "Lenovo",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:6701471305160567506,gpcid:18310609384947216444,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$114.99",
+   "position": 9
+  },
+  {
+   "title": "Lenovo 300 Wireless Compact Mouse",
+   "source": "Canada Computers & Electronics",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:11611890844467199904,gpcid:6395223822077035964,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$16.99",
+   "position": 10
+  },
+  {
+   "title": "ThinkPad X9 Essential Bundle",
+   "source": "Lenovo",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:4229451211103049679,gpcid:15166387074137938077,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$120.87",
+   "position": 11
+  },
+  {
+   "title": "Lenovo ThinkBook Bluetooth Silent Mouse",
+   "source": "Best Buy Canada Marketplace",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:12205536257773535641,gpcid:5179576325607843920,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$36.99",
+   "position": 12
+  },
+  {
+   "title": "Lenovo Yoga Bluetooth Silent Mouse",
+   "source": "Lenovo",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:13093362306317725132,gpcid:17744801412554890235,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$30.99",
+   "position": 13
+  },
+  {
+   "title": "Lenovo 600 Bluetooth Silent Mouse gy50x88832",
+   "source": "Canada Computers & Electronics",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:13098230605514766646,gpcid:9934128774005881040,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$34.99",
+   "position": 14
+  },
+  {
+   "title": "Lenovo Select Wireless Basic Mouse",
+   "source": "Amazon CA",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:7945740297260927930,gpcid:13502192235061006042,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$17.99",
+   "position": 15
+  },
+  {
+   "title": "Lenovo Wireless Multi-Mode Pro Plus Mouse 6050",
+   "source": "Best Buy Canada Marketplace",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:8879382349524824497,gpcid:13497787584537660714,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$24.99",
+   "position": 16
+  },
+  {
+   "title": "Logitech M190 Wireless Mouse",
+   "source": "lenovo.com",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:11541385886977065602,gpcid:3878714723887300684,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$21.20",
+   "position": 17
+  },
+  {
+   "title": "ThinkPad X9 Compact Bundle",
+   "source": "Lenovo",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:12795081964206720866,gpcid:11580351744644000007,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$97.31",
+   "position": 18
+  },
+  {
+   "title": "Lenovo ThinkPad X1 Wireless Touch Mouse. Brand New, sealed. Read",
+   "source": "retail.era",
+   "price": "$85.00",
+   "position": 19
+  },
+  {
+   "title": "Lenovo 300 Wireless Compact Mouse with battery",
+   "source": "Best Buy Canada Marketplace",
+   "link": "https://www.google.com/search?ibp=oshop&q=Lenovo+mouse+wireless+ThinkPad&prds=localAnnotatedOfferId:1,catalogid:12278822207926055166,gpcid:17574576435444346881,pvo:2,pvt:hg&gl=ca&udm=28&pvorigin=2",
+   "price": "$23.99",
+   "position": 20
+  }
+ ]
+}

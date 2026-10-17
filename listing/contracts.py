@@ -99,10 +99,28 @@ class Rejection(Contract):
     match_check: MatchCheck
 
 
+class PriceSource(Contract):
+    """A real listing of the product new, that the reference price was worked out from."""
+
+    title: str  # as the listing names the product
+    seller: str | None = None
+    price_cad: float = Field(gt=0)
+    url: str | None = None
+
+
+class PriceResultCheck(Contract):
+    """Gemini's reading of one numbered shopping result: is it this product, sold new on its own?"""
+
+    index: int = Field(ge=0)
+    same_product: Prob  # the item's product: its model if known, else anything that fits what is known
+    new_single_unit: bool  # sold new, as one unit: not used, refurbished, a bundle, a multipack or an accessory
+
+
 class ReferencePrice(Contract):
     amount_cad: float = Field(gt=0)
     basis: PriceBasis
     note: str
+    sources: list[PriceSource] = Field(default_factory=list)  # the listings behind a looked-up price
 
 
 class Defect(Contract):
@@ -198,6 +216,7 @@ class Listing(Contract):
     condition_notes: list[str]
     price_cad: int = Field(gt=0)
     price_justification: list[str]
+    price_sources: list[PriceSource] = Field(default_factory=list)  # listings the new price came from, if looked up
     preview_images: list[str]
     viewer_url: str | None = None  # 3D viewer, later
     needs_seller_check: bool

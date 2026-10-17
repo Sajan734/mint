@@ -191,16 +191,25 @@ def test_missing_serper_key_fails_early(monkeypatch, tmp_path):
 # --- generic queries are not searched ----------------------------------------------------------
 
 
+GENERIC = {"brand": None, "model": None, "visible_text": [], "search_query": "black in-ear headphones"}
+
+
 @pytest.mark.parametrize(
-    "model, seller_name, searches",
+    "update, seller_name, searches",
     [
-        (None, None, False),  # brand + colour + category only: would find some other product
-        (None, "   ", False),
-        (None, "Sony WI-XB400", True),  # the seller named it
-        ("WI-XB400", None, True),  # the model is printed on the item
+        (GENERIC, None, False),  # colour + category only: would find some other product
+        (GENERIC, "   ", False),
+        ({**GENERIC, "visible_text": ["Made in China"]}, None, False),  # read text the query doesn't use
+        (GENERIC, "Sony WI-XB400", True),  # the seller named it
+        ({"model": "WI-XB400", "visible_text": ["SONY", "WI-XB400"]}, None, True),  # the model is printed on it
+        ({"model": None}, None, True),  # the brand is printed on it
+        # A product line read off the item, its brand dropped (Gemini said "Lenovo", which isn't printed): real
+        # ThinkPad mouse scans in Supabase were never searched, so their match stayed uncertain.
+        ({"category": "wireless mouse", "brand": None, "model": None, "visible_text": ["ThinkPad"],
+          "search_query": "ThinkPad black wireless mouse"}, None, True),
     ],
 )
-def test_search_only_when_a_product_is_named(model, seller_name, searches, monkeypatch, tmp_path):
+def test_search_only_when_the_product_is_named(update, seller_name, searches, monkeypatch, tmp_path):
     called = []
 
     async def fake_find(query, run_dir):
@@ -208,13 +217,27 @@ def test_search_only_when_a_product_is_named(model, seller_name, searches, monke
         return bl.Baseline(query=query, image_path=None, source="image_search", note="x"), {}
 
     monkeypatch.setattr(bl, "find_baseline", fake_find)
-    identity = IDENTITY.model_copy(update={"model": model, "visible_text": ["SONY", "WI-XB400"]})
+    identity = IDENTITY.model_copy(update=update)
     item = tmp_path / "item"
     item.mkdir()
     baseline = asyncio.run(bl.baseline_lookup(ctx_for(item, tmp_path, manual=False), identity, seller_name))
     assert bool(called) is searches
     if not searches:
         assert baseline.image_path is None and baseline.note == bl.NO_PRODUCT_NOTE
+
+
+@pytest.mark.parametrize(
+    "model, seller_name, claimed",
+    [
+        (None, None, False),  # brand only: the search was ours, nobody named the product
+        (None, "  ", False),
+        (None, "Sony WI-XB400", True),
+        ("WI-XB400", None, True),
+    ],
+)
+def test_has_claim(model, seller_name, claimed):
+    identity = IDENTITY.model_copy(update={"model": model, "visible_text": ["SONY", "WI-XB400"]})
+    assert bl.has_claim(identity, seller_name) is claimed
 
 
 # --- manual mode --------------------------------------------------------------------------------

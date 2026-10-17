@@ -4,6 +4,8 @@ Order: no baseline -> uncertain without asking Jev; fixture stub (raw per-view a
 otherwise every view goes to Jev concurrently with the gate questions from jev_questions.py.
 Raw per-view answers are saved to runs/<item>/match_gate_raw.json, in the same format as the fixture
 stubs, so thresholds can be re-tuned with scripts/replay_match_gate.py without new API calls.
+A mismatch needs a claim (the seller typed the name, or the model is printed on the item): a baseline found by
+searching for what identify inferred can be some other product, which says nothing about the seller's item.
 """
 
 from __future__ import annotations
@@ -20,10 +22,11 @@ from typing import Any
 from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient, Image, RetryPolicy, TypeSafeError
 
-from contracts import Baseline, Contract, MatchCheck, Prob, RunContext, Verdict, View, Views
+from contracts import Baseline, Contract, Identity, MatchCheck, Prob, RunContext, Verdict, View, Views
 from images import ImageProblem, fit_for_jev
 from jev_questions import GATE_CONTEXT, GATE_QUESTIONS, IMAGE_HEADERS, MODEL, build_state
 from stages._fixture import has_stub, load_stub
+from stages.baseline_lookup import has_claim
 from stages.condition import second_highest
 from stages.identify import MissingKeyError
 
@@ -49,6 +52,10 @@ REASONS = {
         "Too few clear views of the scan to compare with {query}. Please check the listing before publishing."
     ),
     "uncertain": "We couldn't confirm this scan is {query}. Please check the listing before publishing.",
+    "unclaimed_different": (
+        "The closest reference photo we found for {query} looks like a different product. Add the exact "
+        "product name, or check the listing before publishing."
+    ),
     "no_baseline": (
         "We couldn't find a reference photo for {query}, so we couldn't check the scan matches it. "
         "Add the exact product name, or check the listing before publishing."
@@ -105,13 +112,18 @@ def aggregate(views: list[GateViewAnswer], thresholds: dict[str, Any] = THRESHOL
     )
 
 
-def decide(agg: GateAggregate, thresholds: dict[str, Any] = THRESHOLDS) -> tuple[Verdict, str]:
-    """Returns (verdict, reason key). Rules apply in order."""
+def decide(agg: GateAggregate, thresholds: dict[str, Any] = THRESHOLDS,
+           claimed: bool = True) -> tuple[Verdict, str]:
+    """Returns (verdict, reason key). Rules apply in order. claimed: the seller typed the product's name or its model
+    is printed on it. Without a claim the baseline came from a search we inferred (brand, colour, category), so a
+    photo that looks like a different product means the search found the wrong one: uncertain, never a mismatch."""
     if agg.usable_views < thresholds["min_usable_views"]:
         return "uncertain", "too_few_views"
-    if agg.same_category < thresholds["mismatch_below"]:
-        return "mismatch", "different_kind"
-    if agg.same_product < thresholds["mismatch_below"]:
+    if agg.same_category < thresholds["mismatch_below"] or agg.same_product < thresholds["mismatch_below"]:
+        if not claimed:
+            return "uncertain", "unclaimed_different"
+        if agg.same_category < thresholds["mismatch_below"]:
+            return "mismatch", "different_kind"
         return "mismatch", "different_product"
     if agg.same_product >= thresholds["match_min"]:
         return "match", "match"
@@ -122,9 +134,10 @@ def _round(value: float | None) -> float | None:
     return None if value is None else round(value, 3)
 
 
-def build_match_check(raw: GateRaw, query: str, thresholds: dict[str, Any] = THRESHOLDS) -> MatchCheck:
+def build_match_check(raw: GateRaw, query: str, thresholds: dict[str, Any] = THRESHOLDS,
+                      claimed: bool = True) -> MatchCheck:
     agg = aggregate(raw.views, thresholds)
-    verdict, reason_key = decide(agg, thresholds)
+    verdict, reason_key = decide(agg, thresholds, claimed)
     return MatchCheck(
         same_category=_round(agg.same_category),
         same_product=_round(agg.same_product),
@@ -184,19 +197,24 @@ async def ask_jev(views: Views, baseline: Baseline) -> GateRaw:
     return GateRaw(views=list(answers), query=baseline.query, baseline_image=baseline.image_path)
 
 
-async def match_gate(ctx: RunContext, views: Views, baseline: Baseline) -> MatchCheck:
+async def match_gate(ctx: RunContext, views: Views, baseline: Baseline, identity: Identity | None = None,
+                     seller_name: str | None = None) -> MatchCheck:
+    """identity and seller_name say whether the product was claimed (has_claim); without an identity it counts as
+    claimed, the strict rules."""
     if baseline.image_path is None:
         return no_baseline_check(baseline)
+    claimed = identity is None or has_claim(identity, seller_name)
     if has_stub(ctx, "match_gate"):
-        return build_match_check(load_stub(ctx, "match_gate", GateRaw), baseline.query)
+        return build_match_check(load_stub(ctx, "match_gate", GateRaw), baseline.query, claimed=claimed)
 
     raw = await ask_jev(views, baseline)
-    check = build_match_check(raw, baseline.query)
+    check = build_match_check(raw, baseline.query, claimed=claimed)
     ctx.run_dir.mkdir(parents=True, exist_ok=True)
     record = raw.model_dump() | {
         "model": MODEL,
         "aggregate": asdict(aggregate(raw.views)),
         "verdict": check.verdict,
+        "claimed": claimed,
         "thresholds": THRESHOLDS,
     }
     (ctx.run_dir / "match_gate_raw.json").write_text(json.dumps(record, indent=2), encoding="utf-8")

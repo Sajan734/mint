@@ -1,7 +1,8 @@
 """baseline_lookup: seller's name or Identity.search_query -> Baseline (one clean product photo).
 
 Order: manual baseline (ctx.manual_baseline; never searches) -> fixture stub -> no search when nothing
-names a specific product (no seller-typed name and Identity.model is null) -> live search.
+names the product (no seller-typed name, and no brand, model or other text read off the item in the query)
+-> live search.
 Live search: Serper image search -> metadata pre-filter -> download and fit to Jev's limits -> one Jev
 photo check per candidate -> choose_candidate() in code. If nothing usable is found the Baseline has
 image_path=None, and match_gate treats the match as uncertain.
@@ -25,7 +26,7 @@ from contracts import Baseline, Identity, RunContext
 from images import FittedImage, ImageProblem, fit_for_jev
 from jev_questions import BASELINE_CONTEXT, BASELINE_QUESTIONS, IMAGE_HEADERS, MODEL
 from stages._fixture import has_stub, load_stub
-from stages.identify import MissingKeyError
+from stages.identify import MissingKeyError, text_in_query
 
 LISTING_ROOT = Path(__file__).resolve().parent.parent
 
@@ -87,7 +88,7 @@ class Candidate:
         return entry
 
 
-NO_PRODUCT_NOTE = "not searched: no model in visible text and no product name typed by the seller"
+NO_PRODUCT_NOTE = "not searched: no text read off the item and no product name typed by the seller"
 
 
 def baseline_query(identity: Identity, seller_name: str | None) -> str:
@@ -96,9 +97,18 @@ def baseline_query(identity: Identity, seller_name: str | None) -> str:
     return identity.search_query
 
 
-def names_a_product(identity: Identity, seller_name: str | None) -> bool:
-    """A generic query (brand, colour, category) finds some product of that kind, not this one."""
+def has_claim(identity: Identity, seller_name: str | None) -> bool:
+    """Someone named this exact product: the seller typed its name, or its model is printed on it. Only then can a
+    reference photo that looks like a different product mean the scan is the wrong item (see match_gate)."""
     return bool(seller_name and seller_name.strip()) or identity.model is not None
+
+
+def names_a_product(identity: Identity, seller_name: str | None) -> bool:
+    """Worth searching: a product name, or text read off the item in the query (a brand or product line such as
+    "ThinkPad"). A query of colour and category alone ("white stuffed animal") finds some other product."""
+    if has_claim(identity, seller_name) or identity.brand is not None:
+        return True
+    return bool(text_in_query(identity.visible_text, identity.search_query))
 
 
 # --- decisions (pure) -------------------------------------------------------------------------

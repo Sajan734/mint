@@ -184,7 +184,7 @@ async def run_pipeline(
     views = await run_stage(ctx, "render", Views, render, splat)
     identity = await run_stage(ctx, "identify", Identity, identify, views)
     baseline = await run_stage(ctx, "baseline_lookup", Baseline, baseline_lookup, identity, seller_name)
-    match = await run_stage(ctx, "match_gate", MatchCheck, match_gate, views, baseline)
+    match = await run_stage(ctx, "match_gate", MatchCheck, match_gate, views, baseline, identity, seller_name)
 
     if match.verdict == "mismatch":
         rejection = Rejection(item_id=item_id, match_check=match)

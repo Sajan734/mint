@@ -261,7 +261,8 @@ def test_no_baseline_found_continues_as_uncertain(tmp_path, monkeypatch):
 
 
 def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
-    """No model and no seller name: no search, uncertain match, condition on views alone, a priced Listing."""
+    """Nothing read off the item and no seller name: no search, uncertain match, condition on views alone, a priced
+    Listing."""
     import stages.baseline_lookup as bl
     import stages.condition as cond
 
@@ -297,7 +298,7 @@ def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
     for stage in ("baseline_lookup", "condition"):
         (item_dir / "stubs" / f"{stage}.json").unlink()
     identity = json.loads((item_dir / "stubs" / "identify.json").read_text())
-    identity.update(model=None, visible_text=["SONY"])
+    identity.update(brand=None, model=None, visible_text=[], search_query="black over-ear headphones")
     (item_dir / "stubs" / "identify.json").write_text(json.dumps(identity))
 
     result = run(item_dir, tmp_path)
@@ -333,6 +334,36 @@ def test_seller_name_reaches_reference_price(tmp_path, monkeypatch):
     assert result.price_cad == 295  # 450 x 0.65 light_wear = 292.50, rounded to the nearest $5
     assert "new price at about $450.00" in result.price_justification[0]
 
+
+def test_price_sources_reach_result_json(tmp_path, monkeypatch):
+    """A price from real listings: the listings are in the Listing (result.json), so the site can show them."""
+    import stages.reference_price as rp
+    from gemini import GeminiReply
+
+    async def search(query, api_key):
+        return {"shopping": [{"title": "Sony WH-1000XM4", "source": "Best Buy Canada", "price": "$449.99",
+                              "link": "https://example.test/bb"},
+                             {"title": "Sony WH-1000XM4 Wireless", "source": "Amazon CA", "price": "$399.99",
+                              "link": "https://example.test/az"}]}
+
+    async def fake(contents, system_prompt, schema, **kwargs):
+        return GeminiReply(raw={"results": [{"index": i, "same_product": 0.95, "new_single_unit": True}
+                                            for i in range(2)]}, model="fake", latency_ms=1.0)
+
+    monkeypatch.setattr(rp, "search_shopping", search)
+    monkeypatch.setattr(rp, "_require_key", lambda name: "test-key")
+    monkeypatch.setattr(rp, "generate_json", fake)
+    item_dir = tmp_path / "item_listed_price"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "stubs" / "reference_price.json").unlink()
+
+    result = run(item_dir, tmp_path)
+    assert isinstance(result, Listing)
+    assert result.price_cad == 275  # median $424.99 x 0.65 light_wear = 276.24, rounded to the nearest $5
+    saved = json.loads((tmp_path / "runs" / "item_listed_price" / "result.json").read_text(encoding="utf-8"))
+    assert [(s["seller"], s["price_cad"]) for s in saved["price_sources"]] == [("Best Buy Canada", 449.99),
+                                                                                ("Amazon CA", 399.99)]
+    assert result.deal_rating.confidence_notes == []
 
 def test_demo_mode_reads_cache_first(tmp_path):
     ctx = RunContext(item_id="item01", item_dir=FIXTURES / "item01", run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache", demo_mode=True)

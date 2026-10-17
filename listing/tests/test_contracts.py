@@ -60,3 +60,11 @@ def test_extra_fields_are_rejected():
 @pytest.mark.parametrize("stub", sorted(FIXTURES.glob("*/stubs/*.json")), ids=lambda p: f"{p.parent.parent.name}/{p.stem}")
 def test_fixture_stub_validates(stub):
     STUB_MODELS[stub.stem].model_validate_json(stub.read_text(encoding="utf-8"))
+
+
+def test_price_sources_default_to_none_and_need_a_price():
+    from contracts import PriceSource
+
+    assert ReferencePrice(amount_cad=30, basis="llm_estimate", note="x").sources == []
+    with pytest.raises(ValidationError):
+        PriceSource(title="t", price_cad=0)

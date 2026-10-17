@@ -177,6 +177,7 @@ def build_listing(
         condition_notes=build_notes(condition.defects, views, has_baseline),
         price_cad=price,
         price_justification=[justification],
+        price_sources=reference.sources,
         preview_images=pick_previews(views),
         needs_seller_check=bool(reasons),
         seller_check_reasons=reasons,

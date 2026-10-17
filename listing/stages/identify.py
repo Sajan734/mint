@@ -158,9 +158,21 @@ def _clean(value: Any) -> str | None:
     return value or None
 
 
-def build_search_query(brand: str | None, model: str | None, attributes: dict[str, str], category: str) -> str:
+def build_search_query(brand: str | None, model: str | None, attributes: dict[str, str], category: str,
+                       read: list[str] = ()) -> str:
+    """read: other text read off the item to search by (e.g. a product line like "ThinkPad"), placed first."""
     colour = attributes.get("colour") or attributes.get("color")
-    return " ".join(part for part in (brand, model, colour, category) if part)
+    named = [t for t in read if not any(backed_by_text(t, [p]) for p in (brand, model) if p)]
+    return " ".join(part for part in (*named, brand, model, colour, category) if part)
+
+
+MIN_QUERY_TEXT_CHARS = 3  # shorter visible text (a lone letter or digit) is found inside any query by chance
+
+
+def text_in_query(visible: list[str], query: str | None) -> list[str]:
+    """The visible text Gemini put in its own search query: what it read and judged to name the product."""
+    return [t for t in visible
+            if query and sum(ch.isalnum() for ch in t) >= MIN_QUERY_TEXT_CHARS and backed_by_text(t, [query])]
 
 
 def enforce_evidence(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
@@ -184,10 +196,12 @@ def enforce_evidence(raw: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
         model = None
 
     # Gemini's query can carry a brand or model guess even when it nulls those fields itself,
-    # so it is kept only when both are backed.
+    # so it is kept only when both are backed. A rebuilt query keeps the visible text Gemini's query used:
+    # with "ThinkPad" printed on a mouse it may answer brand "Lenovo" (dropped, not on the item), and the
+    # query must still say ThinkPad, or the reference photo search has nothing specific to look for.
     query = _clean(raw.get("search_query"))
     if not (brand and model and query):
-        rebuilt = build_search_query(brand, model, attributes, category)
+        rebuilt = build_search_query(brand, model, attributes, category, text_in_query(visible, query))
         if rebuilt != query:
             notes.append(f"search_query rebuilt as {rebuilt!r} (was {query!r})")
         query = rebuilt
