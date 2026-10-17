@@ -55,15 +55,19 @@ function headline(s: FeedState): [string, string | null] {
   }
 }
 
-/** Rings rippling out from behind the content (Screens.swift Ripples). Hidden with reduced motion. */
-function Ripples() {
+/**
+ * Rings rippling out to the edge of their box, as in Screens.swift Ripples: 3 thin mint rings a third of a cycle
+ * apart, each growing linearly over 2.4 s from `from` (a fraction of the box) and fading from 50% to nothing. The box
+ * is part of the layout, so the rings never cross the text. Hidden with reduced motion.
+ */
+function Ripples({ from }: { from: number }) {
   return (
     <span aria-hidden className="pointer-events-none absolute inset-0 motion-reduce:hidden">
       {[0, 0.8, 1.6].map((d) => (
         <span
           key={d}
-          className="absolute inset-0 animate-ping rounded-full border-2 border-mint/60"
-          style={{ animationDuration: "2.4s", animationDelay: `${d}s` }}
+          className="animate-mint-ripple absolute inset-0 rounded-full border-[1.5px] border-mint opacity-0"
+          style={{ ["--ripple-from" as string]: from, animationDelay: `${-d}s` }}
         />
       ))}
     </span>
@@ -120,8 +124,8 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   if (s.phase === "waiting") {
     body = (
       <>
-        <div className="relative">
-          <Ripples />
+        <div className="relative grid size-72 place-items-center md:size-80">
+          <Ripples from={0.7} />
           <div
             className="relative w-52 rounded-md bg-white p-3 md:w-56"
             role="img"
@@ -163,8 +167,8 @@ function Panel({ s, deepLink, qrSvg, scanId, listingId }: { s: FeedState; deepLi
   } else if (s.phase === "ready") {
     body = (
       <>
-        <span className="relative grid size-28 place-items-center">
-          <Ripples />
+        <span className="relative grid size-72 place-items-center">
+          <Ripples from={0.31} />
           <span className="relative grid size-28 place-items-center rounded-full bg-mint text-[#0b0f0e] shadow-[0_0_30px_rgb(61_220_151/0.55)]">
             <Check className="size-12" />
           </span>

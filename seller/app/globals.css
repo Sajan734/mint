@@ -113,6 +113,16 @@
   --radius-lg: var(--r-lg);
 }
 
+/* ScanFlow's ripples (scanner/ios/Mint/Screens.swift Ripples): the class animate-mint-ripple. Not in the inline theme
+   above, which would leave the keyframes nested inside :root. */
+@theme {
+  --animate-mint-ripple: mint-ripple 2.4s linear infinite;
+  @keyframes mint-ripple {
+    from { transform: scale(var(--ripple-from, 0.3)); opacity: 0.5; }
+    to { transform: scale(1); opacity: 0; }
+  }
+}
+
 body {
   background: var(--bg);
   color: var(--ink);
@@ -169,6 +179,22 @@ h3 {
   transition: border-color var(--dur-feedback) var(--ease);
 }
 .btn-secondary:hover { border-color: var(--ink); }
+
+/* "Skip to content": the first Tab stop on every page, hidden until it has focus. */
+.skip-link {
+  position: absolute;
+  left: var(--sp-4);
+  top: -100px;
+  z-index: 50;
+  padding: var(--sp-2) var(--sp-4);
+  border-radius: var(--r-md);
+  background: var(--btn-bg);
+  color: var(--btn-fg);
+  font-weight: 600;
+}
+.skip-link:focus { top: var(--sp-2); }
+/* Skip-link targets take focus only so Tab continues from there; they are not controls, so no ring. */
+[tabindex="-1"]:focus { outline: none; }
 
 /* Turntable pad: soft ground shadow under every scanned object. */
 .pad { background-color: var(--surface-2); background-image: var(--pad); }

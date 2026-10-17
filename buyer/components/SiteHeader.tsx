@@ -15,9 +15,9 @@ export default function SiteHeader() {
   // Row 1 on a phone: logo, demo pill, Sell. Row 2: search. Row 3: nav. From md up it is one row: logo, search, nav, Sell.
   return (
     <header className="top-0 z-20 border-b border-line bg-bg md:sticky">
-      <div className="mx-auto flex min-h-14 w-full max-w-[1200px] flex-wrap items-center gap-x-4 gap-y-1 px-4 py-1 md:min-h-16 md:px-6 lg:px-8">
+      <div className="mx-auto flex min-h-14 w-full max-w-[1200px] flex-wrap items-center gap-x-2 gap-y-1 px-4 sm:gap-x-4 py-1 md:min-h-16 md:px-6 lg:px-8">
         {/* aria-label keeps the accessible name "Home" now that Home is not in the nav */}
-        <Link href="/" aria-label="Home" className="order-1 flex items-center gap-2 font-display text-xl font-bold tracking-tight">
+        <Link href="/" aria-label="Home" className="order-1 flex min-h-11 items-center gap-2 font-display text-xl font-bold tracking-tight">
           <svg aria-hidden viewBox="0 0 24 24" width="24" height="24" fill="none">
             <circle cx="12" cy="12" r="10" fill="var(--mint)" />
             <circle cx="12" cy="12" r="6.5" stroke="#0b0f0e" strokeWidth="1.5" strokeDasharray="2.2 1.8" />

@@ -150,7 +150,7 @@ export function MediaTiles({ className = "" }: { className?: string }) {
           key={`${i}:${src}`}
           type="button"
           aria-pressed={selected === i}
-          aria-label={`Photo ${i + 1}`}
+          aria-label={`View ${i + 1}`}
           onClick={() => select(i)}
           className={`${tile(selected === i)} ${PHOTO_BG}`}
         >

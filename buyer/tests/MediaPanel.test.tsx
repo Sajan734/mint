@@ -23,15 +23,15 @@ describe("MediaPanel", () => {
     render(<MediaPanel title="Mouse" splatUrl="/m.spz" frames={frames} photos={photos} />);
     expect(screen.getByTestId("splat")).toHaveAttribute("data-src", "/m.spz");
     expect(pressed("3D view")).toBe("true");
-    expect(screen.getAllByRole("button", { name: /^Photo/ })).toHaveLength(3);
+    expect(screen.getAllByRole("button", { name: /^View \d$/ })).toHaveLength(3);
     expect(screen.queryByText("Sample 3D, not this item")).toBeNull();
   });
 
   it("clicking a tile shows that photo, clicking 3D goes back", () => {
     render(<MediaPanel title="Mouse" splatUrl="/m.spz" frames={frames} photos={photos} />);
-    fireEvent.click(screen.getByRole("button", { name: "Photo 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "View 2" }));
     expect(screen.getByAltText("Mouse, photo 2")).toHaveAttribute("src", "/p2.webp");
-    expect(pressed("Photo 2")).toBe("true");
+    expect(pressed("View 2")).toBe("true");
     expect(pressed("3D view")).toBe("false");
     expect(screen.queryByTestId("splat")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "3D view" }));
@@ -41,7 +41,7 @@ describe("MediaPanel", () => {
   it("works from the keyboard", async () => {
     const user = userEvent.setup();
     render(<MediaPanel title="Mouse" splatUrl={null} frames={frames} photos={photos} />);
-    const tile = screen.getByRole("button", { name: "Photo 3" });
+    const tile = screen.getByRole("button", { name: "View 3" });
     tile.focus();
     await user.keyboard("{Enter}");
     expect(screen.getByAltText("Mouse, photo 3")).toBeInTheDocument();
@@ -54,7 +54,7 @@ describe("MediaPanel", () => {
     render(<MediaPanel title="Mouse" splatUrl="/sample.spz" frames={[]} photos={photos} sample />);
     expect(screen.getByText("Sample 3D, not this item")).toBeInTheDocument();
     expect(screen.getByLabelText("Sample 3D view, not Mouse")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("button", { name: "Photo 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "View 1" }));
     expect(screen.queryByText("Sample 3D, not this item")).toBeNull();
   });
 
@@ -72,7 +72,7 @@ describe("MediaPanel", () => {
     render(<MediaPanel title="Mouse" splatUrl={null} frames={[]} photos={photos} />);
     expect(screen.getByAltText("Mouse, photo 1")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "3D view" })).toBeNull();
-    expect(pressed("Photo 1")).toBe("true");
+    expect(pressed("View 1")).toBe("true");
   });
 
   it("says so when a photo file is missing", () => {
@@ -88,7 +88,7 @@ describe("MediaPanel", () => {
         <section aria-label="right"><MediaTiles /></section>
       </MediaProvider>,
     );
-    fireEvent.click(screen.getByRole("button", { name: "Photo 1" }));
+    fireEvent.click(screen.getByRole("button", { name: "View 1" }));
     expect(screen.getByAltText("Mouse, photo 1")).toBeInTheDocument();
   });
 });
