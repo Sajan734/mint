@@ -9,7 +9,7 @@
         # PUT videos -> run_scan(scan_id) -> .spz + 8 cube views + manifest in Storage, events on Realtime
 
 Use the same --gpu for warm, run and cold: each GPU type is its own pool of containers.
-Merged run (80 frames per video), warm: L40S ~36 s; H100 ~29 s; H100 --scale 1.0 ~37 s (sharpest).
+Warm H100: one video ~24-28 s, top + bottom ~35 s (training resolution is set automatically; see README).
 
 `modal run app.py` starts a fresh app every time (always cold); this script reuses the deployed one.
 """
@@ -64,7 +64,7 @@ def scan(splatter, videos: list[Path], scale: float) -> dict:
     t["upload_mb"] = sum(p.stat().st_size for p in videos) / 1e6
 
     t0 = time.perf_counter()
-    manifest = splatter.run_scan.remote(scan_id, None, {"train": {"train_scale": scale}})
+    manifest = splatter.run_scan.remote(scan_id, None, {"train": {"train_scale": scale or None}})
     t["run_scan_wall_s"] = time.perf_counter() - t0
     manifest["client_timings"] = {k: round(v, 2) for k, v in t.items()}
     return manifest
@@ -77,7 +77,7 @@ def main():
         sub.add_parser(name).add_argument("--gpu", default="")
     r = sub.add_parser("run")
     r.add_argument("--gpu", default="", help="e.g. H100 (default: the app's L40S)")
-    r.add_argument("--scale", type=float, default=0.75, help="training resolution; 1.0 = sharpest, slower")
+    r.add_argument("--scale", type=float, default=0.0, help="training resolution (0 = auto; 1.0 = full res)")
     r.add_argument("video")
     r.add_argument("video2", nargs="?", help="same object flipped over; merged into one splat")
     r.add_argument("--name", default="")
@@ -87,7 +87,7 @@ def main():
     s.add_argument("video")
     s.add_argument("video2", nargs="?")
     s.add_argument("--gpu", default="")
-    s.add_argument("--scale", type=float, default=0.75)
+    s.add_argument("--scale", type=float, default=0.0)
     args = ap.parse_args()
 
     cls = modal.Cls.from_name(APP, CLS)
@@ -111,7 +111,7 @@ def main():
         t0 = time.perf_counter()
         payload = [src.read_bytes(), Path(args.video2).read_bytes()] if args.video2 else src.read_bytes()
         res = splatter.run.remote(payload, {"debug": args.debug, "ply": args.ply,
-                                            "train": {"train_scale": args.scale}})
+                                            "train": {"train_scale": args.scale or None}})
         save(res, Path("out") / (args.name or src.stem), time.perf_counter() - t0)
 
 

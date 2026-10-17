@@ -26,6 +26,8 @@ DEFAULTS = {
     "alpha_w": 0.1,
     "opacity_reg": 0.0005,  # higher values leave a see-through, blotchy surface (tested 0.01)
     "scale_reg": 0.01,
+    "aniso_reg": 0.1,  # penalise needles: longest axis more than aniso_max x the middle one. Flat discs
+    "aniso_max": 5.0,  # (surfaces) are untouched; needles grow along camera rays in barely-seen regions
     "pose_lr": 1e-4,
     "appearance_lr": 0.0,  # >0 enables per-view colour correction (slightly smoother, ~+4 s)
     "appearance_reg": 0.1,
@@ -33,7 +35,8 @@ DEFAULTS = {
     "session_split": None,  # views >= this index come from a 2nd video: learn one gain/offset for them
     "pose_start": 100,
     "init_scale": 0.5,
-    "train_scale": 0.75,  # training resolution relative to the video frames
+    "train_scale": None,  # training resolution relative to the video frames; None = from train_px_budget
+    "train_px_budget": 500_000,  # auto scale: the shared training crop gets at most this many pixels
 }
 
 
@@ -81,6 +84,20 @@ def _pad_to(a, h, w):
     out = np.zeros((max(h, a.shape[0]), max(w, a.shape[1])) + a.shape[2:], a.dtype)
     out[:a.shape[0], :a.shape[1]] = a
     return out
+
+
+def auto_scale(masks, margin: float, budget_px: int) -> float:
+    """Training scale so the shared crop (estimated as in prep_views) fits the pixel budget. Small or
+    far objects train at full resolution, close-ups are downscaled instead of costing more per step."""
+    boxes = []
+    for m in masks:
+        ys, xs = np.nonzero(m)
+        boxes.append((xs.max() + 1 - xs.min(), ys.max() + 1 - ys.min()))
+    bw, bh = np.array(boxes, float).T
+    pad = 2 * margin * np.maximum(bw, bh)
+    H, W = masks[0].shape
+    area = min(W, np.percentile(bw + pad, 80)) * min(H, np.percentile(bh + pad, 80))
+    return float(np.clip(np.sqrt(budget_px / area), 0.4, 1.0))
 
 
 def prep_views(frames, masks, K, margin, band_px):
@@ -153,6 +170,31 @@ def init_params(pts, cols, init_scale):
     })
 
 
+@torch.no_grad()
+def contribution(params, c2w, views, ids, batch: int = 4) -> torch.Tensor:
+    """Per Gaussian: total alpha-blending weight it receives over the given views, in pixels.
+
+    Renders a constant white colour and reads d(sum of the image)/d(colour), which is exactly the sum of
+    each Gaussian's blending weights. (The real colours would not do: the rasteriser clamps negative SH
+    colours, which would make the darkest Gaussians of a black object look like they contribute nothing.)"""
+    from gsplat import rasterization
+
+    n = len(params["means"])
+    ones = torch.ones(n, 3, device="cuda", requires_grad=True)
+    means, quats = params["means"].detach(), params["quats"].detach()
+    scales, opac = torch.exp(params["scales"].detach()), torch.sigmoid(params["opacities"].detach())
+    total = torch.zeros(n, device="cuda")
+    for i in range(0, len(ids), batch):
+        v = torch.tensor(ids[i:i + batch], device="cuda")
+        with torch.enable_grad():
+            rgb, _, _ = rasterization(means, quats, scales, opac, ones, torch.linalg.inv(c2w[v]), views["K"][v],
+                                      views["W"], views["H"], packed=False)
+            rgb[..., 0].sum().backward()
+        total += ones.grad[:, 0]
+        ones.grad = None
+    return total
+
+
 def split_views(n: int, every: int) -> tuple[list[int], list[int]]:
     test = [i for i in range(n) if every and i % every == every // 2]
     return [i for i in range(n) if i not in test], test
@@ -166,7 +208,7 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     iters, B = cfg["iters"], cfg["batch"]
     torch.manual_seed(0)
     train_ids, test_ids = split_views(len(frames), cfg["holdout_every"])
-    ts = cfg["train_scale"]
+    ts = cfg["train_scale"] or auto_scale(masks, cfg["crop_margin"], cfg["train_px_budget"])
     if ts != 1.0:
         h, w = masks[0].shape
         size = (round(w * ts), round(h * ts))
@@ -176,7 +218,8 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         K[:, :2] *= ts
     views = prep_views(frames, masks, K, cfg["crop_margin"], cfg["edge_band_px"])
     W, H = views["W"], views["H"]
-    print(f"  crop {W}x{H}, {len(train_ids)} train / {len(test_ids)} held-out views, batch {B}", flush=True)
+    print(f"  scale {ts:.2f}, crop {W}x{H}, {len(train_ids)} train / {len(test_ids)} held-out views, batch {B}",
+          flush=True)
 
     scene_scale = 1.1 * float((c2w[:, :3, 3] - pts.mean(0)).norm(dim=1).max())
     params = init_params(pts, cols, cfg["init_scale"])
@@ -252,6 +295,9 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         loss = ((1 - cfg["ssim_w"]) * l1 + cfg["ssim_w"] * dssim + cfg["alpha_w"] * a_loss
                 + cfg["opacity_reg"] * torch.sigmoid(params["opacities"]).mean()
                 + cfg["scale_reg"] * torch.exp(params["scales"]).mean())
+        if cfg["aniso_reg"] > 0:
+            ls = params["scales"].sort(dim=1).values  # log scales, ascending
+            loss = loss + cfg["aniso_reg"] * F.relu(ls[:, 2] - ls[:, 1] - math.log(cfg["aniso_max"])).mean()
         if use_app:  # keep the corrections small so the splat's own colours stay the canonical ones
             loss = loss + cfg["appearance_reg"] * (((app_A[v] - torch.eye(3, device="cuda")) ** 2).mean()
                                                    + (app_b[v] ** 2).mean())
@@ -283,18 +329,35 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
 
 
 @torch.no_grad()
-def evaluate(params, c2w, views, ids, sh_degree):
-    """PSNR / SSIM inside the object mask on held-out views (black bg). Returns metrics + (gt, render) pairs."""
+def evaluate(params, c2w, views, ids, sh_degree, pose_steps: int = 0):
+    """PSNR / SSIM inside the object mask on held-out views (black bg). Returns metrics + (gt, render) pairs.
+
+    pose_steps > 0 first fits each held-out camera's pose to the frozen splat (test-time pose alignment,
+    the usual protocol when training refines poses: otherwise the metric punishes pose refinement)."""
     win = _ssim_window("cuda")
     psnrs, ssims, pairs = [], [], []
     bg = torch.zeros(3, device="cuda")
+    frozen = {k: v.detach() for k, v in params.items()}
+    W, H = views["W"], views["H"]
     for v in ids:
-        rgb, _, _ = render(params, torch.linalg.inv(c2w[v])[None], views["K"][v][None], views["W"], views["H"],
-                           sh_degree, bg[None])
-        rgb = rgb[0]
+        K = views["K"][v]
         m = views["mask"][v][..., None]
         gt = views["img"][v].float() / 255 * m
-        r = rgb.clamp(0, 1) * m
+        pose = c2w[v]
+        if pose_steps:
+            delta = torch.zeros(1, 6, device="cuda", requires_grad=True)
+            opt = torch.optim.Adam([delta], lr=1e-3)
+            with torch.enable_grad():
+                for _ in range(pose_steps):
+                    rgb, _, _ = render(frozen, rigid_inv(c2w[v] @ se3_exp(delta)[0])[None], K[None], W, H,
+                                       sh_degree, bg[None])
+                    loss = ((rgb[0] * m - gt).abs()).mean()
+                    opt.zero_grad()
+                    loss.backward()
+                    opt.step()
+            pose = c2w[v] @ se3_exp(delta.detach())[0]
+        rgb, _, _ = render(frozen, rigid_inv(pose)[None], K[None], W, H, sh_degree, bg[None])
+        r = rgb[0].clamp(0, 1) * m
         mse = ((r - gt) ** 2).sum() / (m.sum() * 3)
         psnrs.append(float(10 * torch.log10(1 / mse.clamp_min(1e-10))))
         s = ssim_map(r.permute(2, 0, 1)[None], gt.permute(2, 0, 1)[None], win)[0].permute(1, 2, 0)
@@ -302,7 +365,7 @@ def evaluate(params, c2w, views, ids, sh_degree):
         pairs.append(((gt.cpu().numpy() * 255).astype(np.uint8), (r.cpu().numpy() * 255).astype(np.uint8)))
     return {"psnr_masked": round(float(np.mean(psnrs)), 2) if psnrs else None,
             "ssim_masked": round(float(np.mean(ssims)), 4) if ssims else None,
-            "n_views": len(ids)}, pairs
+            "n_views": len(ids), "pose_fit_steps": pose_steps}, pairs
 
 
 def look_at(pos, target):

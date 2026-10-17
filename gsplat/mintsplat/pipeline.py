@@ -19,10 +19,11 @@ from .timing import Timer
 DEFAULTS = {
     "n_frames": 80,  # per video
     "box": None,  # [x0, y0, x1, y1] in pixels of the first picked frame; None = centre prompt
+    "box_refine": True,  # re-prompt SAM 2 with the first point mask's (grown) box to include attached parts
     "stop_after": None,  # "masks" | "poses" | "register" | None
     "debug": True,  # contact sheets, held-out eval, turntable (adds a few seconds after the timed path)
     "ply": False,  # also return the uncompressed .ply (~38 MB; the .spz is ~10x smaller)
-    "cube_views": True,  # 8 cube-corner RGBA renders + views.json (cameras) for downstream
+    "views": True,  # the 8 reference renders + views.json (cameras) for downstream, see views.py
 }
 
 
@@ -46,7 +47,7 @@ def capture(models, frames: list[np.ndarray], cfg: dict, T: Timer, tag: str, out
     print(f"[{tag}] picked {len(frames)} frames at {w}x{h}", flush=True)
 
     with T.stage(f"2_masks_{tag}"):
-        masks = models.segmenter(frames, cfg["box"])
+        masks = models.segmenter(frames, cfg["box"], cfg["box_refine"])
         ok = masks_mod.sane(masks)
     print(f"[{tag}] usable masks: {sum(ok)}/{len(ok)}; median area {np.median([m.mean() for m in masks]):.3f}",
           flush=True)
@@ -122,20 +123,21 @@ def run(models, videos: bytes | list[bytes], cfg: dict, on_event=None) -> dict:
             cap["c2w"], cap["K"], cap["frames"], cap["masks"], cap["pts"], cap["cols"], tcfg)
 
     with T.stage("5_clean_export"):
+        contrib = train_mod.contribution(params, c2w_ref, views, train_ids)
         keep, cstats = export_mod.keep_mask(params, c2w_ref, cap["K"], cap["masks"], cap["stats"]["object_radius"],
-                                            cfg.get("export"))
+                                            cfg.get("export"), contrib)
         sh_deg = {**train_mod.DEFAULTS, **tcfg}["sh_degree"]
         out["files"]["splat.spz"] = export_mod.to_spz(params, keep, sh_deg)
         if cfg["ply"]:
             out["files"]["splat.ply"] = export_mod.to_ply(params, keep)
     out["gaussians"] = cstats
-    if cfg["cube_views"]:
+    if cfg["views"]:
         with T.stage("6_views"):
             clean0 = {k: v[keep].detach() for k, v in params.items()}
-            images, meta = views_mod.cube_corners(clean0, sh_deg)
+            images, meta = views_mod.reference_views(clean0, sh_deg, include_bottom=len(caps) == 2)
             for name, data in images:
-                out["files"][f"cube/{name}"] = data
-            out["files"]["cube/views.json"] = json.dumps(meta, indent=1).encode()
+                out["files"][f"views/{name}"] = data
+            out["files"]["views/views.json"] = json.dumps(meta, indent=1).encode()
     out["sizes_mb"] = {k: round(len(v) / 1e6, 2) for k, v in out["files"].items() if k.startswith("splat.")}
     print(f"sizes: {out['sizes_mb']}", flush=True)
     print(f"cleanup: {cstats}", flush=True)
@@ -150,6 +152,7 @@ def run(models, videos: bytes | list[bytes], cfg: dict, on_event=None) -> dict:
     clean = {k: torch.nn.Parameter(v[keep]) for k, v in params.items()}
     out["eval_heldout_raw"], _ = train_mod.evaluate(params, cap["c2w"], views, test_ids, sh)  # before cleanup
     out["eval_heldout"], pairs = train_mod.evaluate(clean, cap["c2w"], views, test_ids, sh)
+    out["eval_heldout_posefit"], pairs = train_mod.evaluate(clean, cap["c2w"], views, test_ids, sh, pose_steps=60)
     out["eval_heldout_spz"], _ = train_mod.evaluate(export_mod.from_spz(out["files"]["splat.spz"]), cap["c2w"],
                                                     views, test_ids, sh)
     if cfg.get("spz_sweep"):  # size vs quality for SH quantisation bits (and SH degree)
@@ -161,6 +164,7 @@ def run(models, videos: bytes | list[bytes], cfg: dict, on_event=None) -> dict:
         out["spz_sweep"] = sweep
         print(f"spz sweep: {sweep}", flush=True)
     out["eval_train"], _ = train_mod.evaluate(clean, c2w_ref, views, train_ids[::8], sh)
+    print(f"held-out pose-fit: {out['eval_heldout_posefit']}", flush=True)
     print(f"held-out raw: {out['eval_heldout_raw']}  cleaned: {out['eval_heldout']}  "
           f"spz: {out['eval_heldout_spz']}  train: {out['eval_train']}", flush=True)
     if pairs:

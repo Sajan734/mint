@@ -10,6 +10,8 @@ DEFAULTS = {
     "vote_min_views": 3,
     "vote_dilate_px": 4,
     "max_scale_frac": 0.2,  # of the object radius
+    "min_contrib_px": 1.0,  # Gaussians blending into less than this many pixels over all training views are
+                            # invisible in the capture (hidden junk, e.g. needles under an object); dropped
 }
 
 
@@ -35,16 +37,17 @@ def mask_votes(means, c2w, K, masks, dilate_px):
     return seen, inside
 
 
-def keep_mask(params, c2w, K, masks, object_radius, cfg: dict):
+def keep_mask(params, c2w, K, masks, object_radius, cfg: dict, contrib=None):
     cfg = {**DEFAULTS, **(cfg or {})}
     seen, inside = mask_votes(params["means"], c2w, K, masks, cfg["vote_dilate_px"])
     vote_ok = (seen >= cfg["vote_min_views"]) & (inside >= cfg["vote_inside_frac"] * seen)
     op_ok = torch.sigmoid(params["opacities"]) >= cfg["min_opacity"]
     sc_ok = torch.exp(params["scales"]).max(1).values <= cfg["max_scale_frac"] * object_radius
-    keep = vote_ok & op_ok & sc_ok
+    vis_ok = contrib >= cfg["min_contrib_px"] if contrib is not None else torch.ones_like(op_ok)
+    keep = vote_ok & op_ok & sc_ok & vis_ok
     stats = {"before": int(len(keep)), "after": int(keep.sum()),
              "dropped_vote": int((~vote_ok).sum()), "dropped_opacity": int((~op_ok).sum()),
-             "dropped_scale": int((~sc_ok).sum())}
+             "dropped_scale": int((~sc_ok).sum()), "dropped_invisible": int((~vis_ok).sum())}
     return keep, stats
 
 
