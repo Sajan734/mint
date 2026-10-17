@@ -178,3 +178,12 @@ def test_evidence_never_has_non_allowlisted_claim_text():
     )
     ev = build_evidence(plan(), verdict(), [f], "abcd")
     assert "bad" not in ev and "(not shown)" in ev
+
+
+def test_validator_rejects_scan_counts():
+    from buyer_agent.advisor import SCAN_COUNT
+
+    for bad in ("Seen in 3 scans.", "two scans differ", "at least four scans", "Several scans"):
+        assert SCAN_COUNT.search(bad)
+    for ok in ("Seen in 3 views.", "Compare the scans", "the scan is clear"):
+        assert not SCAN_COUNT.search(ok)

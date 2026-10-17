@@ -15,11 +15,13 @@ DIFF_TEXT = {
     "shape_diff": "the overall shape looks different",
     "any_diff": "some other difference was seen",
 }
-CLAIM_LINE = {
-    "supported": "Listing says {c}. We can see it.",
-    "contradicted": "Listing says {c}. We could not see it in your scan.",
-    "unverifiable": "Listing says {c}. We cannot check this from the scan.",
+CLAIM_PREFIX = {"condition_note": "The listing notes: {c}.", "_": "Listing says {c}."}
+CLAIM_SUFFIX = {
+    "supported": "We can see it.",
+    "contradicted": "We could not see it in your scan.",
+    "unverifiable": "We cannot check this from the scan.",
 }
+TRAILING_PUNCT = " .!?;:,"
 HEADLINE = {
     "none": "The item you received appears to match the listing.",
     "request_refund": "The item you received likely does not match the listing.",
@@ -57,7 +59,13 @@ def found_lines(verdict: Verdict) -> list[str]:
 
 
 def claim_lines(findings: Sequence[ClaimsFinding]) -> list[str]:
-    return [CLAIM_LINE[f.status].format(c=f.claim) for f in findings]
+    lines = []
+    for f in findings:
+        prefix = CLAIM_PREFIX.get(f.source, CLAIM_PREFIX["_"])
+        lines.append(
+            f"{prefix.format(c=f.claim.strip().rstrip(TRAILING_PUNCT))} {CLAIM_SUFFIX[f.status]}"
+        )
+    return lines
 
 
 def _headline(verdict: Verdict, plan: Plan) -> str:
@@ -132,7 +140,11 @@ def build_explanation(
     found = found_lines(verdict)
     sure = how_sure(verdict.evidence_score)
     headline = _headline(verdict, plan)
-    friendly = step.summary if not step.is_template else f"{headline} {sure}"
+    friendly = (
+        step.summary
+        if not step.is_template
+        else f"{headline} {found[0] if verdict.evidence.flagged else sure}"
+    )
     return Explanation(
         headline=headline,
         what_we_compared=_compared(verdict),

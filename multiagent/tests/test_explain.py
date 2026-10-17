@@ -113,3 +113,31 @@ def test_groq_summary_used_when_valid():
 def test_no_banned_words(v):
     _, step, e = explain(v, [finding("contradicted")])
     assert not [t for t in [*texts(e), step.refund_request or ""] if BANNED.search(t)]
+
+
+def test_claim_lines_strip_punct_and_note_wording():
+    fs = [
+        finding("supported", "red lid."),
+        ClaimsFinding(
+            claim="2 views show a scuff.", source="condition_note", status="unverifiable",
+            p_present=None, views=[],
+        ),
+    ]  # fmt: skip
+    lines = build_explanation(*_pieces(fs)).listing_vs_item
+    assert lines[0] == "Listing says red lid. We can see it."
+    assert lines[1] == (
+        "The listing notes: 2 views show a scuff. We cannot check this from the scan."
+    )
+    assert not any(".." in x for x in lines)
+
+
+def _pieces(fs):
+    v = verdict()
+    p, step, _ = explain(v, fs)
+    return p, v, fs, step
+
+
+def test_template_friendly_summary_is_not_headline_only():
+    _, step, e = explain(verdict())
+    assert step.is_template and e.friendly_summary != e.headline
+    assert e.friendly_summary.startswith(e.headline) and "views" in e.friendly_summary
