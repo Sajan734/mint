@@ -17,6 +17,16 @@ DefectKind = Literal[
 ]
 
 
+def _normalise(text: str) -> str:
+    return "".join(ch for ch in text.casefold() if ch.isalnum())
+
+
+def backed_by_text(value: str, visible_text: list[str]) -> bool:
+    """True if `value` appears in some visible text, ignoring case, spaces and punctuation."""
+    needle = _normalise(value)
+    return bool(needle) and any(needle in _normalise(text) for text in visible_text)
+
+
 class Contract(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -54,11 +64,11 @@ class Identity(Contract):
     confidence: Prob
 
     @model_validator(mode="after")
-    def _brand_backed_by_visible_text(self) -> Identity:
-        if self.brand is not None:
-            brand = self.brand.casefold()
-            if not any(brand in text.casefold() for text in self.visible_text):
-                raise ValueError(f"brand {self.brand!r} is not backed by visible_text")
+    def _brand_and_model_backed_by_visible_text(self) -> Identity:
+        for name in ("brand", "model"):
+            value = getattr(self, name)
+            if value is not None and not backed_by_text(value, self.visible_text):
+                raise ValueError(f"{name} {value!r} is not backed by visible_text")
         return self
 
 
