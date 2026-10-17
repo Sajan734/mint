@@ -77,7 +77,8 @@ modal deploy supabase_setup/modal_app.py   # exposes sign_uploads(scan_id, names
 
 ## Live pipeline: upload signer and webhook
 
-Two one-time dashboard steps connect the phone to the pipeline (see gsplat/README.md for the whole flow):
+Two one-time dashboard steps connect the phone to the pipeline (see gsplat/README.md for the whole flow).
+**Done on 2026-10-17**: `scan-upload` and `scan-session` are deployed (JWT verification off) and the trigger exists.
 
 1. **Edge Functions → Deploy a new function → Via editor**, name `scan-upload`, paste
    `scanner/supabase/functions/scan-upload/index.ts` (C's signer: one-time upload URLs for

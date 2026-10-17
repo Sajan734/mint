@@ -38,7 +38,7 @@ iPhone app --scan-upload Edge Function--> scans/{id}/video.mp4
 
 | Where (Supabase, public `assets` bucket unless noted) | What |
 |---|---|
-| `scans/{id}/video.mp4` (private) | the phone's video (`top.*` / `bottom.*` also accepted; bottom = flipped-over orbit) |
+| `scans/{id}/video.mp4` (private) | the phone's video (+ `bottom.mp4`, the item flipped over, uploaded first); the app's `poses.jsonl` turns its sideways frames upright |
 | `splats/{id}.spz`, `splats/{id}.json` | the splat; manifest (inputs, URLs, views, spin frames, Gaussians, stage timings) |
 | `views/{id}/` | 8 reference views (transparent + grey PNG) + `views.json` (cameras) + `spin/f00..f23.webp` |
 | `splats/index.json` | every splat, newest first (`listing/ingest.py` reads it) |
@@ -54,8 +54,8 @@ on the website under the seller and garage sale in `market.LIVE`; the category c
 
 ```bash
 modal deploy app.py                          # prints the on_upload URL that webhook.sql calls
-python client.py scan orbit.mp4              # exactly the phone's path; prints the time of each hop
-python client.py scan orbit.mp4 orbit_reverse.mp4 --gpu H100   # top + bottom: run_scan started directly
+python client.py scan orbit.mp4 orbit_reverse.mp4   # exactly the phone's path (bottom.mp4 first, video.mp4 last);
+                                                   # the webhook does the rest; prints the time of each hop
 ```
 
 ### Demo (no cold start)
