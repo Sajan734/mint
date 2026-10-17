@@ -163,10 +163,10 @@ def prefilter(results: list[SearchResult]) -> tuple[list[Candidate], list[Candid
 
 
 def _require_key(name: str) -> str:
-    load_dotenv(LISTING_ROOT / ".env")
+    load_dotenv(LISTING_ROOT.parent / ".env")  # the repo-wide .env
     key = os.environ.get(name, "").strip()
     if not key:
-        raise MissingKeyError(f"{name} is missing: add it to listing/.env")
+        raise MissingKeyError(f"{name} is missing: add it to the repo-root .env")
     return key
 
 

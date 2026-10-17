@@ -9,7 +9,7 @@ Output: a `Listing`, or a `Rejection` if the scan doesn't match the looked-up pr
 
 Stages, in order:
 
-1. `render`: splat -> 12 PNG views (8 around at 10 degrees, 4 at 40 degrees), 1024x1024, mid-grey background. Rendered in plain PyTorch by `splat_render.py`, which imports nothing from the pipeline. `RENDER_BACKEND` in `.env` picks where: `modal` (default; the deployed `modal_render.py` app on an L4, the .spz or .ply up as bytes, PNGs back as bytes, no warm containers) or `local` (this machine, CUDA if available). Up axis per item via `input.json` `up_axis` or `--up-axis` (default `+y`). Writes `runs/<item>/contact_sheet.png` for checking by eye; `scripts/try_render.py` renders without any Gemini or Jev calls.
+1. `render`: splat -> 12 PNG views (8 around at 10 degrees, 4 at 40 degrees), 1024x1024, mid-grey background. Rendered in plain PyTorch by `splat_render.py`, which imports nothing from the pipeline. `RENDER_BACKEND` in the root `.env` picks where: `modal` (default; the deployed `modal_render.py` app on an L4, the .spz or .ply up as bytes, PNGs back as bytes, no warm containers) or `local` (this machine, CUDA if available). Up axis per item via `input.json` `up_axis` or `--up-axis` (default `+y`). Writes `runs/<item>/contact_sheet.png` for checking by eye; `scripts/try_render.py` renders without any Gemini or Jev calls.
 2. `identify`: views -> `Identity` (Gemini)
 3. `baseline_lookup`: seller's name or `Identity.search_query` -> `Baseline` (one clean product photo)
 4. `match_gate`: views + baseline -> `MatchCheck` (Jev). On mismatch, return a `Rejection` and stop.
@@ -65,7 +65,7 @@ Run the two pipeline checks and the tests after every change. They must still pa
 
 ## Keys and secrets
 
-- Keys come from `listing/.env` via `python-dotenv`: `TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY` (image search for `baseline_lookup`). Also `RENDER_BACKEND` (`modal` or `local`, not a secret). Modal itself uses the login from `modal setup`, not a key in `.env`.
+- Keys come from the repo-root `.env` (one file for all of Mint; see `../.env.example`) via `python-dotenv`: `TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY` (image search for `baseline_lookup`). Also `RENDER_BACKEND` (`modal` or `local`, not a secret). Modal itself uses the login from `modal setup`, not a key in `.env`.
 - Fail early with a clear message if a key is missing.
 - Never print, log, commit or hardcode a key. Never put a key in a fixture or in `runs/`.
 

@@ -1,6 +1,6 @@
-"""Create (or replace) the live pipeline's Modal secrets from gsplat/.env, so keys never go in code or chat.
+"""Create (or replace) the live pipeline's Modal secrets from the repo-root .env, so keys never go in code or chat.
 
-    cp .env.example .env        # fill in the values
+    cp .env.example .env        # in the repo root; fill in the values
     python push_secrets.py      # checks the Supabase key, writes mint-supabase and mint-listing (prints names only)
     modal deploy app.py         # redeploy: the app decides at deploy time which secrets exist
 """
@@ -12,7 +12,7 @@ from pathlib import Path
 
 import modal
 
-ENV = Path(__file__).resolve().parent / ".env"
+ENV = Path(__file__).resolve().parent.parent / ".env"  # the repo-wide .env
 SECRETS = {
     "mint-supabase": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
     "mint-listing": ["TYPESAFE_API_KEY", "GEMINI_API_KEY", "SERPER_API_KEY"],
@@ -46,7 +46,7 @@ def check_supabase(url: str, key: str) -> str:
 
 def main() -> int:
     if not ENV.is_file():
-        print(f"no {ENV.name}: copy .env.example to .env and fill it in")
+        print(f"no {ENV}: copy .env.example to .env in the repo root and fill it in")
         return 1
     env = read_env(ENV)
     done = 0

@@ -195,10 +195,10 @@ def to_identity(raw: dict[str, Any]) -> tuple[Identity, list[str]]:
 
 
 def _api_key() -> str:
-    load_dotenv(LISTING_ROOT / ".env")
+    load_dotenv(LISTING_ROOT.parent / ".env")  # the repo-wide .env
     key = os.environ.get("GEMINI_API_KEY", "").strip()
     if not key:
-        raise MissingKeyError("GEMINI_API_KEY is missing: add it to listing/.env")
+        raise MissingKeyError("GEMINI_API_KEY is missing: add it to the repo-root .env")
     return key
 
 

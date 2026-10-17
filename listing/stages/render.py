@@ -56,7 +56,7 @@ def _relative(path: Path) -> str:
 
 
 def render_backend() -> str:
-    load_dotenv(LISTING_ROOT / ".env")
+    load_dotenv(LISTING_ROOT.parent / ".env")  # the repo-wide .env
     backend = os.environ.get("RENDER_BACKEND", "").strip() or BACKENDS[0]
     if backend not in BACKENDS:
         raise RenderBackendError(f"RENDER_BACKEND must be one of {', '.join(BACKENDS)}, got {backend!r}")

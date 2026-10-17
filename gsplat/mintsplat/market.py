@@ -1,5 +1,5 @@
 """After the splat: run the listing pipeline (listing/, Jev + Gemini) on the scan and publish a website-ready
-MarketListing (multiagent/web/lib/types.ts) to the public bucket.
+MarketListing (buyer/lib/types.ts) to the public bucket.
 
   assets/listings/{scan_id}.json      {"v", "scan_id", "status": listed | rejected | failed, "market_listing" |
                                        "rejection" | "error", "timings_ms", ...}
@@ -23,7 +23,7 @@ ASSETS = "assets"
 LISTING_DIR = Path(os.environ.get("MINT_LISTING_DIR", "/listing"))
 
 # Where live scans appear on the website until sellers are real: an existing seller and garage sale from
-# multiagent/web/mock (the site validates seller_id / garage_sale_id against them). run_scan cfg["market"] overrides.
+# buyer/mock (the site validates seller_id / garage_sale_id against them). run_scan cfg["market"] overrides.
 LIVE = {
     "seller_id": "sel_raj",
     "garage_sale_id": "gs_agincourt_tech",
@@ -98,7 +98,7 @@ def _stage(run_dir: Path, name: str) -> dict:
 
 def market_listing(scan_id: str, listing: dict, run_dir: Path, manifest: dict, preview_urls: list[str],
                    live: dict) -> dict:
-    """listing/ Listing + the website's wrapper fields (multiagent/web/lib/schema.ts MarketListingSchema). The scan id
+    """listing/ Listing + the website's wrapper fields (buyer/lib/schema.ts MarketListingSchema). The scan id
     is the item id, so the website's /listing/<scan_id> page is the scan's page."""
     spin = manifest.get("spin_urls") or []
     previews = preview_urls or spin[::6][:4] or [v["grey_url"] for v in manifest["views"]["items"][:4]]

@@ -33,7 +33,7 @@ iPhone app --scan-upload Edge Function--> scans/{id}/video.mp4
   --Supabase webhook (supabase_setup/webhook.sql)--> on_upload (Modal endpoint, starts each scan once)
   --> Splatter.run_scan on an H100: splat + 8 views + 24 spin frames  (mintsplat/publish.py)
   --> listing/ pipeline in the same container: render, identify, Jev match + condition, price  (mintsplat/market.py)
-  --> assets/listings/index.json  --> the website (multiagent/web/lib/data/live.ts) lists it at /listing/{id}
+  --> assets/listings/index.json  --> the website (buyer/lib/data/live.ts) lists it at /listing/{id}
 ```
 
 | Where (Supabase, public `assets` bucket unless noted) | What |
@@ -47,8 +47,8 @@ iPhone app --scan-upload Edge Function--> scans/{id}/video.mp4
 | Realtime `batch:{id}` | `stage` events (started/done per step, incl. `7_listing`), `passport_ready`, `listing_ready` |
 
 Needs two Modal secrets: `mint-supabase` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) and `mint-listing`
-(`TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY`, the keys in `listing/.env`). Fill in `.env` (copy of
-`.env.example`, gitignored), run `python push_secrets.py` (checks the Supabase key, writes both secrets, prints only
+(`TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY`, the keys in `listing/.env`). Fill in the repo-root
+`.env` (copy of `../.env.example`, gitignored), run `python push_secrets.py` (checks the Supabase key, writes both secrets, prints only
 names), then `modal deploy app.py`. Without `mint-listing` the splat still publishes and the listing step is skipped. Live scans go
 on the website under the seller and garage sale in `market.LIVE`; the category comes from the identified product.
 

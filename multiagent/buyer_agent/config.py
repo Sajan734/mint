@@ -12,7 +12,7 @@ from buyer_agent.errors import AgentError, ErrorCode
 JEV_MODEL_PIN = "jev-1.13.0"
 PACKAGE_ROOT = Path(__file__).resolve().parent.parent  # .../multiagent
 REPO_ROOT = PACKAGE_ROOT.parent
-DEFAULT_ENV_FILE = PACKAGE_ROOT / ".env"
+DEFAULT_ENV_FILE = REPO_ROOT / ".env"  # the repo-wide .env
 MIN_TOKEN_LEN = 32
 _TRUE = {"1", "true", "yes", "on"}
 
