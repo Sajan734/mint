@@ -6,16 +6,38 @@
 
 For the demo use the deployed app instead (no cold start): see client.py.
 
-Outputs land in out/<name>/: splat.spz (~3 MB; add --ply for the ~39 MB .ply) plus debug media and run.json.
---gpu H100 roughly halves the pose stage; --scale 1.0 trains at full video resolution (sharpest).
+Outputs land in out/<name>/: splat.spz (~3 MB) plus debug media and run.json (--ply adds a ~39 MB .ply, for local inspection only).
+--gpu H100 roughly halves the pose stage; --scale sets the training resolution (default: auto from a pixel budget; 1.0 = full video resolution).
 """
 import json
+import os
+import sys
 import time
 from pathlib import Path
 
 import modal
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root: shared `supabase_setup` package
+
 CUDA_ARCHS = "8.0;8.6;8.9;9.0"
+
+
+def _has_supabase() -> bool:
+    """Whether the `mint-supabase` secret exists. Only storage mode (run_scan) needs it, so dev runs and
+    deploys still work before it is created. Decided once where the app is defined (locally) and baked
+    into the image env, so the container sees the same answer: re-checking in the container would
+    change the function's dependency count and break start-up. Redeploy after creating the secret."""
+    if not modal.is_local():
+        return os.environ.get("MINT_SUPABASE") == "1"
+    try:
+        modal.Secret.from_name("mint-supabase").hydrate()
+        return True
+    except modal.exception.NotFoundError:
+        print("note: Modal secret `mint-supabase` not found: storage mode (run_scan) disabled", file=sys.stderr)
+        return False
+
+
+HAS_SUPABASE = _has_supabase()
 
 # The first layers match the legacy image exactly so Modal reuses the cached build
 # (the gsplat CUDA compile takes minutes). Add new layers at the end.
@@ -43,14 +65,16 @@ image = (
     .pip_install("cmake>=3.24", "ninja")
     .apt_install("zlib1g-dev")
     .run_commands("pip install 'spz @ git+https://github.com/nianticlabs/spz.git@affd0ecea7fbb4c265ee119475af7ee5b2997482'")
-    .add_local_python_source("mintsplat")
+    .env({"MINT_SUPABASE": "1" if HAS_SUPABASE else "0"})
+    .add_local_python_source("mintsplat", "supabase_setup")
 )
 
 app = modal.App("mint-gsplat", image=image)
 models_vol = modal.Volume.from_name("mint-models", create_if_missing=True)
-
-
-@app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol}, timeout=900, scaledown_window=300)
+SECRETS = ([modal.Secret.from_name("mint-supabase", required_keys=["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])]
+           if HAS_SUPABASE else [])
+@app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol},
+         secrets=SECRETS, timeout=900, scaledown_window=300)
 class Splatter:
     @modal.enter()
     def load(self):
@@ -76,15 +100,43 @@ class Splatter:
 
         return run(self, video, cfg)
 
+    @modal.method()
+    def run_scan(self, scan_id: str, batch_id: str | None = None, cfg: dict | None = None) -> dict:
+        """Storage mode. Reads scans/{scan_id}/top.* (+ bottom.* if present) from Supabase, writes
+        assets/splats/{scan_id}.spz + .json (manifest), assets/views/{scan_id}/ (8 reference views + views.json),
+        refreshes assets/splats/index.json (newest first; what listing/ingest.py polls without a key), and
+        broadcasts `stage` / `passport_ready`        on Realtime channel batch:{batch_id}. mint-api calls this with .spawn() after upload."""
+        from mintsplat.pipeline import run
+        from mintsplat.publish import fetch_inputs, publish
+        from supabase_setup.storage import Events, Supabase
+
+        if not HAS_SUPABASE:
+            raise RuntimeError("storage mode needs the Modal secret `mint-supabase`; create it, then redeploy")
+        sb = Supabase()
+        batch_id = batch_id or scan_id
+        ev = Events(sb, batch_id)
+        try:
+            keys, videos, io = fetch_inputs(sb, scan_id)
+            res = run(self, videos if len(videos) > 1 else videos[0],
+                      {**(cfg or {}), "ply": False, "debug": False, "views": True}, on_event=ev.stage_hook(scan_id))
+            manifest = publish(sb, scan_id, batch_id, keys, res, io)
+            ev.send("passport_ready", manifest)
+            return manifest
+        except Exception as e:
+            ev.send("error", {"stage": "splat", "message": str(e)[:300], "scan_id": scan_id})
+            raise
+        finally:
+            ev.close()
+
 
 @app.local_entrypoint()
 def main(video: str, video2: str = "", name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 1000,
-         batch: int = 4, cap: int = 200_000, scale: float = 0.75,
-         debug: bool = True, ply: bool = False, spz_sweep: bool = False, gpu: str = "", app_lr: float = 0.0, sh: int = 3, train_json: str = ""):
+         batch: int = 4, cap: int = 200_000, scale: float = 0.0,
+         debug: bool = True, ply: bool = False, spz_sweep: bool = False, gpu: str = "", box_refine: bool = True, app_lr: float = 0.0, sh: int = 3, train_json: str = ""):
     src = Path(video)
     out_dir = Path("out") / (name or src.stem)
-    cfg = {"n_frames": n_frames, "stop_after": stop_after or None, "debug": debug, "ply": ply, "spz_sweep": spz_sweep,
-           "train": {"iters": iters, "batch": batch, "cap_max": cap, "train_scale": scale,
+    cfg = {"n_frames": n_frames, "stop_after": stop_after or None, "debug": debug, "ply": ply, "spz_sweep": spz_sweep, "box_refine": box_refine,
+           "train": {"iters": iters, "batch": batch, "cap_max": cap, "train_scale": scale or None,
                      "appearance_lr": app_lr, "sh_degree": sh, **json.loads(train_json or "{}")}}
 
     t0 = time.perf_counter()

@@ -2,29 +2,58 @@ import cv2
 import numpy as np
 
 
-def fill_holes(m: np.ndarray) -> np.ndarray:
-    """Object outline only: anything the object encloses (logo, trackpoint, specular patches) is object.
+MASK = {
+    "max_hole_frac": 0.025,  # enclosed holes smaller than this share of the object are filled (logos,
+                             # highlights); bigger ones are real see-through gaps (chair legs, handles)
+    "min_part_frac": 0.015,  # extra connected pieces at least this share of the main body are kept ...
+    "part_reach": 0.25,      # ... if their centre lies within the main body's box grown by this fraction
+    "close_px": 9,
+    "box_grow": 0.12,  # box re-prompt: first-frame point mask's box grown by this share of its size per side
+}
 
-    Background = pixels connected to the image border; everything else is filled in.
+
+def fill_small_holes(m: np.ndarray, max_frac: float = MASK["max_hole_frac"]) -> np.ndarray:
+    """Fill enclosed holes smaller than max_frac of the object's area.
+
+    Background = pixels connected to the image border. Small enclosed regions are SAM dropping a logo or
+    a specular patch; large ones are background seen through the object and must stay open.
     """
+    m = m.astype(bool)
     h, w = m.shape
     pad = np.zeros((h + 2, w + 2), np.uint8)
-    pad[1:-1, 1:-1] = m.astype(np.uint8)
+    pad[1:-1, 1:-1] = m
     cv2.floodFill(pad, None, (0, 0), 2)
-    return pad[1:-1, 1:-1] != 2
+    holes = (pad[1:-1, 1:-1] == 0).astype(np.uint8)
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(holes)
+    if n <= 1:
+        return m
+    small = np.zeros(n, bool)
+    small[1:] = stats[1:, cv2.CC_STAT_AREA] < max_frac * max(int(m.sum()), 1)
+    return m | small[lab]
 
 
-def largest_blob(m: np.ndarray) -> np.ndarray:
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(m.astype(np.uint8))
+def main_parts(m: np.ndarray) -> np.ndarray:
+    """Largest blob plus sizeable pieces next to it (a leg split off by occlusion), minus distant specks."""
+    n, lab, stats, cents = cv2.connectedComponentsWithStats(m.astype(np.uint8))
     if n <= 1:
         return m.astype(bool)
-    return lab == 1 + stats[1:, cv2.CC_STAT_AREA].argmax()
+    areas = stats[1:, cv2.CC_STAT_AREA]
+    big = 1 + areas.argmax()
+    x, y, bw, bh = stats[big, :4]
+    gx, gy = MASK["part_reach"] * bw, MASK["part_reach"] * bh
+    keep = np.zeros(n, bool)
+    for i in range(1, n):
+        cx, cy = cents[i]
+        near = x - gx <= cx <= x + bw + gx and y - gy <= cy <= y + bh + gy
+        keep[i] = i == big or (stats[i, cv2.CC_STAT_AREA] >= MASK["min_part_frac"] * areas.max() and near)
+    return keep[lab]
 
 
 def clean(m: np.ndarray) -> np.ndarray:
-    m = largest_blob(m)
-    m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((9, 9), np.uint8)).astype(bool)
-    return fill_holes(m)
+    m = main_parts(m)
+    k = MASK["close_px"]
+    m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((k, k), np.uint8)).astype(bool)
+    return fill_small_holes(m)
 
 
 class Segmenter:
@@ -39,7 +68,8 @@ class Segmenter:
 
         self.pred = SAM2VideoPredictor.from_pretrained(model_id)
 
-    def __call__(self, frames: list[np.ndarray], box: list[float] | None = None) -> list[np.ndarray]:
+    def __call__(self, frames: list[np.ndarray], box: list[float] | None = None,
+                 box_refine: bool = True) -> list[np.ndarray]:
         import sam2.sam2_video_predictor as vp
         import torch
 
@@ -65,8 +95,21 @@ class Segmenter:
                     # covers the body rather than one part of it
                     pts = np.array([[w / 2, h / 2], [w * 0.42, h / 2], [w * 0.58, h / 2],
                                     [w / 2, h * 0.42], [w / 2, h * 0.58]], np.float32)
-                    self.pred.add_new_points_or_box(state, frame_idx=0, obj_id=1, points=pts,
-                                                    labels=np.ones(len(pts), np.int32))
+                    labels = np.ones(len(pts), np.int32)
+                    _, _, logits = self.pred.add_new_points_or_box(state, frame_idx=0, obj_id=1, points=pts,
+                                                                   labels=labels)
+                    m0 = clean((logits[0, 0] > 0).cpu().numpy())
+                    if box_refine and m0.any():
+                        # Re-prompt with the point mask's box grown a little, plus the same points: a box
+                        # asks SAM for the whole thing inside it, which pulls in attached parts (a phone's
+                        # stand, a lamp's base) that the point prompt alone leaves out.
+                        ys, xs = np.nonzero(m0)
+                        gx, gy = MASK["box_grow"] * (xs.ptp() + 1), MASK["box_grow"] * (ys.ptp() + 1)
+                        grown = np.array([max(0, xs.min() - gx), max(0, ys.min() - gy),
+                                          min(w - 1, xs.max() + gx), min(h - 1, ys.max() + gy)], np.float32)
+                        self.pred.reset_state(state)
+                        self.pred.add_new_points_or_box(state, frame_idx=0, obj_id=1, points=pts, labels=labels,
+                                                        box=grown)
                 out: dict[int, np.ndarray] = {}
                 for fi, _, logits in self.pred.propagate_in_video(state):
                     out[fi] = (logits[0, 0] > 0).cpu().numpy()

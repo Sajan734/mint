@@ -39,33 +39,57 @@ def unproject(depth, K_small, ext, sel):
     return ((xc - t) @ R)[sel]  # R^T (x_cam - t)
 
 
-def fit_plane(pts: np.ndarray, thresh: float, iters: int = 512, seed: int = 0):
-    """RANSAC plane (all hypotheses scored at once on the GPU) -> (unit normal, point on plane, inlier fraction)."""
+UP = {
+    "max_tilt_deg": 40.0,  # a support plane must be within this of the cameras' average "up"
+    "min_inlier_frac": 0.08,  # below this the plane is not trusted; fall back to the camera up
+    "plane_thresh": 0.02,  # RANSAC inlier distance, in object radii
+    "bottom_quantile": 0.02,  # the object's lowest points (robust) rest on y = 0
+}
+
+
+def fit_plane(pts: np.ndarray, thresh: float, up_hint: np.ndarray, iters: int = 1024, seed: int = 0):
+    """RANSAC plane restricted to roughly horizontal planes (normal within UP["max_tilt_deg"] of up_hint),
+    all hypotheses scored at once on the GPU. Walls and the sides of a box under the object are rejected,
+    which an unconstrained fit happily picks. Returns (unit normal, point, inlier fraction) or None."""
     g = torch.Generator(device="cuda").manual_seed(seed)
     P = torch.from_numpy(pts).float().cuda()
+    up = torch.from_numpy(up_hint).float().cuda()
     tri = P[torch.randint(len(P), (iters, 3), device="cuda", generator=g)]
     n = torch.linalg.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
     n = n / n.norm(dim=1, keepdim=True).clamp_min(1e-12)
     d = ((P[None] - tri[:, :1]) * n[:, None]).sum(-1).abs()  # (iters, M)
     counts = (d < thresh).sum(1)
-    best = d[counts.argmax()] < thresh
+    flat = (n @ up).abs() >= np.cos(np.radians(UP["max_tilt_deg"]))
+    counts = torch.where(flat, counts, torch.full_like(counts, -1))
+    if int(counts.max()) <= 0:
+        return None
+    k = int(counts.argmax())
+    best = d[k] < thresh
     p = P[best]
     ctr = p.mean(0)
     normal = torch.linalg.svd(p - ctr, full_matrices=False)[2][2]  # least-squares refit on inliers
+    if (normal @ up).abs() < np.cos(np.radians(UP["max_tilt_deg"])):
+        normal = n[k]  # the refit drifted onto a wall; keep the sampled horizontal normal
     return normal.cpu().numpy(), ctr.cpu().numpy(), float(best.float().mean())
 
 
-def align_transform(n: np.ndarray, plane_pt: np.ndarray, obj_ctr: np.ndarray, cam_ctrs: np.ndarray,
-                    cam0_right: np.ndarray) -> np.ndarray:
-    """4x4 world -> scan frame: +Y = plane normal towards the cameras, origin under the object on the plane."""
-    if (cam_ctrs.mean(0) - plane_pt) @ n < 0:
-        n = -n
-    y = n
-    x = cam0_right - (cam0_right @ y) * y
+def align_transform(up: np.ndarray, obj_pts: np.ndarray) -> np.ndarray:
+    """4x4 world -> scan frame: +Y = up, X along the object's long axis on the ground, origin under the
+    object with its lowest points (robustly) at y = 0.
+
+    Aligning yaw to the object (instead of an arbitrary camera) makes orientation-based outputs (the
+    8 reference views, "front" in renders) consistent across scans of different objects."""
+    y = up / np.linalg.norm(up)
+    flat = obj_pts - np.outer(obj_pts @ y, y)  # footprint on the ground plane
+    ctr = flat.mean(0)
+    _, _, vt = np.linalg.svd(flat - ctr, full_matrices=False)
+    x = vt[0] - (vt[0] @ y) * y
     x /= np.linalg.norm(x)
+    if (((flat - ctr) @ x) ** 3).mean() < 0:  # deterministic sign: the heavier tail points to +x
+        x = -x
     z = np.cross(x, y)
     R = np.stack([x, y, z])  # rows; right-handed (x × y = z)
-    origin = obj_ctr - ((obj_ctr - plane_pt) @ y) * y
+    origin = ctr + np.quantile(obj_pts @ y, UP["bottom_quantile"]) * y
     T = np.eye(4)
     T[:3, :3] = R
     T[:3, 3] = -R @ origin
@@ -101,22 +125,33 @@ def estimate(model, frames: list[np.ndarray], masks: list[np.ndarray], n_init: i
     obj_ctr = np.median(obj_np, 0)
     obj_r = float(np.quantile(np.linalg.norm(obj_np - obj_ctr, axis=1), 0.95))
 
-    # support plane from the background near the object (paper can curl further out)
+    c2w = torch.linalg.inv(torch.cat([ext, torch.tensor([[[0, 0, 0, 1.0]]], device=dev).expand(N, 1, 4)], 1))
+    c2w = c2w.cpu().numpy()
+
+    # gravity: the support plane, constrained to be roughly horizontal w.r.t. how the phone was held
+    # (cameras' average up, i.e. minus their y axis); the camera up alone if no such plane is found
+    cam_up = -c2w[:, :3, 1].mean(0)
+    cam_up /= np.linalg.norm(cam_up)
     bg = bg_P.cpu().numpy()
     bg = bg[np.linalg.norm(bg - obj_ctr, axis=1) < 3 * obj_r]
     bg = bg[np.random.default_rng(0).choice(len(bg), min(len(bg), 20_000), replace=False)]
-    n, plane_pt, inlier_frac = fit_plane(bg, thresh=0.02 * obj_r)
-
-    c2w = torch.linalg.inv(torch.cat([ext, torch.tensor([[[0, 0, 0, 1.0]]], device=dev).expand(N, 1, 4)], 1))
-    c2w = c2w.cpu().numpy()
-    T = align_transform(n, plane_pt, obj_ctr, c2w[:, :3, 3], c2w[0, :3, 0])
+    plane = fit_plane(bg, UP["plane_thresh"] * obj_r, cam_up) if len(bg) >= 100 else None
+    if plane is not None and plane[2] >= UP["min_inlier_frac"]:
+        up, inlier_frac, up_source = plane[0], plane[2], "support_plane"
+        if up @ cam_up < 0:
+            up = -up
+    else:
+        up, inlier_frac, up_source = cam_up, (plane[2] if plane else 0.0), "camera_up"
+    tilt = float(np.degrees(np.arccos(np.clip(up @ cam_up, -1, 1))))
+    T = align_transform(up, obj_np)
 
     c2w = T[None] @ c2w
     Rt = torch.from_numpy(T).float().to(dev)
     obj_P = obj_P @ Rt[:3, :3].T + Rt[:3, 3]
 
     sel = torch.randperm(len(obj_P), device=dev)[:n_init]
-    stats = {"plane_inlier_frac": round(float(inlier_frac), 3), "object_radius": round(obj_r, 4),
+    stats = {"up_source": up_source, "plane_inlier_frac": round(float(inlier_frac), 3),
+             "up_vs_camera_deg": round(tilt, 1), "object_radius": round(obj_r, 4),
              "init_points": int(len(sel)), "vggt_res": [W, H],
              "vggt_s": round(t_vggt, 2), "post_s": round(time.perf_counter() - t0 - t_vggt, 2)}
     return torch.from_numpy(c2w).float().to(dev), K.to(dev), obj_P[sel], obj_C[sel], stats

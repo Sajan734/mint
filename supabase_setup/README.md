@@ -15,10 +15,15 @@ a dependency-free Python client for backends, and a smoke test.
 | Bucket | Access | Keys |
 |---|---|---|
 | `scans` | private (signed URLs) | `{scan_id}/top.mp4`, `{scan_id}/bottom.mp4` (any video extension) |
-| **`assets`** | public read | `splats/{scan_id}.spz`, `splats/{scan_id}.json` (manifest), `views/{scan_id}/corner_*.png` + `views.json`, later `thumbs/…`, `refs/…`, `renders/…`, `maps/…`, `wipes/…` |
+| **`assets`** | public read | `splats/{scan_id}.spz`, `splats/{scan_id}.json` (manifest), `splats/index.json` (all scans, newest first), `views/{scan_id}/` (8 reference views: `NN_azAAA_elEE.png` transparent + `_grey.png`, and `views.json` with cameras), later `thumbs/…`, `refs/…`, `renders/…`, `maps/…`, `wipes/…` |
 | `fixtures` | private | raw eval and test captures |
 
 Supabase reserves the name `public`, so ARCHITECTURE.md §12's `public` bucket is **`assets`**.
+
+Everything in `assets` is readable by URL without a key, so consumers that only read published scans need none:
+`listing/ingest.py` polls `splats/index.json` and turns each scan into a listing item folder
+(`python ingest.py --latest` / `--watch`). The splat job's publishing code is `gsplat/mintsplat/publish.py`.
+
 Recreate on a fresh project with [`buckets.sql`](buckets.sql). Free plan: **50 MB per file**, 1 GB total
 storage, 5 GB egress / month; delete raw videos after processing if space gets tight.
 
@@ -39,8 +44,7 @@ Create the Modal secret once (Modal dashboard → Secrets → Custom, or in your
 modal secret create mint-supabase SUPABASE_URL=https://jpanyhsifoxxiizkgjno.supabase.co SUPABASE_SERVICE_ROLE_KEY=<secret key>
 ```
 
-Teammates' Modal apps can only use it if they're in the same Modal workspace (it also shares the
-`mint-work` volume, where A writes `.ply` files for B).
+Teammates' Modal apps can only use it if they're in the same Modal workspace.
 
 ## Use it from a backend
 
