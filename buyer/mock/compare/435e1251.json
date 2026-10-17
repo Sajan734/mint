@@ -1,0 +1,171 @@
+{
+  "claims_available": true,
+  "claims_findings": [
+    {
+      "claim": "watering can",
+      "p_present": 0.97,
+      "source": "accessory",
+      "status": "supported",
+      "views": [
+        "view_01",
+        "view_03",
+        "view_07",
+        "view_10"
+      ]
+    },
+    {
+      "claim": "grow light",
+      "p_present": 0.05,
+      "source": "accessory",
+      "status": "contradicted",
+      "views": [
+        "view_01",
+        "view_03",
+        "view_07",
+        "view_10"
+      ]
+    },
+    {
+      "claim": "Minor scuffs on a few pots",
+      "p_present": 0.47,
+      "source": "condition_note",
+      "status": "unverifiable",
+      "views": []
+    }
+  ],
+  "comparison_id": "435e1251-4d67-4a65-ac2f-a8fcff39dd0c",
+  "error": null,
+  "explanation": {
+    "caveats": [
+      "Very small dents or scratches may not show up in this check.",
+      "The two scans were not aligned by us; views were taken as supplied."
+    ],
+    "disclaimer": "This is an automated visual comparison and can be wrong. It does not check price or payment.",
+    "friendly_summary": "The item appears different from the listing, with part and color differences noted in multiple views.",
+    "headline": "The item you received likely does not match the listing.",
+    "how_sure": "We have fairly strong evidence. This is not proof.",
+    "listing_vs_item": [
+      "Listing says watering can. We can see it.",
+      "Listing says grow light. We could not see it in your scan.",
+      "Listing says Minor scuffs on a few pots. We cannot check this from the scan."
+    ],
+    "what_to_do": [
+      "Contact the seller through the marketplace first.",
+      "Attach these comparison photos.",
+      "State the differences: A part or piece looks different or missing (in 11 of 11 views). Colours look different (in 10 of 11 views).",
+      "Keep a record of messages and photos.",
+      "If the marketplace has a return window, check it and act inside it."
+    ],
+    "what_we_compared": "We compared 11 views of the listing scan with your scan.",
+    "what_we_found": [
+      "A part or piece looks different or missing (in 11 of 11 views).",
+      "Colours look different (in 10 of 11 views)."
+    ]
+  },
+  "model_ids": {
+    "groq": "groq:openai/gpt-oss-120b",
+    "jev": "jev-1.13.0"
+  },
+  "next_step": {
+    "audience": "seller",
+    "category": "request_refund",
+    "cited_views": [
+      "view_01",
+      "view_02"
+    ],
+    "drafted_by": "groq:openai/gpt-oss-120b",
+    "is_template": false,
+    "message_to_seller": "Hi, I noticed the item differs from the description, showing part and color differences in the photos. Could we arrange a refund, please?",
+    "reason_code": "R4",
+    "refund_request": "Hello, I received the item and compared a 3D scan of it with the scan in your listing (11 views). The comparison appears to show that a part or piece looks different or missing; colours look different. I also could not see in my scan: grow light. I have attached the comparison photos. Could you please review them and tell me how you would like to resolve this, for example with a refund or a return? Thank you.",
+    "summary": "The item appears different from the listing, with part and color differences noted in multiple views."
+  },
+  "run_id": "435e1251-4d67-4a65-ac2f-a8fcff39dd0c",
+  "status": "done",
+  "timings_ms": {
+    "advise": 1078,
+    "claims": 766,
+    "judge": 3000,
+    "resolve": 109,
+    "total": 5000
+  },
+  "v": 1,
+  "verdict": {
+    "caveats": [
+      "Very small dents or scratches may not show up in this check.",
+      "The two scans were not aligned by us; views were taken as supplied."
+    ],
+    "evidence": {
+      "alignment": null,
+      "alignment_mode": "skipped_view_pairs",
+      "answered_views": 12,
+      "categories": {
+        "any_diff": {
+          "evidence": 0.97,
+          "max": 0.97,
+          "views": [
+            "view_01",
+            "view_02",
+            "view_03",
+            "view_05",
+            "view_06",
+            "view_07",
+            "view_08",
+            "view_09",
+            "view_10",
+            "view_11",
+            "view_12"
+          ]
+        },
+        "color_diff": {
+          "evidence": 0.86,
+          "max": 0.86,
+          "views": [
+            "view_01",
+            "view_02",
+            "view_03",
+            "view_05",
+            "view_06",
+            "view_08",
+            "view_09",
+            "view_10",
+            "view_11",
+            "view_12"
+          ]
+        },
+        "part_diff": {
+          "evidence": 0.96,
+          "max": 0.96,
+          "views": [
+            "view_01",
+            "view_02",
+            "view_03",
+            "view_05",
+            "view_06",
+            "view_07",
+            "view_08",
+            "view_09",
+            "view_10",
+            "view_11",
+            "view_12"
+          ]
+        },
+        "shape_diff": {
+          "evidence": 0.33,
+          "max": 0.39,
+          "views": []
+        }
+      },
+      "failed_views": [],
+      "flagged": [
+        "part_diff",
+        "color_diff"
+      ],
+      "requested_views": 12,
+      "usable_views": 11
+    },
+    "evidence_score": 0.8799999999999999,
+    "label": "different",
+    "reason": "Seen in at least 2 views: part_diff, color_diff."
+  }
+}

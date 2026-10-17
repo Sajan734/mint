@@ -17,7 +17,14 @@ function loadRootEnv(): void {
 }
 loadRootEnv();
 
+// Multi-zones: the seller app lives under /sell. Read at build time for `next build` (PLAN_TECH 1). `||`, not `??`,
+// because the root .env may hold an empty SELLER_ORIGIN= and the loader keeps empty strings.
+const SELLER_ORIGIN = (process.env.SELLER_ORIGIN || "http://localhost:3001").replace(/\/$/, "");
+
 const nextConfig: NextConfig = {
+  async rewrites() {
+    return [{ source: "/sell/:path*", destination: `${SELLER_ORIGIN}/sell/:path*` }];
+  },
   turbopack: {
     rules: {
       "*.css": {

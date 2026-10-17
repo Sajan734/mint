@@ -12,11 +12,13 @@
     "check": "pnpm typecheck && pnpm lint && pnpm test"
   },
   "dependencies": {
+    "@sparkjsdev/spark": "2.1.0",
     "@supabase/supabase-js": "2.45.4",
     "next": "16.4.2",
     "qrcode": "1.5.4",
     "react": "19.3.0",
-    "react-dom": "19.3.0"
+    "react-dom": "19.3.0",
+    "three": "0.180.0"
   },
   "devDependencies": {
     "@tailwindcss/turbopack": "^4",
@@ -26,6 +28,7 @@
     "@types/qrcode": "1.5.5",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/three": "0.180.0",
     "@vitejs/plugin-react": "^6.1.2",
     "eslint": "^9",
     "eslint-config-next": "16.4.2",

@@ -1,0 +1,118 @@
+{
+  "v": 3,
+  "scan_id": "a6816dfc-7f09-4c03-8c3a-85aaa5611014",
+  "batch_id": "a6816dfc-7f09-4c03-8c3a-85aaa5611014",
+  "splat_url": "/demo/listings/a6816dfc/splat.spz",
+  "spin_urls": [
+    "/demo/listings/a6816dfc/spin/f00.webp",
+    "/demo/listings/a6816dfc/spin/f01.webp",
+    "/demo/listings/a6816dfc/spin/f02.webp",
+    "/demo/listings/a6816dfc/spin/f03.webp",
+    "/demo/listings/a6816dfc/spin/f04.webp",
+    "/demo/listings/a6816dfc/spin/f05.webp",
+    "/demo/listings/a6816dfc/spin/f06.webp",
+    "/demo/listings/a6816dfc/spin/f07.webp",
+    "/demo/listings/a6816dfc/spin/f08.webp",
+    "/demo/listings/a6816dfc/spin/f09.webp",
+    "/demo/listings/a6816dfc/spin/f10.webp",
+    "/demo/listings/a6816dfc/spin/f11.webp",
+    "/demo/listings/a6816dfc/spin/f12.webp",
+    "/demo/listings/a6816dfc/spin/f13.webp",
+    "/demo/listings/a6816dfc/spin/f14.webp",
+    "/demo/listings/a6816dfc/spin/f15.webp",
+    "/demo/listings/a6816dfc/spin/f16.webp",
+    "/demo/listings/a6816dfc/spin/f17.webp",
+    "/demo/listings/a6816dfc/spin/f18.webp",
+    "/demo/listings/a6816dfc/spin/f19.webp",
+    "/demo/listings/a6816dfc/spin/f20.webp",
+    "/demo/listings/a6816dfc/spin/f21.webp",
+    "/demo/listings/a6816dfc/spin/f22.webp",
+    "/demo/listings/a6816dfc/spin/f23.webp"
+  ],
+  "created_at": "2026-10-17T16:59:24Z",
+  "timings_ms": {
+    "listing_pipeline": 15465
+  },
+  "status": "listed",
+  "market_listing": {
+    "listing": {
+      "item_id": "a6816dfc-7f09-4c03-8c3a-85aaa5611014",
+      "title": "ThinkPad Wireless Computer Mouse Black",
+      "description": "This is a ThinkPad wireless computer mouse. It comes in black with red accents.",
+      "attributes": {
+        "brand": "ThinkPad",
+        "type": "wireless computer mouse",
+        "colour": "black",
+        "accent_colour": "red",
+        "connectivity": "wireless"
+      },
+      "tags": [
+        "thinkpad",
+        "mouse",
+        "wireless",
+        "computer mouse",
+        "black",
+        "red"
+      ],
+      "condition_grade": "light_wear",
+      "condition_notes": [
+        "No defects stood out in any view."
+      ],
+      "price_cad": 20,
+      "price_justification": [
+        "Our rough estimate of the new price is about $30.00; x 0.65 for light wear gives $19.50, rounded to $20."
+      ],
+      "preview_images": [
+        "/demo/listings/a6816dfc/previews/v00.webp",
+        "/demo/listings/a6816dfc/previews/v02.webp",
+        "/demo/listings/a6816dfc/previews/v04.webp",
+        "/demo/listings/a6816dfc/previews/v06.webp"
+      ],
+      "viewer_url": null,
+      "needs_seller_check": true,
+      "seller_check_reasons": [
+        "We couldn't find a reference photo for ThinkPad black wireless computer mouse, so we couldn't check the scan matches it. Add the exact product name, or check the listing before publishing.",
+        "We found no reference photo of this product, so condition was judged from the scan alone.",
+        "Condition needs a quick check before publishing."
+      ]
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "electronics",
+    "location": {
+      "neighbourhood": "Agincourt",
+      "city": "Toronto"
+    },
+    "reference_price_cad": 20,
+    "frames": [
+      "/demo/listings/a6816dfc/spin/f00.webp",
+      "/demo/listings/a6816dfc/spin/f01.webp",
+      "/demo/listings/a6816dfc/spin/f02.webp",
+      "/demo/listings/a6816dfc/spin/f03.webp",
+      "/demo/listings/a6816dfc/spin/f04.webp",
+      "/demo/listings/a6816dfc/spin/f05.webp",
+      "/demo/listings/a6816dfc/spin/f06.webp",
+      "/demo/listings/a6816dfc/spin/f07.webp",
+      "/demo/listings/a6816dfc/spin/f08.webp",
+      "/demo/listings/a6816dfc/spin/f09.webp",
+      "/demo/listings/a6816dfc/spin/f10.webp",
+      "/demo/listings/a6816dfc/spin/f11.webp",
+      "/demo/listings/a6816dfc/spin/f12.webp",
+      "/demo/listings/a6816dfc/spin/f13.webp",
+      "/demo/listings/a6816dfc/spin/f14.webp",
+      "/demo/listings/a6816dfc/spin/f15.webp",
+      "/demo/listings/a6816dfc/spin/f16.webp",
+      "/demo/listings/a6816dfc/spin/f17.webp",
+      "/demo/listings/a6816dfc/spin/f18.webp",
+      "/demo/listings/a6816dfc/spin/f19.webp",
+      "/demo/listings/a6816dfc/spin/f20.webp",
+      "/demo/listings/a6816dfc/spin/f21.webp",
+      "/demo/listings/a6816dfc/spin/f22.webp",
+      "/demo/listings/a6816dfc/spin/f23.webp"
+    ],
+    "splat_url": "/demo/listings/a6816dfc/splat.spz",
+    "usable_view_count": 10,
+    "listed_at": "2026-10-17T16:59:40Z",
+    "status": "available"
+  }
+}

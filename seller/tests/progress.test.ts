@@ -1,46 +1,52 @@
 import { describe, expect, it } from "vitest";
-import { phaseOf, splatFraction, stepState } from "../lib/progress";
+import { STEPS, stepMark, subStepLabel } from "../lib/progress";
 import { isScanId, scanDeepLink } from "../lib/scan";
-import type { ListingDoc } from "../lib/types";
 
-const doc = (status: ListingDoc["status"]): ListingDoc => ({ v: 3, scan_id: "x", status });
-
-describe("phaseOf", () => {
-  it("waits for the phone until anything happens", () => {
-    expect(phaseOf({ stages: {}, manifest: false, listing: null })).toBe("waiting");
-  });
-  it("is scanning once the splat job reports a stage", () => {
-    expect(phaseOf({ stages: { "1_frames": "started" }, manifest: false, listing: null })).toBe("scanning");
-  });
-  it("is writing once the 3D scan is published or the listing step started", () => {
-    expect(phaseOf({ stages: {}, manifest: true, listing: null })).toBe("writing");
-    expect(phaseOf({ stages: { "7_listing": "started" }, manifest: false, listing: null })).toBe("writing");
-  });
-  it("ends with the listing document's status", () => {
-    for (const s of ["listed", "rejected", "failed"] as const) {
-      expect(phaseOf({ stages: {}, manifest: true, listing: doc(s) })).toBe(s);
-    }
+describe("STEPS", () => {
+  it("has the same five steps for a listing and a check, in order", () => {
+    const ids = ["waiting", "connected", "uploading", "processing", "ready"];
+    expect(STEPS.listing.map((s) => s.id)).toEqual(ids);
+    expect(STEPS.verify.map((s) => s.id)).toEqual(ids);
+    expect(STEPS.listing[0].label).toBe("Scan this code with your iPhone");
+    expect(STEPS.listing[4].label).toBe("Your listing is ready");
+    expect(STEPS.verify[3].label).toBe("Comparing with the listing");
   });
 });
 
-describe("splatFraction", () => {
-  it("counts finished splat stages, per-video names once", () => {
-    expect(splatFraction({})).toBe(0);
-    expect(splatFraction({ "1_frames": "done", "2_masks_top": "done", "2_masks_bottom": "done", "3_poses_top": "started" })).toBeCloseTo(2 / 6);
-    expect(splatFraction({ "1_frames": "done", "2_masks_top": "done", "3_poses_top": "done", "4_train": "done", "5_clean_export": "done", "6_views": "done" })).toBe(1);
-  });
-});
-
-describe("stepState", () => {
+describe("stepMark", () => {
   it("marks earlier steps done, the current one active, later ones todo", () => {
-    expect(stepState("waiting", "writing")).toBe("done");
-    expect(stepState("writing", "writing")).toBe("active");
-    expect(stepState("listed", "writing")).toBe("todo");
-    expect(stepState("listed", "listed")).toBe("done");
+    expect(stepMark("waiting", "uploading")).toBe("done");
+    expect(stepMark("uploading", "uploading")).toBe("active");
+    expect(stepMark("processing", "uploading")).toBe("todo");
   });
-  it("stops at the listing step when the scan is rejected or failed", () => {
-    expect(stepState("writing", "rejected")).toBe("active");
-    expect(stepState("listed", "failed")).toBe("todo");
+  it("marks everything done when ready", () => {
+    for (const s of STEPS.listing) expect(stepMark(s.id, "ready")).toBe("done");
+  });
+  it("stops at processing when rejected or failed, at the phone when cancelled", () => {
+    expect(stepMark("uploading", "failed")).toBe("done");
+    expect(stepMark("processing", "rejected")).toBe("stopped");
+    expect(stepMark("ready", "failed")).toBe("todo");
+    expect(stepMark("waiting", "cancelled")).toBe("done");
+    expect(stepMark("connected", "cancelled")).toBe("stopped");
+    expect(stepMark("uploading", "cancelled")).toBe("todo");
+  });
+});
+
+describe("subStepLabel", () => {
+  it("names every splat stage by prefix, per-video names included", () => {
+    expect(subStepLabel("1_frames", "listing")).toBe("Reading the video");
+    expect(subStepLabel("2_masks_bottom", "listing")).toBe("Finding the item");
+    expect(subStepLabel("3_poses_top", "listing")).toBe("Working out the angles");
+    expect(subStepLabel("4_train", "listing")).toBe("Building the 3D model");
+    expect(subStepLabel("5_clean_export", "listing")).toBe("Cleaning up");
+  });
+  it("names a check's recorded steps", () => {
+    expect(subStepLabel("judge", "verify")).toBe("Comparing views");
+    expect(subStepLabel("claims", "verify")).toBe("Checking the listing's claims");
+    expect(subStepLabel("advise", "verify")).toBe("Writing advice");
+  });
+  it("returns null for a stage it does not know", () => {
+    expect(subStepLabel("0_unknown", "listing")).toBeNull();
   });
 });
 

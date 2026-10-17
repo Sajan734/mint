@@ -11,22 +11,24 @@ test.afterAll(() => {
 });
 
 const cards = (page: Page) => page.locator("article");
+// The landing also has suggestion shelves; the paged, filtered grid is the "Items for sale" list.
+const gridCards = (page: Page) => page.getByRole("list", { name: "Items for sale" }).locator("article");
 const listing = (page: Page) => page.goto("/listing/pots_i1");
 const reserve = (page: Page) => page.getByRole("button", { name: /^Reserve for/ }).first();
 
 test("home shows 12 of 40, Show more reveals the rest; filter changes URL and count", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("status")).toContainText("40 items");
-  await expect(cards(page)).toHaveCount(12);
+  await expect(gridCards(page)).toHaveCount(12);
   for (const n of [24, 36, 40]) {
     await page.getByRole("button", { name: /^Show \d+ more$/ }).click();
-    await expect(cards(page)).toHaveCount(n);
+    await expect(gridCards(page)).toHaveCount(n);
   }
   await expect(page.getByRole("button", { name: /^Show \d+ more$/ })).toHaveCount(0);
   await page.getByRole("button", { name: "Garden & plants" }).click();
   await expect(page).toHaveURL(/cat=garden_plants/);
   await expect(page.getByRole("status")).toContainText("5 items");
-  await expect(cards(page)).toHaveCount(5);
+  await expect(gridCards(page)).toHaveCount(5);
 });
 
 test("spin viewer drags and responds to ArrowRight", async ({ page }) => {
@@ -105,13 +107,15 @@ test("shipping order validates address then succeeds; advance reaches verify; re
     await expect(page.getByText(h).first()).toBeVisible();
 });
 
-test("static pages render; unknown listing 404s", async ({ page }) => {
+test("static pages render; unknown listing explains itself", async ({ page }) => {
   await page.goto("/about");
   await expect(page.getByRole("heading", { level: 1 })).toContainText("How Mint works");
   await page.goto("/sale/gs_leslieville_moving");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
   await page.goto("/orders/ord_seed_meetup");
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
-  const r = await page.goto("/listing/nope");
-  expect(r?.status()).toBe(404);
+  // Not a 404: the id may be a listing published in this browser, which only the client can see.
+  await page.goto("/listing/nope");
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("published on another device");
+  await expect(page.getByRole("link", { name: "Back to Mint" })).toBeVisible();
 });

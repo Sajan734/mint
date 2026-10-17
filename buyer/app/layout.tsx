@@ -34,8 +34,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       className={`${bricolage.variable} ${figtree.variable} ${dmMono.variable}`}
     >
       <body className="min-h-screen flex flex-col">
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
         <SiteHeader />
-        <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-16 pt-4 md:px-6 md:pt-6 lg:px-8">
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-16 pt-4 md:px-6 md:pt-6 lg:px-8">
           {children}
         </main>
       </body>

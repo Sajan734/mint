@@ -7,7 +7,9 @@
     "member_since": "2026-03",
     "rating": 4.9,
     "rating_count": 31,
-    "response_time": "usually replies within an hour"
+    "response_time": "usually replies within an hour",
+    "email": "priya@example.com",
+    "phone": "416-555-0101"
   },
   {
     "id": "sel_marcus",
@@ -17,7 +19,9 @@
     "member_since": "2026-05",
     "rating": 4.8,
     "rating_count": 22,
-    "response_time": "usually replies within a few hours"
+    "response_time": "usually replies within a few hours",
+    "email": "marcus@example.com",
+    "phone": "416-555-0102"
   },
   {
     "id": "sel_amara",
@@ -27,7 +31,9 @@
     "member_since": "2026-02",
     "rating": 4.7,
     "rating_count": 18,
-    "response_time": "usually replies within a day"
+    "response_time": "usually replies within a day",
+    "email": "amara@example.com",
+    "phone": "416-555-0103"
   },
   {
     "id": "sel_daniel",
@@ -37,7 +43,9 @@
     "member_since": "2026-06",
     "rating": 4.6,
     "rating_count": 9,
-    "response_time": "usually replies within an hour"
+    "response_time": "usually replies within an hour",
+    "email": "daniel@example.com",
+    "phone": "416-555-0104"
   },
   {
     "id": "sel_hannah",
@@ -47,7 +55,9 @@
     "member_since": "2026-04",
     "rating": 5,
     "rating_count": 12,
-    "response_time": "usually replies within a few hours"
+    "response_time": "usually replies within a few hours",
+    "email": "hannah@example.com",
+    "phone": "416-555-0105"
   },
   {
     "id": "sel_raj",
@@ -57,6 +67,8 @@
     "member_since": "2026-07",
     "rating": 4.5,
     "rating_count": 7,
-    "response_time": "usually replies within a day"
+    "response_time": "usually replies within a day",
+    "email": "raj@example.com",
+    "phone": "416-555-0106"
   }
 ]

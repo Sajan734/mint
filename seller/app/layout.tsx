@@ -16,8 +16,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="en" className={`${bricolage.variable} ${figtree.variable} ${dmMono.variable}`}>
       <body className="flex min-h-screen flex-col">
+        <a href="#main" className="skip-link">
+          Skip to content
+        </a>
         <SiteHeader />
-        <main className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-16 pt-6 md:px-6 lg:px-8">{children}</main>
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-[1200px] flex-1 px-4 pb-16 pt-6 md:px-6 lg:px-8">{children}</main>
       </body>
     </html>
   );

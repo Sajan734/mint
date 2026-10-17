@@ -1,10 +1,10 @@
-// Run once: node scripts/gen-mock.mjs  -> writes mock/*.json and public/avatars/*.svg (outputs are committed).
+// Run once: node scripts/gen-mock.mjs  -> writes mock/*.json, public/avatars/*.svg and ../seller/mock/my-listings.json (outputs are committed).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const real = join(root, "..", "..", "..", "..");
+const real = join(root, "..", "multiagent");
 const out = (p, d) => { mkdirSync(dirname(join(root, p)), { recursive: true }); writeFileSync(join(root, p), typeof d === "string" ? d : JSON.stringify(d, null, 2) + "\n"); };
 
 // seeded rng + shuffle (mulberry32)
@@ -21,8 +21,10 @@ const sellers = [
   ["sel_daniel", "Daniel K.", "Scarborough Village", "2026-06", 4.6, 9, "usually replies within an hour"],
   ["sel_hannah", "Hannah L.", "Highland Creek", "2026-04", 5.0, 12, "usually replies within a few hours"],
   ["sel_raj", "Raj S.", "Agincourt", "2026-07", 4.5, 7, "usually replies within a day"],
-].map(([id, name, neighbourhood, member_since, rating, rating_count, response_time]) => ({
+].map(([id, name, neighbourhood, member_since, rating, rating_count, response_time], i) => ({
   id, name, avatar: `/avatars/${id}.svg`, neighbourhood, member_since, rating, rating_count, response_time,
+  // demo-only contact details, reserved fictional values (example.com, 555-01xx)
+  email: `${id.slice(4)}@example.com`, phone: `416-555-01${String(i + 1).padStart(2, "0")}`,
 }));
 sellers.forEach((x, i) => {
   const hue = (i * 57 + 140) % 360;
@@ -71,8 +73,8 @@ const pool = shuffle(kinds.flatMap((k) => Array(dist[k] - (k === "fair" ? 1 : 0)
 const badge = ["fair", ...pool];
 const grades = ["light_wear", ...shuffle([...Array(10).fill("like_new"), ...Array(15).fill("light_wear"), ...Array(10).fill("moderate_wear"), ...Array(4).fill("heavy_wear")])];
 const MULT = { like_new: 0.8, light_wear: 0.65, moderate_wear: 0.5, heavy_wear: 0.35 };
-const reserved = new Set([3, 9, 16, 22]);
-const sold = new Set([35, 37]);
+const reserved = new Set([3, 9, 16, 22, 28]);
+const sold = new Set([35, 37, 25, 27]); // 25, 27 and 28 are sel_raj's, so the seller dashboard shows how items sold
 const check = { 5: ["The back view was unclear."], 12: ["One scuff is hard to read.", "Only 6 usable views."], 20: ["A label could not be read."], 28: ["The base view shows a possible crack."] };
 const boundary = { great: [85, 100], fair: [110, 100], high: [130, 100] };
 const ratioRange = { great: [0.55, 0.84], fair: [0.9, 1.08], high: [1.13, 1.28], overpriced: [1.4, 1.8] };
@@ -152,4 +154,6 @@ out("mock/listings.json", listings);
 out("mock/frame-fallbacks.json", fallbacks);
 out("mock/orders.json", orders);
 out("mock/verify-sample.json", verify);
+// ../seller/mock/scan-result.json (what demo mode's scan flow replays) comes from make_demo_assets.py: a real listing.
+out("../seller/mock/my-listings.json", listings.filter((m) => m.seller_id === "sel_raj"));
 console.log("wrote", listings.length, "listings");
