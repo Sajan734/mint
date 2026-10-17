@@ -36,6 +36,7 @@ export const MarketListingSchema = z.object({
 export const SellerSchema = z.object({
   id: z.string(), name: z.string(), avatar: z.string(), neighbourhood: z.string(), member_since: z.string(),
   rating: z.number().min(0).max(5), rating_count: z.number().int(), response_time: z.string(),
+  email: z.string().optional(), phone: z.string().optional(),
 });
 
 export const GarageSaleSchema = z.object({

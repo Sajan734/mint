@@ -1,7 +1,9 @@
-// What the pipeline publishes, as far as the seller site reads it. Listing mirrors listing/contracts.py; the
-// document wrapper is gsplat/mintsplat/market.py's assets/listings/{scan_id}.json.
-export type Grade = "like_new" | "light_wear" | "moderate_wear" | "heavy_wear";
+// The website's listing shapes. Same MarketListing as buyer/lib/types.ts (the pipeline Listing nested inside the
+// website wrapper). Keep the Grade ... MarketListing block identical to the buyer copy.
+export type { ListingDoc, SplatManifest, StageEvent } from "./listing-doc";
 
+// Mirrors listing/contracts.py Listing exactly. Do not add fields here.
+export type Grade = "like_new" | "light_wear" | "moderate_wear" | "heavy_wear";
 export interface Listing {
   item_id: string;
   title: string;
@@ -10,46 +12,36 @@ export interface Listing {
   tags: string[];
   condition_grade: Grade;
   condition_notes: string[];
-  price_cad: number;
+  price_cad: number; // int > 0
   price_justification: string[];
-  preview_images: string[];
-  viewer_url: string | null;
+  preview_images: string[]; // URLs
+  viewer_url: string | null; // splat viewer later
   needs_seller_check: boolean;
   seller_check_reasons: string[];
 }
 
+export type ListingStatus = "available" | "reserved" | "sold";
+export type Category =
+  | "home_kitchen"
+  | "electronics"
+  | "garden_plants"
+  | "sports_outdoors"
+  | "toys_games"
+  | "books_media"
+  | "furniture"
+  | "clothing_accessories";
+
+// Website wrapper. The pipeline Listing is nested, never flattened.
 export interface MarketListing {
   listing: Listing;
-  category: string;
-  reference_price_cad: number | null;
-  frames: string[];
-  splat_url: string | null;
-  usable_view_count: number;
-  listed_at: string;
-}
-
-export interface ListingDoc {
-  v: number;
-  scan_id: string;
-  status: "listed" | "rejected" | "failed";
-  market_listing?: MarketListing;
-  rejection?: { match_check: { verdict: string; reason: string } };
-  error?: string;
-  spin_urls?: string[];
-  timings_ms?: Record<string, number>;
-}
-
-export interface SplatManifest {
-  scan_id: string;
-  splat_url: string;
-  spin_urls?: string[];
-  stage_timings_ms: Record<string, number>;
-}
-
-/** Realtime `stage` event payload (supabase_setup/storage.py Events, inside the v3 envelope). */
-export interface StageEvent {
-  scan_id: string;
-  stage: string;
-  status: string;
-  ms: number;
+  seller_id: string;
+  garage_sale_id: string;
+  category: Category;
+  location: { neighbourhood: string; city: string };
+  reference_price_cad: number | null; // Mint fair value for this item in this condition
+  frames: string[]; // spin frames, ordered by azimuth, >= 1
+  splat_url: string | null; // .spz for a future Spark viewer
+  usable_view_count: number; // for "Verified by Mint scan"
+  listed_at: string; // ISO-8601
+  status: ListingStatus;
 }

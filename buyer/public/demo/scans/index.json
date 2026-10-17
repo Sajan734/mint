@@ -1,0 +1,147 @@
+[
+  {
+    "name": "backpack",
+    "object": "backpack",
+    "files": {
+      "views": [
+        "/demo/scans/backpack/views/00.webp",
+        "/demo/scans/backpack/views/01.webp",
+        "/demo/scans/backpack/views/02.webp",
+        "/demo/scans/backpack/views/03.webp",
+        "/demo/scans/backpack/views/04.webp",
+        "/demo/scans/backpack/views/05.webp",
+        "/demo/scans/backpack/views/06.webp",
+        "/demo/scans/backpack/views/07.webp"
+      ],
+      "spin": [],
+      "photos": [
+        "/demo/scans/backpack/photos/p1.webp",
+        "/demo/scans/backpack/photos/p2.webp",
+        "/demo/scans/backpack/photos/p3.webp",
+        "/demo/scans/backpack/photos/p4.webp"
+      ]
+    },
+    "source": "gsplat/out (real scan, commit e80f994)",
+    "splat_url": null
+  },
+  {
+    "name": "chair",
+    "object": "office chair",
+    "files": {
+      "views": [
+        "/demo/scans/chair/views/00.webp",
+        "/demo/scans/chair/views/01.webp",
+        "/demo/scans/chair/views/02.webp",
+        "/demo/scans/chair/views/03.webp",
+        "/demo/scans/chair/views/04.webp",
+        "/demo/scans/chair/views/05.webp",
+        "/demo/scans/chair/views/06.webp",
+        "/demo/scans/chair/views/07.webp"
+      ],
+      "spin": [],
+      "photos": [
+        "/demo/scans/chair/photos/p1.webp",
+        "/demo/scans/chair/photos/p2.webp",
+        "/demo/scans/chair/photos/p3.webp",
+        "/demo/scans/chair/photos/p4.webp"
+      ]
+    },
+    "source": "gsplat/out (real scan, commit e80f994)",
+    "splat_url": null
+  },
+  {
+    "name": "phone",
+    "object": "desk phone",
+    "files": {
+      "views": [
+        "/demo/scans/phone/views/00.webp",
+        "/demo/scans/phone/views/01.webp",
+        "/demo/scans/phone/views/02.webp",
+        "/demo/scans/phone/views/03.webp",
+        "/demo/scans/phone/views/04.webp",
+        "/demo/scans/phone/views/05.webp",
+        "/demo/scans/phone/views/06.webp",
+        "/demo/scans/phone/views/07.webp"
+      ],
+      "spin": [],
+      "photos": [
+        "/demo/scans/phone/photos/p1.webp",
+        "/demo/scans/phone/photos/p2.webp",
+        "/demo/scans/phone/photos/p3.webp",
+        "/demo/scans/phone/photos/p4.webp"
+      ]
+    },
+    "source": "gsplat/out (real scan, commit e80f994)",
+    "splat_url": null
+  },
+  {
+    "name": "merged",
+    "object": "ThinkPad mouse",
+    "files": {
+      "views": [
+        "/demo/scans/merged/views/00.webp",
+        "/demo/scans/merged/views/01.webp",
+        "/demo/scans/merged/views/02.webp",
+        "/demo/scans/merged/views/03.webp",
+        "/demo/scans/merged/views/04.webp",
+        "/demo/scans/merged/views/05.webp",
+        "/demo/scans/merged/views/06.webp",
+        "/demo/scans/merged/views/07.webp"
+      ],
+      "spin": [],
+      "photos": [
+        "/demo/scans/merged/photos/p1.webp",
+        "/demo/scans/merged/photos/p2.webp",
+        "/demo/scans/merged/photos/p3.webp",
+        "/demo/scans/merged/photos/p4.webp"
+      ]
+    },
+    "source": "gsplat/out (real scan, commit e80f994)",
+    "splat_url": null
+  },
+  {
+    "name": "live_check",
+    "object": "ThinkPad mouse",
+    "files": {
+      "views": [
+        "/demo/scans/live_check/views/00.webp",
+        "/demo/scans/live_check/views/01.webp",
+        "/demo/scans/live_check/views/02.webp",
+        "/demo/scans/live_check/views/03.webp",
+        "/demo/scans/live_check/views/04.webp",
+        "/demo/scans/live_check/views/05.webp",
+        "/demo/scans/live_check/views/06.webp",
+        "/demo/scans/live_check/views/07.webp"
+      ],
+      "spin": [
+        "/demo/scans/live_check/spin/f00.webp",
+        "/demo/scans/live_check/spin/f01.webp",
+        "/demo/scans/live_check/spin/f02.webp",
+        "/demo/scans/live_check/spin/f03.webp",
+        "/demo/scans/live_check/spin/f04.webp",
+        "/demo/scans/live_check/spin/f05.webp",
+        "/demo/scans/live_check/spin/f06.webp",
+        "/demo/scans/live_check/spin/f07.webp",
+        "/demo/scans/live_check/spin/f08.webp",
+        "/demo/scans/live_check/spin/f09.webp",
+        "/demo/scans/live_check/spin/f10.webp",
+        "/demo/scans/live_check/spin/f11.webp",
+        "/demo/scans/live_check/spin/f12.webp",
+        "/demo/scans/live_check/spin/f13.webp",
+        "/demo/scans/live_check/spin/f14.webp",
+        "/demo/scans/live_check/spin/f15.webp",
+        "/demo/scans/live_check/spin/f16.webp",
+        "/demo/scans/live_check/spin/f17.webp",
+        "/demo/scans/live_check/spin/f18.webp",
+        "/demo/scans/live_check/spin/f19.webp",
+        "/demo/scans/live_check/spin/f20.webp",
+        "/demo/scans/live_check/spin/f21.webp",
+        "/demo/scans/live_check/spin/f22.webp",
+        "/demo/scans/live_check/spin/f23.webp"
+      ],
+      "photos": []
+    },
+    "source": "gsplat/out (real scan, commit e80f994)",
+    "splat_url": null
+  }
+]

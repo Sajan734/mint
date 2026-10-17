@@ -1,0 +1,76 @@
+{
+  "listing": {
+    "item_id": "pots_i1",
+    "title": "Succulents and houseplants in plastic and terracotta pots on pallet shelf",
+    "description": "About 20 potted succulents and houseplants in black plastic, terracotta and yellow pots on a stacked pallet and brick shelf. Includes a white plastic watering can.",
+    "attributes": {
+      "type": "houseplant collection",
+      "colour": "green",
+      "material": "plastic and terracotta pots",
+      "count": "about 20 plants"
+    },
+    "tags": [
+      "succulents",
+      "houseplants",
+      "plant pots",
+      "terracotta",
+      "garden"
+    ],
+    "condition_grade": "light_wear",
+    "condition_notes": [
+      "2 views show scratches or scuffs: front, 10° above; right, 10° above.",
+      "The back view shows stains or discolouration."
+    ],
+    "price_cad": 30,
+    "price_justification": [
+      "We estimate the used market price at about $46.00; x 0.65 for light wear gives $29.90, rounded to $30."
+    ],
+    "preview_images": [
+      "/local/pots/f00.webp",
+      "/local/pots/f06.webp",
+      "/local/pots/f12.webp",
+      "/local/pots/f18.webp"
+    ],
+    "viewer_url": null,
+    "needs_seller_check": false,
+    "seller_check_reasons": []
+  },
+  "seller_id": "sel_priya",
+  "garage_sale_id": "gs_leslieville_moving",
+  "category": "garden_plants",
+  "location": {
+    "neighbourhood": "Leslieville",
+    "city": "Toronto"
+  },
+  "reference_price_cad": 30,
+  "frames": [
+    "/local/pots/f00.webp",
+    "/local/pots/f01.webp",
+    "/local/pots/f02.webp",
+    "/local/pots/f03.webp",
+    "/local/pots/f04.webp",
+    "/local/pots/f05.webp",
+    "/local/pots/f06.webp",
+    "/local/pots/f07.webp",
+    "/local/pots/f08.webp",
+    "/local/pots/f09.webp",
+    "/local/pots/f10.webp",
+    "/local/pots/f11.webp",
+    "/local/pots/f12.webp",
+    "/local/pots/f13.webp",
+    "/local/pots/f14.webp",
+    "/local/pots/f15.webp",
+    "/local/pots/f16.webp",
+    "/local/pots/f17.webp",
+    "/local/pots/f18.webp",
+    "/local/pots/f19.webp",
+    "/local/pots/f20.webp",
+    "/local/pots/f21.webp",
+    "/local/pots/f22.webp",
+    "/local/pots/f23.webp"
+  ],
+  "splat_url": null,
+  "usable_view_count": 9,
+  "listed_at": "2026-10-08T09:15:00Z",
+  "status": "available"
+}

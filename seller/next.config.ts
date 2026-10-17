@@ -18,6 +18,8 @@ function loadRootEnv(): void {
 loadRootEnv();
 
 const nextConfig: NextConfig = {
+  // Served as one site with the buyer app: its rewrite sends /sell/* here. Assets then live at /sell/_next/.
+  basePath: "/sell",
   // Browser code reads these; pass them explicitly so they are inlined however the app is started.
   env: Object.fromEntries(Object.entries(process.env).filter(([k]) => k.startsWith("NEXT_PUBLIC_"))) as Record<string, string>,
   turbopack: {

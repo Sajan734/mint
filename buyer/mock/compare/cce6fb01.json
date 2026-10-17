@@ -1,0 +1,132 @@
+{
+  "claims_available": true,
+  "claims_findings": [
+    {
+      "claim": "watering can",
+      "p_present": 0.05,
+      "source": "accessory",
+      "status": "contradicted",
+      "views": [
+        "view_01",
+        "view_04",
+        "view_07",
+        "view_10"
+      ]
+    },
+    {
+      "claim": "Minor scuffs on a few pots",
+      "p_present": 0.19,
+      "source": "condition_note",
+      "status": "contradicted",
+      "views": [
+        "view_01",
+        "view_04",
+        "view_07",
+        "view_10"
+      ]
+    }
+  ],
+  "comparison_id": "cce6fb01-06fb-47de-803d-bb06a2b5e1a3",
+  "error": null,
+  "model_ids": {
+    "groq": "groq:openai/gpt-oss-120b",
+    "jev": "jev-1.13.0"
+  },
+  "next_step": {
+    "audience": "seller",
+    "category": "request_refund",
+    "cited_views": [
+      "view_01",
+      "view_02"
+    ],
+    "drafted_by": "groq:openai/gpt-oss-120b",
+    "is_template": false,
+    "message_to_seller": "Hi, the item appears to differ from the listing in parts and color. Could we arrange a refund, please?",
+    "reason_code": "R4",
+    "refund_request": "I would appreciate a full refund.",
+    "summary": "request_refund: item appears to have part and color differences"
+  },
+  "run_id": "cce6fb01-06fb-47de-803d-bb06a2b5e1a3",
+  "status": "done",
+  "timings_ms": {
+    "advise": 2609,
+    "claims": 547,
+    "judge": 3014,
+    "resolve": 109,
+    "total": 6359
+  },
+  "v": 1,
+  "verdict": {
+    "caveats": [
+      "Very small dents or scratches may not show up in this check.",
+      "The two scans were not aligned by us; views were taken as supplied."
+    ],
+    "evidence": {
+      "alignment": null,
+      "alignment_mode": "skipped_view_pairs",
+      "answered_views": 12,
+      "categories": {
+        "any_diff": {
+          "evidence": 0.98,
+          "max": 0.98,
+          "views": [
+            "view_01",
+            "view_02",
+            "view_03",
+            "view_04",
+            "view_06",
+            "view_07",
+            "view_09",
+            "view_11",
+            "view_12"
+          ]
+        },
+        "color_diff": {
+          "evidence": 0.86,
+          "max": 0.86,
+          "views": [
+            "view_01",
+            "view_02",
+            "view_03",
+            "view_04",
+            "view_06",
+            "view_07",
+            "view_09",
+            "view_11",
+            "view_12"
+          ]
+        },
+        "part_diff": {
+          "evidence": 0.98,
+          "max": 0.98,
+          "views": [
+            "view_01",
+            "view_02",
+            "view_03",
+            "view_04",
+            "view_06",
+            "view_07",
+            "view_09",
+            "view_11",
+            "view_12"
+          ]
+        },
+        "shape_diff": {
+          "evidence": 0.24,
+          "max": 0.26,
+          "views": []
+        }
+      },
+      "failed_views": [],
+      "flagged": [
+        "part_diff",
+        "color_diff"
+      ],
+      "requested_views": 12,
+      "usable_views": 9
+    },
+    "evidence_score": 0.735,
+    "label": "different",
+    "reason": "Seen in at least 2 views: part_diff, color_diff."
+  }
+}

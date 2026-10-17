@@ -1,0 +1,96 @@
+"use client";
+// The listing card's root and image box, with hover-to-3D. It renders the card's <article> so hover and focus anywhere
+// on the card count: the title link's `after:inset-0` overlay covers the image and would swallow pointer events there.
+// Static photo first. After a short dwell (fine pointer hover, or keyboard focus) it mounts the splat spinning, or the
+// frame spinner when there is no splat. Touch and reduced motion: static only.
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { MarketListing } from "@/lib/types";
+import { sampleSplatFor, useMockMode } from "@/lib/mock-mode";
+import SplatViewer, { preloadSplatScene } from "./SplatViewer";
+import SpinViewer from "./SpinViewer";
+
+const DWELL_MS = 200;
+const MIN_SPIN_FRAMES = 8;
+
+const canPlay = () =>
+  typeof window !== "undefined" &&
+  !!window.matchMedia?.("(hover: hover) and (pointer: fine)").matches &&
+  !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const PILL =
+  "pointer-events-none absolute bottom-2 left-2 rounded-full border border-line-strong bg-surface px-2 py-1 font-mono text-xs leading-none text-ink";
+
+export default function CardMedia({
+  item,
+  className,
+  children,
+}: {
+  item: MarketListing;
+  className?: string;
+  children: ReactNode;
+}) {
+  const mock = useMockMode();
+  const { listing: l } = item;
+  const still = l.preview_images[0] ?? item.frames[0];
+  const splat = item.splat_url ?? (mock ? sampleSplatFor(l.item_id) : null);
+  const sample = !item.splat_url && !!splat;
+  const canSpin = item.frames.length >= MIN_SPIN_FRAMES;
+  const [active, setActive] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    if (splat && canPlay()) preloadSplatScene();
+  }, [splat]);
+  useEffect(() => () => clearTimeout(timer.current), []);
+
+  const start = () => {
+    if (!canPlay() || (!splat && !canSpin)) return;
+    clearTimeout(timer.current);
+    timer.current = setTimeout(() => setActive(true), DWELL_MS);
+  };
+  const stop = () => {
+    clearTimeout(timer.current);
+    setActive(false);
+  };
+
+  const showSplat = active && !!splat && !failed;
+  const showSpin = active && !showSplat && canSpin;
+  return (
+    <article
+      className={className}
+      onPointerEnter={(e) => { if (e.pointerType === "mouse") start(); }}
+      onPointerLeave={stop}
+      onFocus={start}
+      onBlur={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) stop(); }}
+    >
+      <div
+        className={`relative aspect-square overflow-hidden bg-surface-2 [background-image:var(--pad)] ${item.status === "available" ? "" : "opacity-60"}`}
+      >
+        {still && (
+          // eslint-disable-next-line @next/next/no-img-element -- scan frames come from storage or /public
+          <img src={still} alt="" draggable={false} className="h-full w-full object-contain" />
+        )}
+        {showSplat && (
+          <div className="absolute inset-0">
+            <SplatViewer
+              src={splat}
+              label={sample ? `Sample 3D view, not ${l.title}` : `3D view of ${l.title}`}
+              poster={still}
+              autoRotate
+              className="[background-image:var(--pad)]"
+              onError={() => setFailed(true)}
+            />
+          </div>
+        )}
+        {showSpin && (
+          <div className="absolute inset-0">
+            <SpinViewer frames={item.frames} alt={l.title} variant="card" />
+          </div>
+        )}
+        {item.splat_url ? <span className={PILL}>3D</span> : showSplat && <span className={PILL}>Sample 3D</span>}
+      </div>
+      {children}
+    </article>
+  );
+}

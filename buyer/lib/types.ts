@@ -51,6 +51,8 @@ export interface Seller {
   rating: number; // 1 decimal, 0-5
   rating_count: number;
   response_time: string; // "usually replies within an hour"
+  email?: string; // demo contact, @example.com
+  phone?: string; // demo contact, 555-01xx
 }
 
 export interface GarageSale {
