@@ -1,6 +1,6 @@
 # Mint scanner (Role C capture)
 
-The iOS app that captures a full-coverage scan of an item. The plan, decisions and chunks are in [PLAN.md](PLAN.md); the role spec is in [role-C.md](role-C.md).
+The iOS app that captures a full-coverage scan of an item. The plan, decisions and chunks are in [PLAN.md](PLAN.md); what reconstruction receives is in [HANDOFF.md](HANDOFF.md); the role spec is in [role-C.md](role-C.md).
 
 ```
 scanner/
@@ -24,3 +24,7 @@ Tests: **⌘U** in Xcode (runs `CoverageKitTests`), or `cd ios/Packages/Coverage
 ## Using it
 
 Move the phone until the coaching overlay finds the table → **tap the item** → a dome of 24 tiles appears around it (pinch to resize). Walk around at two heights; tiles turn mint as sharp, steady frames land. The ring at the bottom is a top-down map (you're the white dot). Exposure, focus and white balance lock when you tap. It finishes by itself at 90% coverage.
+
+## Getting a scan off the phone
+
+When a scan finishes, tap **Send to teammate** (AirDrop the zip). Scans are also in **Files → On My iPhone → Mint**, and in Finder (phone plugged in → Files tab). Check one with `tools/check_scan.py` (see [HANDOFF.md](HANDOFF.md)).

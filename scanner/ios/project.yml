@@ -38,6 +38,9 @@ targets:
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
+        # Scans show up in Files → On My iPhone → Mint, and in Finder when the phone is plugged in.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
 schemes:
   Mint:
     build:

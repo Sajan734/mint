@@ -10,15 +10,18 @@ struct ScanView: View {
     var body: some View {
         ZStack {
             ARViewContainer(session: session).ignoresSafeArea()
+
+            if session.phase == .aiming, let found = session.found {
+                FoundBracket(found: found)
+                    .allowsHitTesting(false)
+                    .ignoresSafeArea()
+            }
+
             VStack(spacing: 12) {
                 topBar
                 Spacer()
                 guidance
-                if session.phase == .scanning || session.phase == .complete {
-                    CoverageRingView(filled: session.filled, cameraAzimuthDeg: session.position?.azimuthDeg,
-                                     pct: session.coveragePct)
-                        .frame(width: 168, height: 168)
-                }
+                bottom
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 20)
@@ -30,24 +33,42 @@ struct ScanView: View {
             if phase == .background { session.pause() }
             if phase == .active && old == .background { session.run() }
         }
+        .sheet(item: doneBinding) { summary in
+            DoneSheet(summary: summary) { session.reset() }
+                .presentationDetents([.medium])
+                .interactiveDismissDisabled()
+        }
+    }
+
+    private var doneBinding: Binding<ScanSummary?> {
+        Binding(
+            get: { if case .done(let s) = session.phase { return s } else { return nil } },
+            set: { if $0 == nil { session.reset() } }
+        )
     }
 
     private var topBar: some View {
         HStack {
-            if session.phase != .starting && session.phase != .aim {
+            if session.phase == .scanning {
                 Button(action: session.reset) {
                     Image(systemName: "xmark").font(.headline).padding(12).background(.ultraThinMaterial, in: Circle())
                 }
-                .accessibilityLabel("Start over")
-            }
-            Spacer()
-            if session.phase == .scanning {
-                Label(session.cameraLocked ? "Exposure locked" : "Exposure not locked",
-                      systemImage: session.cameraLocked ? "lock.fill" : "lock.open")
-                    .font(.caption.weight(.semibold))
-                    .padding(.horizontal, 10).padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
+                .accessibilityLabel("Cancel scan")
+                Spacer()
+                if let start = session.scanStart {
+                    TimelineView(.periodic(from: start, by: 0.1)) { ctx in
+                        Text(String(format: "%.0f s", ctx.date.timeIntervalSince(start)))
+                            .font(.system(.headline, design: .rounded)).monospacedDigit()
+                            .padding(.horizontal, 12).padding(.vertical, 8)
+                            .background(.ultraThinMaterial, in: Capsule())
+                    }
+                }
+                Spacer()
+                Image(systemName: session.cameraLocked ? "lock.fill" : "lock.open")
+                    .font(.headline)
                     .foregroundStyle(session.cameraLocked ? Color.brandMint : Color.brandAmber)
+                    .padding(12).background(.ultraThinMaterial, in: Circle())
+                    .accessibilityLabel(session.cameraLocked ? "Exposure locked" : "Exposure not locked")
             }
         }
     }
@@ -56,9 +77,13 @@ struct ScanView: View {
         switch session.phase {
         case .starting:
             pill(Copy.finding, symbol: "viewfinder")
-        case .aim:
-            pill(session.tapError ?? Copy.aim, symbol: "hand.tap.fill",
-                 tint: session.tapError == nil ? .white : .brandAmber)
+        case .aiming:
+            if let found = session.found {
+                pill(found.estimate == nil ? Copy.findingTable : Copy.found(found.estimate!), symbol: "scope",
+                     tint: found.estimate == nil ? .white : .brandMint)
+            } else {
+                pill(Copy.aim, symbol: "scope")
+            }
         case .scanning:
             if let issue = session.issue {
                 pill(Copy.issue(issue), symbol: "exclamationmark.triangle.fill", tint: .brandAmber)
@@ -66,8 +91,46 @@ struct ScanView: View {
                 let h = Copy.hint(hint)
                 pill(h.text, symbol: h.symbol)
             }
-        case .complete:
-            pill(Copy.complete, symbol: "checkmark.seal.fill", tint: .brandMint)
+        case .saving:
+            pill(Copy.saving, symbol: "arrow.down.doc.fill", tint: .brandMint)
+        case .done:
+            EmptyView()
+        case .failed(let message):
+            pill(message, symbol: "xmark.octagon.fill", tint: .brandAmber)
+        }
+    }
+
+    @ViewBuilder private var bottom: some View {
+        switch session.phase {
+        case .aiming:
+            Button(action: session.start) {
+                Text("Start scan")
+                    .font(.title3.weight(.semibold))
+                    .frame(maxWidth: .infinity, minHeight: 56)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(.brandMint)
+            .foregroundStyle(Color.brandStageBg)
+            .disabled(!session.canStart)
+        case .scanning, .saving:
+            HStack(alignment: .bottom) {
+                Spacer().frame(width: 64)
+                Spacer()
+                CoverageRingView(filled: session.filled, cameraAzimuthDeg: session.position?.azimuthDeg,
+                                 pct: session.coveragePct)
+                    .frame(width: 168, height: 168)
+                Spacer()
+                Button(action: session.finish) {
+                    Image(systemName: "stop.fill").font(.title2).frame(width: 64, height: 64)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .disabled(session.phase != .scanning)
+                .accessibilityLabel("Finish scan now")
+            }
+        case .failed:
+            Button("Try again", action: session.reset).buttonStyle(.borderedProminent).tint(.brandMint)
+        case .starting, .done:
+            EmptyView()
         }
     }
 
@@ -79,6 +142,31 @@ struct ScanView: View {
             .background(.ultraThinMaterial, in: Capsule())
             .animation(.easeOut(duration: 0.2), value: text)
             .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
+extension ScanSummary: Identifiable {
+    var id: String { scanID }
+}
+
+/// Corner brackets that glide to the detected item.
+private struct FoundBracket: View {
+    let found: ScanSession.Found
+
+    var body: some View {
+        let r = found.boundsInView.insetBy(dx: -10, dy: -10)
+        let len = min(28, r.width / 3, r.height / 3)
+        Path { p in
+            for (corner, dx, dy) in [(CGPoint(x: r.minX, y: r.minY), 1.0, 1.0), (CGPoint(x: r.maxX, y: r.minY), -1.0, 1.0),
+                                     (CGPoint(x: r.minX, y: r.maxY), 1.0, -1.0), (CGPoint(x: r.maxX, y: r.maxY), -1.0, -1.0)] {
+                p.move(to: CGPoint(x: corner.x + dx * len, y: corner.y))
+                p.addLine(to: corner)
+                p.addLine(to: CGPoint(x: corner.x, y: corner.y + dy * len))
+            }
+        }
+        .stroke(found.estimate == nil ? Color.white : Color.brandMint, style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+        .shadow(color: .black.opacity(0.4), radius: 4)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: found.boundsInView)
     }
 }
 

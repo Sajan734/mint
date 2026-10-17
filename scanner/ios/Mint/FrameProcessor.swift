@@ -1,8 +1,9 @@
 import ARKit
 import CoverageKit
 
-/// Runs on its own serial queue as the ARSession delegate: reduces each frame to a thumbnail,
-/// scores sharpness and feeds the coverage tracker. Never holds on to an ARFrame.
+/// The ARSession delegate, on its own serial queue. While aiming it runs the item detector a few
+/// times a second; while scanning it scores each frame for coverage and hands it to the recorder.
+/// Never holds on to an ARFrame.
 final class FrameProcessor: NSObject, ARSessionDelegate {
     struct Update {
         let decision: FrameDecision
@@ -11,43 +12,139 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
         let hint: Hint
     }
 
+    private enum Mode { case idle, aiming, scanning }
+
     let queue = DispatchQueue(label: "mint.frames", qos: .userInteractive)
     /// Set once before the session runs; called on the main actor.
     var onUpdate: (@MainActor (Update) -> Void)?
     var onTrackingChange: (@MainActor (ARCamera.TrackingState) -> Void)?
+    var onDetection: (@MainActor (ObjectDetector.Result?) -> Void)?
 
-    private var tracker: CoverageTracker?  // touched only on `queue`
-    private var frameCount = 0
-    private static let thumbnailFactor = 4      // 1920×1440 → 480×360
-    private static let processEveryNthFrame = 2 // 60 fps camera → 30 Hz coverage updates
+    // Everything below is touched only on `queue`.
+    private var mode = Mode.idle
+    private var tracker: CoverageTracker?
+    private var recorder: Recorder?
+    private let detector = ObjectDetector()
+    private var preferredPoint = CGPoint(x: 0.5, y: 0.5)
+    private var lastProcessed: TimeInterval = 0
+    private var lastDetect: TimeInterval = 0
+    private var sensorSize = CGSize(width: 1920, height: 1440)
 
-    func start(anchor: SIMD3<Float>) {
+    private static let thumbnailFactor = 4         // 1920×1440 → 480×360 for sharpness
+    private static let scanInterval = 1.0 / 30     // video + coverage at 30 fps
+    private static let detectInterval = 0.25       // item detection at ~4 Hz
+
+    func startAiming() {
         queue.async {
-            self.tracker = CoverageTracker(anchor: anchor)
-            self.frameCount = 0
+            self.mode = .aiming
+            self.tracker = nil
         }
     }
 
-    func stop() {
-        queue.async { self.tracker = nil }
+    /// Upright (portrait) normalized image point the user tapped: pick the item under it.
+    func setPreferredPoint(_ p: CGPoint) {
+        queue.async { self.preferredPoint = p }
+    }
+
+    func startScanning(item: ObjectEstimate, recorder: Recorder?) {
+        var config = CoverageConfig()
+        let halfExtent = 0.5 * max(item.width, item.height, item.depth)
+        config.minDistanceM = max(0.1, halfExtent + 0.05)
+        config.maxDistanceM = max(1.5, item.domeRadius * 6)
+        queue.async {
+            self.tracker = CoverageTracker(anchor: item.centre, config: config)
+            self.recorder = recorder
+            self.lastProcessed = 0
+            self.mode = .scanning
+        }
+    }
+
+    /// Stops scanning and hands the recorder back on the frame queue (where `Recorder.finish` must run).
+    func finish(_ body: @escaping (Recorder?, CGSize) -> Void) {
+        queue.async {
+            self.mode = .idle
+            self.tracker = nil
+            let r = self.recorder
+            self.recorder = nil
+            body(r, self.sensorSize)
+        }
+    }
+
+    func cancel() {
+        queue.async {
+            self.recorder?.cancel()
+            self.recorder = nil
+            self.tracker = nil
+            self.mode = .idle
+        }
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
-        frameCount += 1
-        guard var tracker, frameCount % Self.processEveryNthFrame == 0 else { return }
+        sensorSize = frame.camera.imageResolution
+        switch mode {
+        case .idle:
+            return
+        case .aiming:
+            detect(frame)
+        case .scanning:
+            scan(frame)
+        }
+    }
+
+    func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
+        let state = camera.trackingState
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.onTrackingChange?(state) } }
+    }
+
+    private func detect(_ frame: ARFrame) {
+        guard frame.timestamp - lastDetect >= Self.detectInterval else { return }
+        guard case .normal = frame.camera.trackingState else { return }
+        lastDetect = frame.timestamp
+        detector.detect(.init(
+            pixelBuffer: frame.capturedImage,
+            cameraTransform: frame.camera.transform,
+            intrinsics: frame.camera.intrinsics,
+            imageSize: frame.camera.imageResolution,
+            preferredPoint: preferredPoint
+        )) { result in
+            MainActor.assumeIsolated { self.onDetection?(result) }
+            self.queue.async { self.detector.markIdle() }
+        }
+    }
+
+    private func scan(_ frame: ARFrame) {
+        guard var tracker, frame.timestamp - lastProcessed >= Self.scanInterval - 0.004 else { return }
+        lastProcessed = frame.timestamp
 
         let thumb = Self.thumbnail(frame.capturedImage)
-        var trackingNormal = false
-        if case .normal = frame.camera.trackingState { trackingNormal = true }
+        let tracking: String
+        switch frame.camera.trackingState {
+        case .normal: tracking = "normal"
+        case .limited: tracking = "limited"
+        case .notAvailable: tracking = "not_available"
+        }
+        let sharpness = thumb.map(Sharpness.laplacianVariance) ?? 0
 
         let decision = tracker.observe(FrameObservation(
             cameraTransform: frame.camera.transform,
             timestamp: frame.timestamp,
-            trackingNormal: trackingNormal,
-            sharpness: thumb.map(Sharpness.laplacianVariance) ?? 0,
+            trackingNormal: tracking == "normal",
+            sharpness: sharpness,
             meanLuma: thumb.map(Sharpness.meanLuma) ?? 0
         ))
         self.tracker = tracker
+
+        // The item hasn't moved yet (no hand-turn tracking), so camera-to-item = camera-to-world.
+        recorder?.append(pixelBuffer: frame.capturedImage, timestamp: frame.timestamp, sensorSize: sensorSize, meta: .init(
+            cameraTransform: frame.camera.transform,
+            itemPose: frame.camera.transform,
+            intrinsics: frame.camera.intrinsics,
+            tracking: tracking,
+            state: "scanning",
+            sharpness: sharpness,
+            segment: decision.segment,
+            isBestForSegment: decision.isBestForSegment
+        ))
 
         let update = Update(
             decision: decision,
@@ -56,11 +153,6 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
             hint: Guidance.hint(position: decision.position, filled: tracker.filled)
         )
         DispatchQueue.main.async { MainActor.assumeIsolated { self.onUpdate?(update) } }
-    }
-
-    func session(_ session: ARSession, cameraDidChangeTrackingState camera: ARCamera) {
-        let state = camera.trackingState
-        DispatchQueue.main.async { MainActor.assumeIsolated { self.onTrackingChange?(state) } }
     }
 
     /// Downsampled luma (Y plane of the bi-planar YCbCr capturedImage).

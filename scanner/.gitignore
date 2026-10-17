@@ -11,3 +11,5 @@ DerivedData/
 # Secrets
 .env
 .env.local
+tools/.venv/
+__pycache__/

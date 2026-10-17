@@ -171,3 +171,57 @@ final class GuidanceTests: XCTestCase {
         }
     }
 }
+
+final class ObjectSizingTests: XCTestCase {
+    /// A 20 × 30 × 20 cm box standing on the table at the origin, seen from 80 cm away, 35 cm up.
+    func testBoxFromOneView() {
+        let cam = SIMD3<Float>(0.05, 0.35, 0.8)
+        func ray(to p: SIMD3<Float>) -> Ray { Ray(origin: cam, direction: p - cam) }
+        let steps = (0...20).map { Float($0) / 20 }
+        let contact = steps.map { ray(to: [-0.1 + 0.2 * $0, 0, 0.1]) }
+        let frontFace = steps.flatMap { u in steps.map { v in ray(to: [-0.1 + 0.2 * u, 0.3 * v, 0.1]) } }
+        let topFace = steps.flatMap { u in steps.map { v in ray(to: [-0.1 + 0.2 * u, 0.3, 0.1 - 0.2 * v]) } }
+
+        let e = ObjectSizing.estimate(camera: cam, contactRays: contact, silhouetteRays: frontFace + topFace, planeY: 0)!
+        XCTAssertEqual(e.width, 0.2, accuracy: 0.02)
+        XCTAssertEqual(e.height, 0.3, accuracy: 0.02)
+        XCTAssertEqual(e.footprintCentre.x, 0, accuracy: 0.02)
+        XCTAssertEqual(e.footprintCentre.y, 0, accuracy: 1e-5)
+        XCTAssertEqual(e.footprintCentre.z, 0, accuracy: 0.03)
+        XCTAssertEqual(e.centre.y, e.height / 2, accuracy: 1e-5)
+        XCTAssertGreaterThan(e.domeRadius, 0.5 * (0.2 * 0.2 + 0.3 * 0.3 + 0.2 * 0.2).squareRoot())
+    }
+
+    func testRejectsTooLittleData() {
+        let cam = SIMD3<Float>(0, 0.3, 0.5)
+        let r = Ray(origin: cam, direction: [0, -0.3, -0.5])
+        XCTAssertNil(ObjectSizing.estimate(camera: cam, contactRays: [r], silhouetteRays: [r], planeY: 0))
+    }
+}
+
+final class CaptureFilesTests: XCTestCase {
+    func testManifestShape() throws {
+        let m = CaptureManifest(
+            scan_id: "s", item_id: "i", batch_id: "b", kind: "listing",
+            frames: [.init(index: 7, path: "scans/s/f00007.jpg", t_ms: 233, pose: Geometry.rowMajor(matrix_identity_float4x4),
+                           intrinsics: [[1, 0, 2], [0, 1, 3], [0, 0, 1]], sharpness: 12.5, segment: "az090_el20")],
+            anchor: [0, 0.1, 0], coverage_pct: 91, width: 1440, height: 1080, device: "iPhone", created_at: "2026-10-17T00:00:00Z")
+        let json = try JSONSerialization.jsonObject(with: CaptureJSON.encode(m)) as! [String: Any]
+        XCTAssertEqual(json["v"] as? Int, 3)
+        XCTAssertNil(json["deal_id"])  // optional fields are omitted, not null
+        XCTAssertEqual(Set(json.keys), ["v", "scan_id", "item_id", "batch_id", "kind", "frames", "anchor",
+                                        "coverage_pct", "width", "height", "device", "created_at"])
+        let frame = (json["frames"] as! [[String: Any]])[0]
+        XCTAssertNil(frame["sha256"])
+        XCTAssertEqual(frame["path"] as? String, "scans/s/f00007.jpg")
+    }
+
+    func testPoseRecordIsOneLine() throws {
+        let r = PoseRecord(frame: 0, t_ms: 0, pose_world: Geometry.rowMajor(matrix_identity_float4x4), pose: nil,
+                           intrinsics: [[1, 0, 0], [0, 1, 0], [0, 0, 1]], tracking: "normal", state: "handling",
+                           sharpness: 0, segment: nil, counted: false)
+        let line = String(decoding: try CaptureJSON.encode(r), as: UTF8.self)
+        XCTAssertFalse(line.contains("\n"))
+        XCTAssertFalse(line.contains("\"pose\""))  // absent while handling
+    }
+}

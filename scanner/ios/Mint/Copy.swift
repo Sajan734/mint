@@ -2,9 +2,16 @@ import CoverageKit
 
 /// User-facing words. Calm, short, plain language (CLAUDE.md §14.4, §15).
 enum Copy {
-    static let aim = "Tap the item to start."
+    static let aim = "Point at the item."
     static let finding = "Move the phone slowly so it can see the table."
+    static let findingTable = "Found it. Finding the table under it…"
+    static let saving = "Saving…"
     static let complete = "Coverage verified. Nothing hidden."
+
+    /// "Found it · 18 × 24 cm" (width × height).
+    static func found(_ e: ObjectEstimate) -> String {
+        String(format: "Found it · %.0f × %.0f cm", e.width * 100, e.height * 100)
+    }
 
     static func issue(_ issue: CaptureIssue) -> String {
         switch issue {
