@@ -103,6 +103,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
     ap.add_argument("--case", default="pots_i1_changed_small+medium")
     ap.add_argument("--listing", default="pots_missing_accessory")
+    ap.add_argument("--listing-file", type=Path, help="claims JSON (native or listing format)")
     ap.add_argument("--folders", nargs=2, metavar=("SELLER_DIR", "BUYER_DIR"))
     ap.add_argument("--name", default="mine")
     ap.add_argument("--list", action="store_true")
@@ -118,6 +119,11 @@ def main() -> None:
 
     settings = load_settings()
     stage_mock_claims(settings.data_root)
+    if args.listing_file:
+        shutil.copy(
+            args.listing_file, settings.data_root / "claims" / f"{args.listing_file.stem}.json"
+        )
+        args.listing = args.listing_file.stem
     if args.list:
         list_cases(settings.data_root)
         return

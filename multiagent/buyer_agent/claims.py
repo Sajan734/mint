@@ -15,6 +15,7 @@ from buyer_agent.config import Settings
 from buyer_agent.images import normalise_png
 from buyer_agent.jev_client import JevClient
 from buyer_agent.jev_prompts import CLAIM_VIEW_KEYS, claim_label, claim_question
+from buyer_agent.listing_adapter import parse_claims
 from buyer_agent.models import ClaimsFinding, ListingClaims, Verdict, ViewPair
 
 log = logging.getLogger(__name__)
@@ -47,7 +48,7 @@ class FileClaimsProvider:
             log.warning("no claims file for listing")
             return None
         try:
-            return ListingClaims.model_validate(json.loads(path.read_text(encoding="utf-8")))
+            return parse_claims(json.loads(path.read_text(encoding="utf-8")))
         except (OSError, ValueError, ValidationError):
             log.warning("invalid claims file for listing")
             return None
