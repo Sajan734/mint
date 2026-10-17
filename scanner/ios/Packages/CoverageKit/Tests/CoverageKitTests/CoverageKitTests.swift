@@ -622,3 +622,47 @@ extension PaperTrackerTests {
         XCTAssertEqual(f.long, knownLong, accuracy: 0.01)
     }
 }
+
+final class ItemOnPaperTests: XCTestCase {
+    /// A beige table, a tilted ruled sheet (lines run edge to edge), a dark item on it with a soft
+    /// shadow, a hand reaching onto the sheet's edge, and a knee in the corner of the frame.
+    func scene() -> ImageGrid {
+        let w = 160, h = 120
+        var luma = [UInt8](repeating: 180, count: w * h), chroma = [UInt8](repeating: 42, count: w * h)
+        let c = SIMD2<Float>(80, 55), a: Float = 0.35
+        let u = SIMD2<Float>(cos(a), sin(a)), v = SIMD2<Float>(-sin(a), cos(a))
+        for y in 0..<h {
+            for x in 0..<w {
+                let p = SIMD2<Float>(Float(x), Float(y)), d = p - c, i = y * w + x
+                let pu = simd_dot(d, u), pv = simd_dot(d, v)
+                if abs(pu) < 45 && abs(pv) < 34 {
+                    (luma[i], chroma[i]) = (232, 3)                                            // paper
+                    if Int(pv + 100) % 7 == 0 { (luma[i], chroma[i]) = (190, 30) }             // ruled line, edge to edge
+                }
+                if simd_length(d / SIMD2(14, 9)) < 1 { (luma[i], chroma[i]) = (35, 4) }       // the item
+                else if simd_length((d - SIMD2(3, 4)) / SIMD2(17, 12)) < 1, luma[i] > 200 { luma[i] = 160 }  // shadow
+                if simd_length(p - (c + u * 45)) < 9 { (luma[i], chroma[i]) = (150, 60) }    // hand on the sheet's edge
+                if simd_length(p - SIMD2(15, 110)) < 20 { (luma[i], chroma[i]) = (40, 8) }   // knee
+            }
+        }
+        return ImageGrid(width: w, height: h, luma: luma, chroma: chroma)
+    }
+
+    func testFindsTheItemNotTheHandLinesOrKnee() {
+        let g = scene()
+        let r = ItemOnPaper.segment(g)!
+        var sx = 0, sy = 0, n = 0
+        for y in 0..<g.height { for x in 0..<g.width where r.item[y * g.width + x] != 0 { sx += x; sy += y; n += 1 } }
+        XCTAssertEqual(Float(sx) / Float(n), 80, accuracy: 2.5, "item centre x")
+        XCTAssertEqual(Float(sy) / Float(n), 55, accuracy: 2.5, "item centre y")
+        // The item (π·14·9 ≈ 396 px) plus at most a little shadow; never the hand, lines or knee.
+        XCTAssertGreaterThan(n, 380)
+        XCTAssertLessThan(n, 700)
+        XCTAssertEqual(r.item[110 * g.width + 15], 0, "knee")
+    }
+
+    func testNoPaperNoAnswer() {
+        let g = ImageGrid(width: 40, height: 30, luma: .init(repeating: 180, count: 1200), chroma: .init(repeating: 42, count: 1200))
+        XCTAssertNil(ItemOnPaper.segment(g))
+    }
+}

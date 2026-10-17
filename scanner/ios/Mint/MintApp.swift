@@ -4,7 +4,7 @@ import SwiftUI
 struct MintApp: App {
     var body: some Scene {
         WindowGroup {
-            ScanView()
+            CaptureView()
                 .preferredColorScheme(.dark)
                 .statusBarHidden()
         }

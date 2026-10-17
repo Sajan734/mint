@@ -1,5 +1,7 @@
 # Scanner game plan (Role C, capture only)
 
+> **Current direction (Sat Oct 17):** we run the demos ourselves and the turntable method reliably gives a good scan, so the app's job is now just (1) **look great** for the ~25 s the judges watch and (2) **get the MP4 into Supabase**. All guidance/gating (distance, sharpness, coverage checkpoints, locking) was removed: live item outline (the item = what the sheet of paper encloses, `ItemOnPaper`; outlined the mouse in 114/114 sampled frames of the turntable recording where Vision's subject segmentation picked the paper, the hand or a knee) + holographic scan overlay, 3·2·1, a fixed 20 s two-lap recording with a segmented progress ring and %, auto-stop, upload with progress. The measurement work below (hull tracking, paper tracker) is kept in CoverageKit and documented, but the app doesn't use it.
+
 Scope: the **iOS capture app** plus the handoff to reconstruction (A). Stage view, demo player and seller key are Role C work too, but they come later (CLAUDE.md §11). Everything lives under `scanner/` until merge; at merge `scanner/ios/` → `ios/` (CLAUDE.md §12). What A receives is specified in [HANDOFF.md](HANDOFF.md).
 
 **Demo target:** a judge picks any item. Point the phone at it, it's found and sized automatically, tap Start, and in **≤ 20 s** you have full coverage by walking, turning the item by hand, or both. One scan, and it has to look good.

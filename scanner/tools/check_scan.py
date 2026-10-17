@@ -65,24 +65,28 @@ def main() -> int:
     scan = load_scan(args.scan)
     problems: list[str] = []
 
-    manifest = json.loads((scan / "manifest.json").read_text())
+    manifest_path = scan / "manifest.json"
+    manifest = json.loads(manifest_path.read_text()) if manifest_path.exists() else None
     capture = json.loads((scan / "capture.json").read_text())
     poses = [json.loads(line) for line in (scan / "poses.jsonl").read_text().splitlines() if line.strip()]
 
-    # 1. Schema
-    try:
-        import jsonschema
-        from referencing import Registry, Resource
+    # 1. Schema (older scans had a contract manifest with keyframes; current ones are video + poses)
+    if manifest is None:
+        print("manifest: none (video + poses scan)")
+    else:
+      try:
+          import jsonschema
+          from referencing import Registry, Resource
 
-        resources = [(p.name, Resource.from_contents(json.loads(p.read_text()))) for p in SCHEMA_DIR.glob("*.schema.json")]
-        registry = Registry().with_resources(resources + [(f"mint/{n}", r) for n, r in resources])
-        schema = json.loads((SCHEMA_DIR / "capture_manifest.schema.json").read_text())
-        errors = list(jsonschema.Draft202012Validator(schema, registry=registry).iter_errors(manifest))
-        for e in errors[:10]:
-            problems.append(f"manifest schema: {'/'.join(map(str, e.path))}: {e.message}")
-        print(f"schema: {'ok' if not errors else f'{len(errors)} errors'}")
-    except ImportError:
-        print("schema: skipped (pip install jsonschema)")
+          resources = [(p.name, Resource.from_contents(json.loads(p.read_text()))) for p in SCHEMA_DIR.glob("*.schema.json")]
+          registry = Registry().with_resources(resources + [(f"mint/{n}", r) for n, r in resources])
+          schema = json.loads((SCHEMA_DIR / "capture_manifest.schema.json").read_text())
+          errors = list(jsonschema.Draft202012Validator(schema, registry=registry).iter_errors(manifest))
+          for e in errors[:10]:
+              problems.append(f"manifest schema: {'/'.join(map(str, e.path))}: {e.message}")
+          print(f"schema: {'ok' if not errors else f'{len(errors)} errors'}")
+      except ImportError:
+          print("schema: skipped (pip install jsonschema)")
 
     # 2. Video ↔ poses
     cap = cv2.VideoCapture(str(scan / capture["video"]))
@@ -102,7 +106,7 @@ def main() -> int:
         problems.append("poses.jsonl frame numbers aren't 0..n-1 in order")
 
     # 3. Keyframes
-    for f in manifest["frames"]:
+    for f in (manifest or {"frames": []})["frames"]:
         p = scan / Path(f["path"]).name
         if not p.exists():
             problems.append(f"missing keyframe {p.name}")
@@ -113,10 +117,15 @@ def main() -> int:
         img = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR)
         if img.shape[1::-1] != (manifest["width"], manifest["height"]):
             problems.append(f"{p.name}: {img.shape[1]}x{img.shape[0]}, manifest says {manifest['width']}x{manifest['height']}")
-    print(f"keyframes: {len(manifest['frames'])}")
+    print(f"keyframes: {len(manifest['frames']) if manifest else 0}")
 
-    # 4. Projection of the item centre
-    centre = np.asarray(manifest["anchor"], dtype=np.float64)
+    # 4. Projection of the item centre (needs a centre: the manifest anchor, or --centre-from)
+    if manifest is None and not args.centre_from:
+        for p in problems[:30]:
+            print("PROBLEM:", p)
+        print("OK" if not problems else f"{len(problems)} problems")
+        return 0 if not problems else 1
+    centre = np.asarray(manifest["anchor"], dtype=np.float64) if manifest else np.zeros(3)
     if args.centre_from:
         centre = np.asarray(json.loads(args.centre_from.read_text())["centre"], dtype=np.float64)
         print(f"drawing centre from {args.centre_from.name}: {np.round(centre, 4).tolist()}")
@@ -128,16 +137,16 @@ def main() -> int:
         elif not (0 <= u < width and 0 <= v < height):
             problems.append(f"{label}: item centre projects outside the image at ({u:.0f}, {v:.0f})")
 
-    for f in manifest["frames"]:
+    for f in (manifest or {"frames": []})["frames"]:
         check(Path(f["path"]).name, f["pose"], f["intrinsics"], manifest["width"], manifest["height"])
     tracked = [p for p in poses if p.get("pose") is not None]
     for p in tracked:
         check(f"video frame {p['frame']}", p["pose"], p["intrinsics"], w, h)
-    print(f"projection: checked {len(manifest['frames'])} keyframes + {len(tracked)} video frames")
+    print(f"projection: checked {len(manifest['frames']) if manifest else 0} keyframes + {len(tracked)} video frames")
 
     if args.overlays:
         args.overlays.mkdir(parents=True, exist_ok=True)
-        for f in manifest["frames"][:: max(1, len(manifest["frames"]) // 6)]:
+        for f in (manifest or {"frames": []})["frames"][:: max(1, len((manifest or {"frames": []})["frames"]) // 6)]:
             img = cv2.imread(str(scan / Path(f["path"]).name))
             crosshair(img, *project(centre, f["pose"], f["intrinsics"])[:2])
             cv2.imwrite(str(args.overlays / f"kf_{Path(f['path']).stem}.jpg"), img)

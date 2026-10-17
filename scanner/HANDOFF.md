@@ -1,15 +1,16 @@
 # Scan handoff (scanner → gsplat)
 
-What the Mint scanner hands to reconstruction (Role A). One folder per scan, sent as `mint-{id}.zip` (AirDrop now; Supabase bucket `scans/{scan_id}/` later).
+What the Mint scanner hands to reconstruction (Role A): one folder per scan in Supabase Storage, **`scans/{scan_id}/`** (download: `python3 tools/fetch_scan.py latest`, see [supabase/README.md](supabase/README.md)). AirDrop zip as a fallback.
 
 ```
 {scan_id}/
-  video.mp4       960×720 H.264, ~30 fps (variable: real capture timestamps), no B-frames
+  video.mp4       960×720 H.264, 20 s at ~30 fps (real capture timestamps), no B-frames
   poses.jsonl     one JSON line per video frame, in order: line n = decoded frame n
-  f{nnnnn}.jpg    best sharp frame per dome segment, 1440×1080; nnnnn = the video frame it came from
-  manifest.json   contracts/capture_manifest.schema.json (v3): the keyframes
-  capture.json    session info: item centre/size in metres, table height, duration, coverage
+  capture.json    session info: device, duration, frame count, sizes, exposure lock
+  thumb.jpg       first frame, upright
 ```
+
+**How scans are taken (current app):** the item sits on a sheet of paper; the phone stays still; the paper is turned through two laps (lap 2 with the phone raised). The app records only; it doesn't track the turn, so `pose` = `pose_world` = the raw ARKit camera pose. **Relative to the item the camera orbits, but in ARKit's world the camera barely moves and the item turns**, so: mask the item (SAM 2) and get item-relative poses from VGGT on the masked frames, as in the hand-held-video fallback. ARKit poses still give metric scale and the (static) camera height. Older scans in `tools/` notes had manifests/keyframes; current ones don't.
 
 ## Conventions (CLAUDE.md §6.2, D2/D3)
 

@@ -6,8 +6,10 @@ The iOS app that captures a full-coverage scan of an item. The plan, decisions a
 scanner/
   ios/
     project.yml                  XcodeGen config → Mint.xcodeproj (generated, not committed)
-    Mint/                        the app: AR session, dome, HUD
-    Packages/CoverageKit/        pure logic (dome segments, sharpness, coverage, guidance) + unit tests
+    Mint/                        the app: camera, live outline + scan overlay, recorder, uploader
+    Packages/CoverageKit/        pure, unit-tested pieces (pose maths, file formats, fast sharpness, and the
+                                 measured-but-shelved tracking work: hull, paper tracker)
+  supabase/                      Edge Function (signed uploads) + bucket SQL + setup guide
 ```
 
 ## Run it on your iPhone
@@ -21,10 +23,10 @@ scanner/
 
 Tests: **⌘U** in Xcode (runs `CoverageKitTests`), or `cd ios/Packages/CoverageKit && swift test`.
 
-## Using it
+## Using it (the demo)
 
-Move the phone until the coaching overlay finds the table → **tap the item** → a dome of 24 tiles appears around it (pinch to resize). Walk around at two heights; tiles turn mint as sharp, steady frames land. The ring at the bottom is a top-down map (you're the white dot). Exposure, focus and white balance lock when you tap. It finishes by itself at 90% coverage.
+Put the item on a sheet of paper and point the phone at it: a glowing outline locks onto the item. Tap **Scan** → 3·2·1 → 20 s of recording: **lap 1** turn the paper slowly; at 10 s (haptic bump) **lap 2**, raise the phone and keep turning. It stops by itself, seals the capture, and uploads to Supabase with a live progress bar (setup: [supabase/README.md](supabase/README.md)). **Share** on the card AirDrops a zip as a fallback.
 
 ## Getting a scan off the phone
 
-When a scan finishes, tap **Send to teammate** (AirDrop the zip). Scans are also in **Files → On My iPhone → Mint**, and in Finder (phone plugged in → Files tab). Check one with `tools/check_scan.py` (see [HANDOFF.md](HANDOFF.md)).
+Supabase: `scans/{scan_id}/video.mp4` (+ `poses.jsonl`, `capture.json`, `thumb.jpg`), fetched with `tools/fetch_scan.py`. Scans are also in **Files → On My iPhone → Mint**. See [HANDOFF.md](HANDOFF.md) for the file formats.

@@ -125,9 +125,9 @@ public struct CaptureInfo: Codable, Equatable, Sendable {
     public var sensor_width: Int
     public var sensor_height: Int
     public var orientation: String            // "sensor_landscape": frames are NOT rotated to portrait
-    public var item: Item
-    public var coverage_pct: Int
-    public var segments_filled: [String]
+    public var item: Item?
+    public var coverage_pct: Int?
+    public var segments_filled: [String]?
     public var exposure_locked: Bool
     /// "turntable" (item on a sheet the user turned; `pose` = camera in the item's frame) or "walk".
     public var mode: String?
@@ -136,8 +136,8 @@ public struct CaptureInfo: Codable, Equatable, Sendable {
 
     public init(scan_id: String, device: String, os: String, created_at: String, duration_ms: Int,
                 video: String, video_width: Int, video_height: Int, video_frames: Int,
-                sensor_width: Int, sensor_height: Int, orientation: String, item: Item,
-                coverage_pct: Int, segments_filled: [String], exposure_locked: Bool,
+                sensor_width: Int, sensor_height: Int, orientation: String, item: Item? = nil,
+                coverage_pct: Int? = nil, segments_filled: [String]? = nil, exposure_locked: Bool,
                 mode: String? = nil, paper_m: [Double]? = nil) {
         self.scan_id = scan_id
         self.device = device
