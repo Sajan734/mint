@@ -468,3 +468,68 @@ final class VisualHullTests: XCTestCase {
         XCTAssertLessThan(hull.spreadDegrees, 10)  // the app waits for more spread before trusting it
     }
 }
+
+final class TurntableTests: XCTestCase {
+    /// Corners of a Letter sheet (27.9 × 21.6 cm) centred at `c`, long edges at `yaw`, slightly shuffled.
+    private func sheet(_ c: SIMD3<Float>, yaw: Float, noise: Float = 0) -> [SIMD3<Float>] {
+        let l = SIMD3<Float>(sin(yaw), 0, cos(yaw)), s = SIMD3<Float>(cos(yaw), 0, -sin(yaw))
+        let pts = [c + l * 0.1395 + s * 0.108, c - l * 0.1395 + s * 0.108, c - l * 0.1395 - s * 0.108, c + l * 0.1395 - s * 0.108]
+        return [pts[2], pts[0], pts[3], pts[1]].enumerated().map { i, p in p + SIMD3(noise * Float(i % 2 == 0 ? 1 : -1), 0, noise) }
+    }
+
+    func testPoseFromCorners() {
+        for deg: Float in [0, 17, 45, 89, 91, 135, 179] {
+            let yaw = deg * .pi / 180
+            let p = Turntable.pose(corners: sheet([0.3, -0.17, 0.1], yaw: yaw))!
+            XCTAssertEqual(p.centre.x, 0.3, accuracy: 1e-4)
+            XCTAssertEqual(p.centre.z, 0.1, accuracy: 1e-4)
+            XCTAssertEqual(p.long, 0.279, accuracy: 1e-3)
+            XCTAssertEqual(p.short, 0.216, accuracy: 1e-3)
+            let d = abs(Turntable.unwrap(p.yaw, near: yaw) - yaw)
+            XCTAssertLessThan(d, 1e-3, "yaw \(deg)°")
+        }
+    }
+
+    func testCornerNoiseCostsUnderADegree() {
+        // 3 mm of corner error (a few pixels at arm's length) on a sheet.
+        let p = Turntable.pose(corners: sheet([0, 0, 0], yaw: 0.6, noise: 0.003))!
+        XCTAssertLessThan(abs(Turntable.unwrap(p.yaw, near: 0.6) - 0.6) * 180 / .pi, 1.0)
+    }
+
+    func testRejectsNonSheets() {
+        // A square (90° ambiguous), a trapezoid, and three points.
+        let sq: [SIMD3<Float>] = [[0, 0, 0], [0.2, 0, 0], [0.2, 0, 0.2], [0, 0, 0.2]]
+        let trap: [SIMD3<Float>] = [[0, 0, 0], [0.3, 0, 0], [0.25, 0, 0.2], [0.05, 0, 0.2]]
+        XCTAssertNil(Turntable.pose(corners: sq))
+        XCTAssertNil(Turntable.pose(corners: trap))
+        XCTAssertNil(Turntable.pose(corners: Array(sq.prefix(3))))
+    }
+
+    func testUnwrapFollowsAFullTurn() {
+        // Reads every 20° over two full turns; raw yaw is only known mod π.
+        var cont: Float = 0.3
+        for step in 1...36 {
+            let truth = 0.3 + Float(step) * 20 * .pi / 180
+            var raw = truth.truncatingRemainder(dividingBy: .pi)
+            if raw < 0 { raw += .pi }
+            cont = Turntable.unwrap(raw, near: cont)
+            XCTAssertEqual(cont, truth, accuracy: 1e-4)
+        }
+    }
+
+    func testCameraInItemFrame() {
+        // Item turned 90° and slid 5 cm. A camera that hasn't moved now sees the item from 90° round.
+        let start = PaperPose(centre: [0, 0, 0], yaw: 0, long: 0.28, short: 0.22)
+        let now = PaperPose(centre: [0.05, 0, 0], yaw: .pi / 2, long: 0.28, short: 0.22)
+        let m = Turntable.motion(from: start, startYaw: 0, to: now, nowYaw: .pi / 2)
+        // A point on the item that started 10 cm along +Z is now 10 cm along +X from the new centre.
+        let moved = m * SIMD4<Float>(0, 0, 0.1, 1)
+        XCTAssertEqual(moved.x, 0.15, accuracy: 1e-5)
+        XCTAssertEqual(moved.z, 0, accuracy: 1e-5)
+        var cam = matrix_identity_float4x4
+        cam.columns.3 = [0.05, 0.3, 0.4, 1]  // above and in front (+Z) of the item's new spot
+        let inItem = Turntable.cameraInItemFrame(camera: cam, itemMotion: m)
+        let p = Dome.position(camera: inItem.translation, anchor: .zero)
+        XCTAssertEqual(p.azimuthDeg, 270, accuracy: 0.01)  // the item's −X side faces the camera now
+    }
+}
