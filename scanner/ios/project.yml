@@ -1,0 +1,66 @@
+# Generate the Xcode project with:  cd scanner/ios && xcodegen
+# (Mint.xcodeproj is generated, not committed. Re-run xcodegen after adding or removing files.)
+name: Mint
+options:
+  bundleIdPrefix: ca.htv11.mint
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+packages:
+  CoverageKit:
+    path: Packages/CoverageKit
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  Mint:
+    type: application
+    platform: iOS
+    sources:
+      - path: Mint
+    dependencies:
+      - package: CoverageKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: ca.htv11.mint.scanner
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: F977S4Y87X  # personal team; survives xcodegen regenerating the project
+        # e.g. https://<project-ref>.supabase.co/functions/v1/scan-upload (empty = save + share only)
+        MINT_UPLOAD_URL: "https://jpanyhsifoxxiizkgjno.supabase.co/functions/v1/scan-upload"
+        # The dashboard hand-off (scanner/supabase/functions/scan-session, see scanner/DASHBOARD.md)
+        MINT_SESSION_URL: "https://jpanyhsifoxxiizkgjno.supabase.co/functions/v1/scan-session"
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+    info:
+      path: Mint/Info.plist
+      properties:
+        CFBundleDisplayName: Mint
+        NSCameraUsageDescription: Mint uses the camera to scan your item in 3D.
+        UIRequiredDeviceCapabilities: [arkit]
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        # Scans show up in Files → On My iPhone → Mint, and in Finder when the phone is plugged in.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        # Supabase Edge Function that hands out signed upload URLs (see scanner/supabase/README.md).
+        MintUploadURL: $(MINT_UPLOAD_URL)
+        MintSessionURL: $(MINT_SESSION_URL)
+        # mint://scan?id=<uuid> (sell an item) and mint://verify?id=<uuid>&listing=<uuid> (a buyer checking it):
+        # the website's QR codes open the scanner for that id (scanner/DASHBOARD.md). mintscan:// = older alias.
+        CFBundleURLTypes:
+          - CFBundleURLName: ca.htv11.mint.scanner
+            CFBundleURLSchemes: [mint, mintscan]
+schemes:
+  Mint:
+    build:
+      targets:
+        Mint: all
+    run:
+      config: Release   # ⌘R builds optimised: the capture loop needs it for a steady 30 fps
+    test:
+      targets:
+        - package: CoverageKit/CoverageKitTests
