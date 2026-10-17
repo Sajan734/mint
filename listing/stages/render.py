@@ -1,24 +1,27 @@
 """render: splat -> 12 labelled square views on a neutral grey background, plus a contact sheet.
 
-Fixture items that have stubs/render.json stay offline. Otherwise the splat is rendered locally with
-splat_render (CUDA if available). Views go to runs/<item>/views/, the contact sheet to
-runs/<item>/contact_sheet.png for checking the render by eye.
+Fixture items that have stubs/render.json stay offline. Otherwise splat_render runs on the backend named by
+RENDER_BACKEND in .env: "modal" (default; the deployed app in modal_render.py, on a GPU) or "local" (this
+machine, CUDA if available). Either way the PNGs come back here, and views go to runs/<item>/views/, the
+contact sheet to runs/<item>/contact_sheet.png for checking the render by eye.
 """
 
 from __future__ import annotations
 
 import asyncio
-import io
+import os
 from pathlib import Path
 
+from dotenv import load_dotenv
 from PIL import Image as PILImage, ImageDraw, ImageFont
 
-import splat_render
 from contracts import RunContext, View, Views
 from images import fit_for_jev
 from stages._fixture import has_stub, load_stub
 
 LISTING_ROOT = Path(__file__).resolve().parent.parent
+
+BACKENDS = ("modal", "local")  # the first is the default
 
 RENDER = {
     "size_px": 1024,
@@ -37,6 +40,10 @@ AZIMUTH_NAMES = {
 SHEET = {"columns": 4, "thumb_px": 320, "label_px": 34, "font_px": 18, "background_rgb": (32, 32, 32)}
 
 
+class RenderBackendError(RuntimeError):
+    pass
+
+
 def view_label(azimuth: int, elevation: int) -> str:
     return f"{AZIMUTH_NAMES[azimuth]}, {elevation}° above"
 
@@ -48,31 +55,52 @@ def _relative(path: Path) -> str:
         return str(path)
 
 
-def _png_bytes(pixels) -> bytes:
-    buf = io.BytesIO()
-    PILImage.fromarray(pixels).save(buf, format="PNG")
-    return buf.getvalue()
+def render_backend() -> str:
+    load_dotenv(LISTING_ROOT / ".env")
+    backend = os.environ.get("RENDER_BACKEND", "").strip() or BACKENDS[0]
+    if backend not in BACKENDS:
+        raise RenderBackendError(f"RENDER_BACKEND must be one of {', '.join(BACKENDS)}, got {backend!r}")
+    return backend
+
+
+def render_on_modal(*args) -> list[bytes]:
+    import modal
+
+    from modal_render import APP_NAME, FUNCTION_NAME
+
+    try:
+        return modal.Function.from_name(APP_NAME, FUNCTION_NAME).remote(*args)
+    except modal.exception.AuthError as e:
+        raise RenderBackendError("not logged in to Modal: run `modal setup`, or set RENDER_BACKEND=local") from e
+    except modal.exception.NotFoundError as e:
+        raise RenderBackendError(
+            f"Modal app {APP_NAME} isn't deployed: run `modal deploy modal_render.py` from listing/"
+        ) from e
+
+
+def render_pngs(ply: bytes, up_axis: str, angles: list[tuple[int, int]]) -> list[bytes]:
+    args = (ply, up_axis, angles, RENDER["size_px"], RENDER["background_rgb"])
+    if render_backend() == "local":
+        import splat_render
+
+        return splat_render.render_pngs(*args)
+    return render_on_modal(*args)
 
 
 def render_views(splat_path: Path, item_id: str, up_axis: str, out_dir: Path) -> Views:
     if not splat_path.is_file():
         raise FileNotFoundError(f"no splat at {splat_path}; pass the item folder (with splat.ply) or the .ply itself")
-    device = splat_render.default_device()
-    splat = splat_render.load_ply(splat_path, device)
-    framing = splat_render.robust_framing(splat)
-    splat = splat_render.crop_floaters(splat, framing)
+    angles = [(azimuth, elevation) for elevation, azimuths in RENDER["rings"] for azimuth in azimuths]
+    pngs = render_pngs(splat_path.read_bytes(), up_axis, angles)
     out_dir.mkdir(parents=True, exist_ok=True)
 
     views = []
-    for elevation, azimuths in RENDER["rings"]:
-        for azimuth in azimuths:
-            view_id = f"v{len(views):02d}"
-            camera = splat_render.orbit_camera(framing, up_axis, azimuth, elevation)
-            pixels = splat_render.render(splat, camera, RENDER["size_px"], RENDER["background_rgb"])
-            path = out_dir / f"{view_id}.png"
-            path.write_bytes(fit_for_jev(_png_bytes(pixels)).data)  # checks Jev's limits; unchanged at 1024 px
-            views.append(View(view_id=view_id, label=view_label(azimuth, elevation), azimuth_deg=azimuth,
-                              elevation_deg=elevation, image_path=_relative(path)))
+    for i, ((azimuth, elevation), png) in enumerate(zip(angles, pngs, strict=True)):
+        view_id = f"v{i:02d}"
+        path = out_dir / f"{view_id}.png"
+        path.write_bytes(fit_for_jev(png).data)  # checks Jev's limits; unchanged at 1024 px
+        views.append(View(view_id=view_id, label=view_label(azimuth, elevation), azimuth_deg=azimuth,
+                          elevation_deg=elevation, image_path=_relative(path)))
     return Views(item_id=item_id, views=views)
 
 

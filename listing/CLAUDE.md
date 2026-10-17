@@ -9,7 +9,7 @@ Output: a `Listing`, or a `Rejection` if the scan doesn't match the looked-up pr
 
 Stages, in order:
 
-1. `render`: splat -> 12 PNG views (8 around at 10 degrees, 4 at 40 degrees), 1024x1024, mid-grey background. Rendered locally in plain PyTorch by `splat_render.py` (CUDA if available), which imports nothing from the pipeline so a Modal job can reuse it. Up axis per item via `input.json` `up_axis` or `--up-axis` (default `+y`). Writes `runs/<item>/contact_sheet.png` for checking by eye; `scripts/try_render.py` renders without any API calls.
+1. `render`: splat -> 12 PNG views (8 around at 10 degrees, 4 at 40 degrees), 1024x1024, mid-grey background. Rendered in plain PyTorch by `splat_render.py`, which imports nothing from the pipeline. `RENDER_BACKEND` in `.env` picks where: `modal` (default; the deployed `modal_render.py` app on an L4, .ply up as bytes, PNGs back as bytes, no warm containers) or `local` (this machine, CUDA if available). Up axis per item via `input.json` `up_axis` or `--up-axis` (default `+y`). Writes `runs/<item>/contact_sheet.png` for checking by eye; `scripts/try_render.py` renders without any Gemini or Jev calls.
 2. `identify`: views -> `Identity` (Gemini)
 3. `baseline_lookup`: seller's name or `Identity.search_query` -> `Baseline` (one clean product photo)
 4. `match_gate`: views + baseline -> `MatchCheck` (Jev). On mismatch, return a `Rejection` and stop.
@@ -29,6 +29,7 @@ listing/
   stages/            # one file per stage, named as above
   cache.py           # cached stage outputs keyed by item id + stage
   splat_render.py    # 3DGS .ply loading, floater-robust framing, PyTorch rasterizer
+  modal_render.py    # Modal app wrapping splat_render on a GPU (RENDER_BACKEND=modal)
   images.py          # fit images to Jev's limits
   samples/           # local sample splats (gitignored, never commit)
   fixtures/          # one folder per test item: views, baseline, expected JSON
@@ -42,6 +43,7 @@ listing/
 ```powershell
 .venv\Scripts\Activate.ps1
 pip install -r requirements.txt
+modal deploy modal_render.py          # after any change to splat_render.py or modal_render.py
 python pipeline.py fixtures/item01    # must print a valid Listing
 python pipeline.py fixtures/item02    # must print a Rejection
 python -m pytest
@@ -65,7 +67,7 @@ Run the two pipeline checks and the tests after every change. They must still pa
 
 ## Keys and secrets
 
-- Keys come from `listing/.env` via `python-dotenv`: `TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY` (image search for `baseline_lookup`).
+- Keys come from `listing/.env` via `python-dotenv`: `TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY` (image search for `baseline_lookup`). Also `RENDER_BACKEND` (`modal` or `local`, not a secret). Modal itself uses the login from `modal setup`, not a key in `.env`.
 - Fail early with a clear message if a key is missing.
 - Never print, log, commit or hardcode a key. Never put a key in a fixture or in `runs/`.
 

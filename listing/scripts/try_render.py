@@ -1,7 +1,8 @@
-"""Render a splat's 12 views and contact sheet only (no API calls), e.g. to find the right up axis.
+"""Render a splat's 12 views and contact sheet only (no Gemini or Jev calls), e.g. to find the right up axis.
 
     python scripts/try_render.py samples/splat.ply [--up-axis -y]
 
+Renders on Modal or locally, per RENDER_BACKEND (see stages/render.py).
 Output: runs/try_render/<splat name>/views/*.png and contact_sheet.png.
 """
 
@@ -16,7 +17,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 import splat_render  # noqa: E402
-from stages.render import contact_sheet, render_views  # noqa: E402
+from stages.render import RenderBackendError, contact_sheet, render_backend, render_views  # noqa: E402
 
 
 def main() -> int:
@@ -26,11 +27,11 @@ def main() -> int:
     args = parser.parse_args()
 
     out_dir = ROOT / "runs" / "try_render" / args.splat.stem
-    print(f"device: {splat_render.default_device()}")
     start = time.perf_counter()
     try:
+        print(f"backend: {render_backend()}")
         views = render_views(args.splat, args.splat.stem, args.up_axis, out_dir / "views")
-    except (splat_render.SplatError, FileNotFoundError) as e:
+    except (splat_render.SplatError, FileNotFoundError, RenderBackendError) as e:
         print(e, file=sys.stderr)
         return 1
     sheet = out_dir / "contact_sheet.png"

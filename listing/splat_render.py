@@ -1,17 +1,18 @@
 """Render a trained 3D Gaussian splat (standard 3DGS .ply) from any orbit camera, in plain PyTorch.
 
-Standalone on purpose: it imports nothing from the listing pipeline, so a Modal job can call it as is.
-Runs on CUDA when available, otherwise on the CPU (much slower). Colours use the SH DC term only.
+Standalone on purpose: it imports nothing from the listing pipeline, so the Modal app (modal_render.py) runs it
+as is. Runs on CUDA when available, otherwise on the CPU (much slower). Colours use the SH DC term only.
 """
 
 from __future__ import annotations
 
+import io
 import math
 from dataclasses import dataclass
-from pathlib import Path
 
 import numpy as np
 import torch
+from PIL import Image as PILImage
 
 SH_C0 = 0.28209479177387814  # degree-0 spherical-harmonic constant
 
@@ -78,34 +79,33 @@ REQUIRED_FIELDS = ["x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2", "opacity",
                    "scale_0", "scale_1", "scale_2", "rot_0", "rot_1", "rot_2", "rot_3"]
 
 
-def _read_header(data: bytes, path: Path) -> tuple[int, list[str], int]:
+def _read_header(data: bytes) -> tuple[int, list[str], int]:
     """Returns (vertex count, float property names, header length in bytes)."""
     end = data.find(b"end_header\n")
     if not data.startswith(b"ply") or end < 0:
-        raise SplatError(f"{path} is not a PLY file")
+        raise SplatError("the splat is not a PLY file")
     lines = data[:end].decode("ascii", errors="replace").splitlines()
     if "format binary_little_endian 1.0" not in lines:
-        raise SplatError(f"{path}: only binary little-endian PLY is supported (export it from the trainer as such)")
+        raise SplatError("only binary little-endian PLY is supported (export the splat from the trainer as such)")
     count, names = 0, []
     for line in lines:
         parts = line.split()
         if parts[:2] == ["element", "vertex"]:
             count = int(parts[2])
         elif parts[:1] == ["element"]:
-            raise SplatError(f"{path}: unexpected element {parts[1]!r}; expected a Gaussian splat with vertices only")
+            raise SplatError(f"unexpected PLY element {parts[1]!r}; expected a Gaussian splat with vertices only")
         elif parts[:1] == ["property"]:
             if parts[1] != "float":
-                raise SplatError(f"{path}: property {parts[-1]!r} is {parts[1]}, expected float")
+                raise SplatError(f"PLY property {parts[-1]!r} is {parts[1]}, expected float")
             names.append(parts[2])
     missing = [f for f in REQUIRED_FIELDS if f not in names]
     if missing:
-        raise SplatError(f"{path} is not a 3DGS splat: missing {', '.join(missing)}")
+        raise SplatError(f"the PLY is not a 3DGS splat: missing {', '.join(missing)}")
     return count, names, end + len(b"end_header\n")
 
 
-def load_ply(path: Path, device: torch.device) -> Splat:
-    data = Path(path).read_bytes()
-    count, names, offset = _read_header(data, Path(path))
+def parse_ply(data: bytes, device: torch.device) -> Splat:
+    count, names, offset = _read_header(data)
     rows = np.frombuffer(data, dtype=np.dtype([(n, "<f4") for n in names]), count=count, offset=offset)
 
     def cols(*fields: str) -> torch.Tensor:
@@ -266,3 +266,24 @@ def render(splat: Splat, camera: Camera, size: int, background_rgb: tuple[int, i
             pixels = _composite_tile(tile_g, gx.reshape(-1), gy.reshape(-1), background)
             image[j * tile:(j + 1) * tile, i * tile:(i + 1) * tile] = pixels.reshape(tile, tile, 3)
     return (image.clamp(0, 1) * 255 + 0.5).to(torch.uint8).cpu().numpy()
+
+
+# --- whole job --------------------------------------------------------------------------------
+
+
+def _png_bytes(pixels: np.ndarray) -> bytes:
+    buf = io.BytesIO()
+    PILImage.fromarray(pixels).save(buf, format="PNG")
+    return buf.getvalue()
+
+
+def render_pngs(ply: bytes, up_axis: str, angles: list[tuple[float, float]], size: int,
+                background_rgb: tuple[int, int, int]) -> list[bytes]:
+    """Renders one PNG per (azimuth_deg, elevation_deg), framed on the splat's solid part with floaters cropped."""
+    splat = parse_ply(ply, default_device())
+    framing = robust_framing(splat)
+    splat = crop_floaters(splat, framing)
+    return [
+        _png_bytes(render(splat, orbit_camera(framing, up_axis, azimuth, elevation), size, background_rgb))
+        for azimuth, elevation in angles
+    ]
