@@ -1,0 +1,265 @@
+{
+  "scan_id": "076973e2-13b5-4243-8d66-54ab64ed1e9b",
+  "client_timings": {
+    "upload_mb": 42.8,
+    "uploaded_s": 7.03,
+    "splat_published_s": 65.94,
+    "listing_published_s": 84.94
+  },
+  "website_path": "/listing/076973e2-13b5-4243-8d66-54ab64ed1e9b",
+  "manifest": {
+    "v": 3,
+    "scan_id": "076973e2-13b5-4243-8d66-54ab64ed1e9b",
+    "batch_id": "076973e2-13b5-4243-8d66-54ab64ed1e9b",
+    "inputs": [
+      "scans/076973e2-13b5-4243-8d66-54ab64ed1e9b/video.mp4",
+      "scans/076973e2-13b5-4243-8d66-54ab64ed1e9b/bottom.mp4"
+    ],
+    "splat_path": "assets/splats/076973e2-13b5-4243-8d66-54ab64ed1e9b.spz",
+    "splat_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/splats/076973e2-13b5-4243-8d66-54ab64ed1e9b.spz",
+    "views_json_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/views.json",
+    "views": {
+      "layout": "cube_corners",
+      "includes_bottom": true,
+      "items": [
+        {
+          "name": "00_az045_el+35",
+          "azimuth_deg": 45,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/00_az045_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/00_az045_el+35_grey.png"
+        },
+        {
+          "name": "01_az135_el+35",
+          "azimuth_deg": 135,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/01_az135_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/01_az135_el+35_grey.png"
+        },
+        {
+          "name": "02_az225_el+35",
+          "azimuth_deg": 225,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/02_az225_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/02_az225_el+35_grey.png"
+        },
+        {
+          "name": "03_az315_el+35",
+          "azimuth_deg": 315,
+          "elevation_deg": 35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/03_az315_el+35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/03_az315_el+35_grey.png"
+        },
+        {
+          "name": "04_az045_el-35",
+          "azimuth_deg": 45,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/04_az045_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/04_az045_el-35_grey.png"
+        },
+        {
+          "name": "05_az135_el-35",
+          "azimuth_deg": 135,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/05_az135_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/05_az135_el-35_grey.png"
+        },
+        {
+          "name": "06_az225_el-35",
+          "azimuth_deg": 225,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/06_az225_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/06_az225_el-35_grey.png"
+        },
+        {
+          "name": "07_az315_el-35",
+          "azimuth_deg": 315,
+          "elevation_deg": -35.26,
+          "transparent_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/07_az315_el-35.png",
+          "grey_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/07_az315_el-35_grey.png"
+        }
+      ]
+    },
+    "spin_urls": [
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f00.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f01.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f02.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f03.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f04.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f05.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f06.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f07.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f08.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f09.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f10.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f11.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f12.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f13.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f14.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f15.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f16.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f17.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f18.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f19.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f20.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f21.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f22.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f23.webp"
+    ],
+    "metric_scale": null,
+    "frame": "scan frame: +Y up, +X along the object's long axis, origin under the object, right-handed (SPZ's RUB)",
+    "gaussians": 143450,
+    "sizes_mb": {
+      "splat.spz": 2.7
+    },
+    "stage_timings_ms": {
+      "1_frames": 1870,
+      "2_masks_top": 2210,
+      "3_poses_top": 3740,
+      "2_masks_bottom": 1580,
+      "3_poses_bottom": 3410,
+      "3b_register": 1960,
+      "4_train": 16590,
+      "5_clean_export": 720,
+      "6_views": 1370,
+      "total": 33450
+    },
+    "register": {
+      "scale_b_to_a": 1.1489,
+      "start_yaw_deg": 30,
+      "coarse_loss_px": 0.0567,
+      "best_distinct_alternative_px": 0.1514,
+      "fine_loss_px": 0.0487,
+      "up_dot": -0.985,
+      "outside_frac_bottom_in_top": 0.008,
+      "outside_frac_top_in_bottom": 0.001,
+      "outside_frac_top_in_top_baseline": 0.007,
+      "outside_px_bottom_in_top": 0.2,
+      "outside_px_top_in_bottom": 0.0
+    },
+    "io": {
+      "download_s": 1.01,
+      "download_mb": 42.8,
+      "rotate_cw": [
+        0,
+        0
+      ],
+      "upload_s": 2.35,
+      "upload_mb": 7.85
+    }
+  },
+  "listing": {
+    "v": 3,
+    "scan_id": "076973e2-13b5-4243-8d66-54ab64ed1e9b",
+    "batch_id": "076973e2-13b5-4243-8d66-54ab64ed1e9b",
+    "splat_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/splats/076973e2-13b5-4243-8d66-54ab64ed1e9b.spz",
+    "spin_urls": [
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f00.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f01.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f02.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f03.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f04.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f05.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f06.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f07.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f08.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f09.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f10.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f11.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f12.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f13.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f14.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f15.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f16.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f17.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f18.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f19.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f20.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f21.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f22.webp",
+      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f23.webp"
+    ],
+    "created_at": "2026-10-17T16:57:58Z",
+    "timings_ms": {
+      "listing_pipeline": 16688
+    },
+    "status": "listed",
+    "market_listing": {
+      "listing": {
+        "item_id": "076973e2-13b5-4243-8d66-54ab64ed1e9b",
+        "title": "ThinkPad computer mouse (black)",
+        "description": "ThinkPad computer mouse in black.",
+        "attributes": {
+          "brand": "ThinkPad",
+          "type": "computer mouse",
+          "colour": "black",
+          "accent_colour": "red"
+        },
+        "tags": [
+          "computer mouse",
+          "thinkpad",
+          "black"
+        ],
+        "condition_grade": "light_wear",
+        "condition_notes": [
+          "No defects stood out in any view."
+        ],
+        "price_cad": 15,
+        "price_justification": [
+          "Our rough estimate of the new price is about $25.00; x 0.65 for light wear gives $16.25, rounded to $15."
+        ],
+        "preview_images": [
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/076973e2-13b5-4243-8d66-54ab64ed1e9b/v00.png",
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/076973e2-13b5-4243-8d66-54ab64ed1e9b/v02.png",
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/076973e2-13b5-4243-8d66-54ab64ed1e9b/v04.png",
+          "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/listings/076973e2-13b5-4243-8d66-54ab64ed1e9b/v06.png"
+        ],
+        "viewer_url": null,
+        "needs_seller_check": true,
+        "seller_check_reasons": [
+          "We couldn't find a reference photo for ThinkPad black computer mouse, so we couldn't check the scan matches it. Add the exact product name, or check the listing before publishing.",
+          "We found no reference photo of this product, so condition was judged from the scan alone.",
+          "Condition needs a quick check before publishing."
+        ]
+      },
+      "seller_id": "sel_raj",
+      "garage_sale_id": "gs_agincourt_tech",
+      "category": "electronics",
+      "location": {
+        "neighbourhood": "Agincourt",
+        "city": "Toronto"
+      },
+      "reference_price_cad": 15,
+      "frames": [
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f00.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f01.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f02.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f03.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f04.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f05.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f06.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f07.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f08.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f09.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f10.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f11.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f12.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f13.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f14.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f15.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f16.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f17.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f18.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f19.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f20.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f21.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f22.webp",
+        "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/views/076973e2-13b5-4243-8d66-54ab64ed1e9b/spin/f23.webp"
+      ],
+      "splat_url": "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/splats/076973e2-13b5-4243-8d66-54ab64ed1e9b.spz",
+      "usable_view_count": 9,
+      "listed_at": "2026-10-17T16:58:15Z",
+      "status": "available"
+    }
+  }
+}
