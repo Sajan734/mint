@@ -61,6 +61,7 @@ test("meetup reserve lands on order page and appears in /orders", async ({ page 
   await dlg.getByRole("radio").first().check();
   await dlg.getByRole("button", { name: "Continue" }).click();
   await dlg.getByRole("button", { name: /^Reserve for/ }).click();
+  await dlg.getByRole("button", { name: "View order" }).click();
   await expect(page).toHaveURL(/\/orders\/[^/]+$/);
   const url = page.url();
   await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
@@ -85,6 +86,7 @@ test("shipping order validates address then succeeds; advance reaches verify; re
   await dlg.getByLabel("Postal code").fill("M2N 4Y5");
   await dlg.getByRole("button", { name: "Continue" }).click();
   await dlg.getByRole("button", { name: /and reserve$/ }).click();
+  await dlg.getByRole("button", { name: "View order" }).click();
   await expect(page).toHaveURL(/\/orders\/[^/]+$/);
 
   const adv = page.getByRole("button", { name: /^Advance/ });

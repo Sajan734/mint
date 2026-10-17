@@ -20,25 +20,29 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
     .sort((a, b) => b.ends_at.localeCompare(a.ends_at));
   const items = (await getListings()).filter((m) => m.seller_id === id && m.status === "available");
   return (
-    <div className="flex flex-col gap-8 py-6">
-      <h1 className="sr-only">{seller.name}</h1>
-      <SellerCard seller={seller} />
-      <p className="text-sm text-ink-2">Member since {seller.member_since}</p>
+    <div className="flex flex-col gap-10 py-8 md:py-12">
+      <header className="flex flex-col gap-3">
+        <h1 className="text-[length:var(--t-2xl)] font-bold md:text-[length:var(--t-3xl)]">{seller.name}</h1>
+        <p className="text-sm text-ink-2">Member since {seller.member_since}</p>
+        <div className="max-w-[480px]"><SellerCard seller={seller} /></div>
+      </header>
       <section aria-labelledby="sales">
-        <h2 id="sales" className="mb-3 text-xl font-bold">Garage sales</h2>
+        <h2 id="sales" className="mb-4 text-[length:var(--t-xl)] font-bold">Garage sales</h2>
         {sales.length ? (
           <ul className="flex list-none flex-col gap-2 p-0">
             {sales.map((s) => (
               <li key={s.id}>
-                <Link href={`/sale/${s.id}`} className="text-mint-ink hover:underline">{s.name}</Link>
-                <span className="text-sm text-ink-2"> · {s.location.neighbourhood}</span>
+                <Link href={`/sale/${s.id}`} className="flex min-h-12 items-center justify-between gap-3 rounded-md border border-line bg-surface px-4 hover:border-ink-2">
+                  <span className="font-semibold">{s.name}</span>
+                  <span className="text-sm text-ink-2">{s.location.neighbourhood}</span>
+                </Link>
               </li>
             ))}
           </ul>
-        ) : <p className="text-ink-2">No sales yet.</p>}
+        ) : <p className="rounded-md border border-dashed border-line p-4 text-ink-2">No sales yet.</p>}
       </section>
       <section aria-labelledby="avail">
-        <h2 id="avail" className="mb-3 text-xl font-bold">Available now</h2>
+        <h2 id="avail" className="mb-4 text-[length:var(--t-xl)] font-bold">Available now</h2>
         {items.length ? (
           <ListingGrid label={`Listings by ${seller.name}`}>
             {items.map((m) => {
@@ -49,7 +53,7 @@ export default async function SellerPage({ params }: { params: Promise<{ id: str
               ) : null;
             })}
           </ListingGrid>
-        ) : <p className="text-ink-2">Nothing available right now.</p>}
+        ) : <p className="rounded-md border border-dashed border-line p-4 text-ink-2">Nothing available right now. Check back after their next sale.</p>}
       </section>
     </div>
   );
