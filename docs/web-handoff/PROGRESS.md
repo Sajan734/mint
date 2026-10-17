@@ -46,3 +46,18 @@ clean except the old warning in `buyer/components/FilterBar.tsx`.
   `pnpm build` (Turbopack) fails on this machine inside `next/font/google` ("queries have exactly one entry"),
   before and after these changes; `next build --webpack` builds but has no Tailwind (no PostCSS config).
 - Tests: buyer 187 (1 skipped), seller 91.
+
+## D. End-to-end test of the demo walk-through
+
+- `buyer/e2e-demo/walkthrough.spec.ts`, run with `cd buyer && pnpm test:e2e:demo` (`playwright.demo.config.ts`). It
+  runs on `http://localhost:3000` with both dev servers (reuses running ones, else starts `pnpm dev` in both apps),
+  at 1280 and at 390 wide: landing -> Sell an item -> New listing (QR shown) -> Skip to result -> editor holds the
+  real ThinkPad listing -> price 17 -> Publish -> the card is in "Just listed" at $17 -> open it -> Contact seller
+  (demo email shown, Escape closes) -> Scan -> Skip to result (says the recorded check is from another item) -> drag
+  the before/after slider (value drops) -> ArrowRight moves it by 1. Fails on any page error.
+- The existing `pnpm test:e2e` (buyer only, `next build` on :3107) is unchanged; its build fails on this machine (see C).
+- Bug it found: **New listing** and **Scan** were `next/link`s to route handlers that redirect; the client router
+  sometimes dropped the click (no request at all). They are plain `<a>` now.
+- Dev compiles a route on its first visit, so the demo config gives `expect` 30 s. The first run right after editing
+  files can still fail while the dev servers rebuild; rerun. Result: 10 of 10 runs pass (desktop and phone) after that.
+- Tests: buyer 187 (1 skipped), seller 91, e2e demo 2.

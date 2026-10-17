@@ -1,5 +1,5 @@
 "use client";
-import Link from "next/link";
+import { NEW_SCAN_HREF } from "@/lib/scan";
 import ListingRow, { buildRows, countByStatus, STATUS_WORD, type RowStatus } from "@/components/ListingRow";
 import { useLocalListings } from "@/lib/local-listings";
 import { useMockMode } from "@/lib/mock-mode";
@@ -30,18 +30,18 @@ export default function Dashboard() {
           <p className="text-ink-2">{SELLER_LINE}</p>
         </div>
         {rows.length > 0 && (
-          <Link href="/scan/new" className="btn-primary">
+          <a href={NEW_SCAN_HREF} className="btn-primary">
             New listing
-          </Link>
+          </a>
         )}
       </header>
 
       {rows.length === 0 ? (
         <section className="flex flex-col items-start gap-4 rounded-lg border border-line bg-surface p-6">
           <p className="text-[length:var(--t-lg)]">Nothing listed yet. Scan something to sell it.</p>
-          <Link href="/scan/new" className="btn-primary">
+          <a href={NEW_SCAN_HREF} className="btn-primary">
             New listing
-          </Link>
+          </a>
         </section>
       ) : (
         <section aria-labelledby="mine" className="flex flex-col gap-3">

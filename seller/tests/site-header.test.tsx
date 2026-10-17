@@ -23,6 +23,6 @@ describe("seller SiteHeader", () => {
     const { default: SiteHeader } = await import("../components/SiteHeader");
     path.current = "/listing/abc";
     render(<SiteHeader />);
-    expect(screen.getByRole("link", { name: "New listing" })).toHaveAttribute("href", "/scan/new");
+    expect(screen.getByRole("link", { name: "New listing" })).toHaveAttribute("href", "/sell/scan/new");
   });
 });

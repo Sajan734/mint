@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { NEW_SCAN_HREF } from "@/lib/scan";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ChangeEvent } from "react";
 import { MediaProvider, MediaTiles, MediaViewer } from "@/components/MediaPanel";
 import PriceBadge from "@/components/PriceBadge";
@@ -111,9 +112,15 @@ function NotReady({ id, doc }: { id: string; doc: ListingDoc | null }) {
         {doc?.status === "rejected" ? "We couldn't list this one" : doc?.status === "failed" ? "Something went wrong" : "Still working on it"}
       </h1>
       <p className="text-ink-2">{doc?.rejection?.match_check.reason ?? doc?.error ?? "Your listing isn't ready yet."}</p>
-      <Link href={doc ? "/scan/new" : `/scan/${id}`} className="btn-primary self-start">
-        {doc ? "Scan again" : "Back to the scan"}
-      </Link>
+      {doc ? (
+        <a href={NEW_SCAN_HREF} className="btn-primary self-start">
+          Scan again
+        </a>
+      ) : (
+        <Link href={`/scan/${id}`} className="btn-primary self-start">
+          Back to the scan
+        </Link>
+      )}
     </div>
   );
 }

@@ -1,10 +1,10 @@
 "use client";
-import Link from "next/link";
+import { NEW_SCAN_HREF } from "@/lib/scan";
 import { usePathname } from "next/navigation";
 import { setMockMode, useMockMode } from "@/lib/mock-mode";
 
-// Seller zone (served under /sell). Inside this zone use next/link: it adds /sell by itself. To leave the zone
-// (the shared landing page at "/") use a plain <a>: next/link cannot cross zones.
+// Seller zone (served under /sell). To leave the zone (the shared landing page at "/") use a plain <a>: next/link
+// cannot cross zones. New listing is a plain <a> too (NEW_SCAN_HREF: it goes to a route handler, not a page).
 export default function SiteHeader() {
   const mock = useMockMode();
   // "Your listings" (/sell) has its own New listing button in the page, so the header leaves it out there.
@@ -35,9 +35,9 @@ export default function SiteHeader() {
             Back to Mint
           </a>
           {!onDashboard && (
-            <Link href="/scan/new" className="btn-primary text-sm">
+            <a href={NEW_SCAN_HREF} className="btn-primary text-sm">
               New listing
-            </Link>
+            </a>
           )}
         </div>
       </div>

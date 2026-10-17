@@ -112,7 +112,9 @@ work. They did not finish their own review passes. Phone-width (390 px) layouts 
 ## 5. Rules that keep this working
 
 - **Two zones, one origin.** Links between the buyer app and the seller app MUST be plain `<a href>`. A
-  `next/link` across zones does nothing. Inside one zone, `next/link` is fine (the seller app adds `/sell` itself).
+  `next/link` across zones does nothing. Inside one zone, `next/link` is fine (the seller app adds `/sell` itself). Except links to a route handler that
+  redirects (`/sell/scan/new`, `/listing/{id}/check`): plain `<a>` there too, or the client router sometimes drops the
+  click (found by the e2e; `NEW_SCAN_HREF` in `seller/lib/scan.ts`).
 - **Twin files.** These exist in both `buyer/` and `seller/` and must stay identical after line 1 (line 1 names the
   twin): `lib/local-listings.ts`, `lib/mock-mode.ts`, `lib/compare-types.ts`, `lib/listing-doc.ts`,
   `lib/scan-feed.ts`, `lib/progress.ts`, `lib/splat-scene.ts`, `lib/viewer-slots.ts`, `components/ScanFlow.tsx`,

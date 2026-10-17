@@ -79,10 +79,11 @@ export function ListingView({
               <p className="text-sm text-ink-2">Got the item? Scan it to compare with the seller&apos;s scan.</p>
               <div className="flex gap-3">
                 <ContactSeller seller={seller} itemTitle={l.title} />
-                {/* A route handler makes the comparison id and redirects: no prefetch, or every visit would make one. */}
-                <Link href={`/listing/${l.item_id}/check`} prefetch={false} className="btn-primary flex-1 md:flex-none md:min-w-32">
+                {/* A route handler makes the comparison id and redirects. A plain <a>: next/link would prefetch it (a new id
+                    on every visit) and the client router sometimes drops a soft navigation to a route handler. */}
+                <a href={`/listing/${l.item_id}/check`} className="btn-primary flex-1 md:flex-none md:min-w-32">
                   Scan
-                </Link>
+                </a>
               </div>
             </div>
           </div>
