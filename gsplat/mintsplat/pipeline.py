@@ -4,6 +4,7 @@ One video -> one splat. Two videos (upright orbit, then the object flipped over)
 reconstructed on its own, the second is registered into the first's scan frame, and a single
 splat is trained on all views.
 """
+import json
 import subprocess
 import time
 from pathlib import Path
@@ -12,7 +13,7 @@ import numpy as np
 import torch
 
 from . import debug, export as export_mod, frames as frames_mod, masks as masks_mod, merge as merge_mod
-from . import poses as poses_mod, train as train_mod
+from . import poses as poses_mod, train as train_mod, views as views_mod
 from .timing import Timer
 
 DEFAULTS = {
@@ -21,6 +22,7 @@ DEFAULTS = {
     "stop_after": None,  # "masks" | "poses" | "register" | None
     "debug": True,  # contact sheets, held-out eval, turntable (adds a few seconds after the timed path)
     "ply": False,  # also return the uncompressed .ply (~38 MB; the .spz is ~10x smaller)
+    "cube_views": True,  # 8 cube-corner RGBA renders + views.json (cameras) for downstream
 }
 
 
@@ -69,10 +71,11 @@ def capture(models, frames: list[np.ndarray], cfg: dict, T: Timer, tag: str, out
     return {"frames": frames, "masks": masks, "c2w": c2w, "K": K, "pts": pts, "cols": cols, "stats": pstats}
 
 
-def run(models, videos: bytes | list[bytes], cfg: dict) -> dict:
+def run(models, videos: bytes | list[bytes], cfg: dict, on_event=None) -> dict:
+    """on_event(stage, status, ms): live stage events (storage mode broadcasts them over Realtime)."""
     cfg = {**DEFAULTS, **(cfg or {})}
     videos = [videos] if isinstance(videos, (bytes, bytearray)) else list(videos)
-    T = Timer()
+    T = Timer(on_event)
     out: dict = {"files": {}}
 
     with T.stage("1_frames"):
@@ -126,6 +129,13 @@ def run(models, videos: bytes | list[bytes], cfg: dict) -> dict:
         if cfg["ply"]:
             out["files"]["splat.ply"] = export_mod.to_ply(params, keep)
     out["gaussians"] = cstats
+    if cfg["cube_views"]:
+        with T.stage("6_views"):
+            clean0 = {k: v[keep].detach() for k, v in params.items()}
+            images, meta = views_mod.cube_corners(clean0, sh_deg)
+            for name, data in images:
+                out["files"][f"cube/{name}"] = data
+            out["files"]["cube/views.json"] = json.dumps(meta, indent=1).encode()
     out["sizes_mb"] = {k: round(len(v) / 1e6, 2) for k, v in out["files"].items() if k.startswith("splat.")}
     print(f"sizes: {out['sizes_mb']}", flush=True)
     print(f"cleanup: {cstats}", flush=True)
