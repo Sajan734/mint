@@ -545,20 +545,16 @@ Trunk-based on `main`, always deployable · `git pull --rebase` before every pus
 
 **Name:** Mint ("mint condition" + minting a verified record). **Motif:** a minted seal for verified passports, a stamp when records are signed, subtle banknote guilloche on statements and verify pages.
 
-Final tokens, type and component rules: **[docs/design/DESIGN.md](docs/design/DESIGN.md)** (web: both `globals.css`; iOS:
-`scanner/ios/Mint/Brand.swift`). Summary:
-
 | Token | Use | Value |
 |---|---|---|
-| `--bg` (oat) | page canvas | `#F1EFE9` |
-| `--ink` (pine ink) | all text | `#15302A` |
-| `--leaf` | every action (buttons, links) | `#0B6B4C` |
-| `--pine` | deep bands, footer, phone panel, iOS full-screen moments | `#163A30` |
-| `--spark` (brand mint) | ring, done check, logo dot; on pine only | `#3DDC97` |
-| `--amber` / `--amber-wash` | **disclosed** regions, demo notices | `#7A4A00` / `#F2E1B8` |
-| `--coral` / `--coral-wash` | **new damage**, errors | `#A33A25` / `#F4D8CF` |
+| `--mint` | accent, verified, coverage badge | `#3DDC97` |
+| `--stage-bg` | near-black stage | `#0B0F0E` |
+| `--paper` | warm off-white phone pages | `#FAF7F2` |
+| `--amber` | **disclosed** regions | `#F5B53F` |
+| `--red` | **new damage** at handover | `#FF4D4D` |
+| `--slate` | artifacts | `#8A9499` |
 
-Type: Fraunces (soft) for signs, Figtree for everything else; on iOS, New York and SF Pro.
+Layout and component rules: [docs/design/DESIGN.md](docs/design/DESIGN.md). Light mode only.
 
 **Voice:** calm, short, slightly witty. "Found 2 real marks. Ignored 31 lighting differences." · "Coverage verified. Nothing hidden." · "Sealed. Nobody can quietly edit this."
 

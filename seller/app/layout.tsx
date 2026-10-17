@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
-import { Figtree, Fraunces } from "next/font/google";
+import { Bricolage_Grotesque, Figtree } from "next/font/google";
 import SiteFooter from "@/components/SiteFooter";
 import SiteHeader from "@/components/SiteHeader";
 import "./globals.css";
 
-// Two faces (docs/design/DESIGN.md §3): Fraunces at its softest for signs, Figtree for everything read or pressed.
-const fraunces = Fraunces({ variable: "--font-fraunces", subsets: ["latin"], axes: ["SOFT", "WONK", "opsz"], display: "swap" });
+// Bricolage Grotesque for headings and the wordmark, Figtree for everything else.
+const bricolage = Bricolage_Grotesque({ variable: "--font-bricolage", subsets: ["latin"], weight: ["600", "700"], display: "swap" });
 const figtree = Figtree({ variable: "--font-figtree", subsets: ["latin"], weight: ["400", "500", "600", "700"], display: "swap" });
 
 export const metadata: Metadata = {
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
-    <html lang="en" className={`${fraunces.variable} ${figtree.variable}`}>
+    <html lang="en" className={`${bricolage.variable} ${figtree.variable}`}>
       <body className="flex min-h-svh flex-col">
         <a href="#main" className="skip-link">
           Skip to content

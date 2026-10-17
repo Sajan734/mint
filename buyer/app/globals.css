@@ -1,44 +1,45 @@
 @import "tailwindcss";
 
-/* Mint design system: docs/design/DESIGN.md (oat canvas, pine ink, mint-leaf actions; Fraunces + Figtree).
-   The old names (mint, mint-ink, mint-wash, surface, line) are kept as aliases so every component follows. */
+/* Mint theme: the original palette (cream paper, near-black ink, brand mint), light mode only.
+   docs/design/DESIGN.md has the roles. The "pine" band tokens are light: the mint wash with ink type. */
 :root {
-  --bg: #f1efe9; /* oat */
-  --surface: #e8e5de; /* shelf: one tone step up */
-  --surface-2: #dedad1; /* deeper shelf: hover, selected */
-  --raised: #ffffff; /* paper: only what floats */
-  --line: #dcd8ce; /* form fields and real tables only */
-  --line-strong: #c4beb1;
-  --ink: #15302a; /* pine ink */
-  --ink-2: #4a5953;
-  --leaf: #0b6b4c; /* every action */
-  --leaf-press: #085a40;
-  --pine: #163a30; /* deep field */
-  --on-pine: #f1efe9;
-  --on-pine-2: #b9c2bc;
-  --wash: #d6ebdf; /* light field */
-  --spark: #3ddc97; /* brand mint: on pine only */
+  color-scheme: light;
+  --bg: #faf7f2; /* paper */
+  --surface: #f0ece4; /* one tone step: image wells, panels, inputs */
+  --surface-2: #e7e1d6; /* hover, selected */
+  --raised: #fffefc; /* cards and what floats */
+  --line: #e1dcd2;
+  --line-strong: #bdb6a8;
+  --ink: #0b0f0e;
+  --ink-2: #4a5552;
+  --leaf: #1b6b49; /* mint ink: links, green text */
+  --leaf-press: #14563a;
+  --pine: #ddf6ea; /* band: mint wash (light) */
+  --on-pine: #0b0f0e;
+  --on-pine-2: #3f4b48;
+  --wash: #ddf6ea;
+  --spark: #3ddc97; /* brand mint: fills and marks, not text */
   --amber: #7a4a00;
-  --amber-wash: #f2e1b8;
-  --coral: #a33a25;
-  --coral-wash: #f4d8cf;
-  --slate: #6f7c77;
+  --amber-wash: #fcebc6;
+  --coral: #a8301f;
+  --coral-wash: #ffe0da;
+  --slate: #8a9499;
   --mint: var(--spark);
   --mint-ink: var(--leaf);
   --mint-wash: var(--wash);
-  --focus: var(--leaf);
-  --btn-bg: var(--leaf);
-  --btn-fg: #ffffff;
-  --btn-press: var(--leaf-press);
+  --focus: #2f6fd0;
+  --btn-bg: var(--ink);
+  --btn-fg: var(--bg);
+  --btn-press: #2a3330;
   --pad: none;
 
   --t-xs: 0.8125rem;
   --t-sm: 0.875rem;
   --t-md: 1rem;
   --t-lg: 1.125rem;
-  --t-xl: 1.625rem;
+  --t-xl: 1.5rem;
   --t-2xl: 2rem;
-  --t-3xl: clamp(2.75rem, 6.2vw, 5.75rem);
+  --t-3xl: clamp(2.75rem, 6vw, 5.25rem);
 
   --sp-1: 4px;
   --sp-2: 8px;
@@ -51,66 +52,18 @@
   --sp-9: 96px;
 
   --r-sm: 8px;
-  --r-md: 16px;
-  --r-lg: 24px;
+  --r-md: 14px;
+  --r-lg: 22px;
 
-  --shadow-float: 0 1px 2px rgb(21 48 42 / 0.08), 0 12px 32px rgb(21 48 42 / 0.16);
+  --shadow-float: 0 1px 2px oklch(0.2 0.02 170 / 0.08), 0 12px 32px oklch(0.2 0.02 170 / 0.14);
   --shadow-hover: none;
-  --shadow-sheet: var(--shadow-float);
-  --scrim: rgb(21 48 42 / 0.45);
+  --shadow-sheet: 0 -12px 40px oklch(0.2 0.02 170 / 0.18);
+  --scrim: oklch(0.1 0.01 170 / 0.5);
 
   --dur-feedback: 120ms;
-  --dur-state: 220ms;
+  --dur-state: 200ms;
   --dur-sheet: 320ms;
   --ease: cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --bg: #0f201b;
-    --surface: #17302a;
-    --surface-2: #1f3b34;
-    --raised: #17302a;
-    --line: #2a453d;
-    --line-strong: #3d5a51;
-    --ink: #edebe4;
-    --ink-2: #a9b8b1;
-    --leaf: #3ddc97;
-    --leaf-press: #5be6aa;
-    --pine: #0a1814;
-    --wash: #123a2a;
-    --amber: #f5c66a;
-    --amber-wash: #3a2a0c;
-    --coral: #ff9a84;
-    --coral-wash: #3d1a12;
-    --slate: #8fa09a;
-    --btn-fg: #0f201b;
-    --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45);
-    --scrim: rgb(0 0 0 / 0.6);
-  }
-}
-
-:root[data-theme="dark"] {
-  --bg: #0f201b;
-  --surface: #17302a;
-  --surface-2: #1f3b34;
-  --raised: #17302a;
-  --line: #2a453d;
-  --line-strong: #3d5a51;
-  --ink: #edebe4;
-  --ink-2: #a9b8b1;
-  --leaf: #3ddc97;
-  --leaf-press: #5be6aa;
-  --pine: #0a1814;
-  --wash: #123a2a;
-  --amber: #f5c66a;
-  --amber-wash: #3a2a0c;
-  --coral: #ff9a84;
-  --coral-wash: #3d1a12;
-  --slate: #8fa09a;
-  --btn-fg: #0f201b;
-  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.45);
-  --scrim: rgb(0 0 0 / 0.6);
 }
 
 @theme inline {
@@ -140,7 +93,7 @@
   --color-line-strong: var(--line-strong);
   --color-btn-bg: var(--btn-bg);
   --color-btn-fg: var(--btn-fg);
-  --font-display: var(--font-fraunces), Georgia, serif;
+  --font-display: var(--font-bricolage), system-ui, sans-serif;
   --font-sans: var(--font-figtree), system-ui, sans-serif;
   --font-mono: var(--font-figtree), system-ui, sans-serif;
   --radius-sm: var(--r-sm);
@@ -175,15 +128,14 @@
     scrollbar-color: var(--line-strong) transparent;
   }
 
-  /* Signs: Fraunces at its softest. Card and panel titles (h3 and below) stay in Figtree. */
+  /* Headings in Bricolage Grotesque; card and panel titles (h3 and below) stay in Figtree. */
   h1,
   h2,
   .font-display {
     font-family: var(--font-display);
-    font-variation-settings: "SOFT" 100, "WONK" 0;
-    font-weight: 600;
+    font-weight: 700;
     letter-spacing: -0.02em;
-    line-height: 1.08;
+    line-height: 1.1;
     text-wrap: balance;
   }
   h3 {
@@ -209,7 +161,7 @@
 }
 
 @layer components {
-  /* Buttons are full pills that press in (DESIGN.md §4). */
+  /* Buttons: ink on paper, 14px corners, press in slightly. */
   .btn-primary,
   .btn-secondary {
     display: inline-flex;
@@ -218,7 +170,7 @@
     gap: var(--sp-2);
     min-height: 3rem;
     padding: 0 var(--sp-5);
-    border-radius: 999px;
+    border-radius: var(--r-md);
     font-weight: 600;
     transition: background-color var(--dur-feedback) var(--ease), transform var(--dur-feedback) var(--ease);
   }

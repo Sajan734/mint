@@ -27,49 +27,35 @@ from showing the thing itself, not from badges.
 
 ## 2. Colour
 
-| Token | Light | Dark | Role |
-|---|---|---|---|
-| `--bg` (Oat) | `#F1EFE9` | `#0F201B` | Page canvas. Low-chroma warm, never yellow cream, never pure white. |
-| `--surface` (Shelf) | `#E7E4DC` | `#17302A` | One tone step up: image wells, inputs, quiet panels, chips. |
-| `--surface-2` (Deeper shelf) | `#DCD8CE` | `#1F3B34` | Hover and pressed state of a shelf surface; selected tile. |
-| `--raised` (Paper) | `#FFFFFF` | `#17302A` | Only things that float: dialogs, sheets, menus, the sticky phone bar. |
-| `--ink` (Pine ink) | `#15302A` | `#EDEBE4` | All running text and headings. Never pure black. |
-| `--ink-2` | `#4A5953` | `#A9B8B1` | Secondary notes, metadata. Never for body copy. |
-| `--leaf` (Mint leaf) | `#0B6B4C` | `#3DDC97` | Every action: buttons, links, the selected state. White text on it (dark: pine text). |
-| `--leaf-press` | `#085A40` | `#5BE6AA` | Hover/pressed action. |
-| `--pine` (Field) | `#163A30` | `#0A1814` | Deep band: footer, "how it works", the phone panel. Oat text on it. |
-| `--wash` (Mint wash) | `#D6EBDF` | `#123A2A` | The light field: fair-price badge, verified notes, one landing band. |
-| `--spark` (Brand mint) | `#3DDC97` | `#3DDC97` | Brand mint. Only on pine: progress ring, done check, the logo dot. Never text on oat. |
-| `--amber` / `--amber-wash` | `#7A4A00` / `#F2E1B8` | `#F5C66A` / `#3A2A0C` | "A bit high", disclosed marks, demo notices. |
-| `--coral` / `--coral-wash` | `#A33A25` / `#F4D8CF` | `#FF9A84` / `#3D1A12` | "Overpriced", new damage, errors. |
-| `--focus` | `#0B6B4C` | `#3DDC97` | 2px focus outline, 2px offset. |
+**Theme (Oct 17): the original Mint palette, light mode only.** The pine-and-oat palette tried earlier was dropped.
+Tokens in both `globals.css` (identical) and `scanner/ios/Mint/Brand.swift`.
 
-Contrast targets (light): ink on oat and ink-2 on oat above 4.5:1, white on leaf above 4.5:1, oat on pine above
-7:1. Checked in `buyer/tests/design-tokens.test.ts`.
+| Token | Value | Role |
+|---|---|---|
+| `--bg` (paper) | `#FAF7F2` | Page canvas. |
+| `--surface` | `#F0ECE4` | One tone step: image wells, panels, inputs. |
+| `--surface-2` | `#E7E1D6` | Hover, selected. |
+| `--raised` | `#FFFEFC` | Cards, dialogs, sheets. |
+| `--ink` | `#0B0F0E` | All text; the primary button fill (paper text on it). |
+| `--ink-2` | `#4A5552` | Secondary text. |
+| `--mint` (`--spark`) | `#3DDC97` | Brand mint: logo, fills, rings, the done check. Not for text. |
+| `--mint-ink` (`--leaf`) | `#1B6B49` | Green text and links. |
+| `--mint-wash` (`--wash`, `--pine`) | `#DDF6EA` | The light band ("How Mint works", footer, phone panel), fair-price badge. Ink text on it. |
+| `--amber` / `--amber-wash` | `#7A4A00` / `#FCEBC6` | "A bit high", disclosed marks, demo notices. |
+| `--coral` / `--coral-wash` | `#A8301F` / `#FFE0DA` | "Overpriced", new damage, errors. |
+| `--focus` | `#2F6FD0` | Focus outline. |
 
-Proportions: oat holds most of every page; shelf tiles hold the product pictures; leaf appears on the one primary
-action per view and on links; pine appears once or twice per page as a whole band; wash at most once.
+Checked in `buyer/tests/design-tokens.test.ts` (WCAG AA for every text pair, light only).
 
 ## 3. Typography
 
-| Role | Face | Size | Weight | Leading | Tracking |
-|---|---|---|---|---|---|
-| Display (landing headline) | Fraunces, `SOFT 100`, `opsz` auto | `clamp(2.75rem, 6.2vw, 5.75rem)` | 600 | 0.98 | -0.03em |
-| Heading (page and section titles) | Fraunces, `SOFT 100` | 32px (phone 26px) | 600 | 1.1 | -0.02em |
-| Title (card titles, panel titles) | Figtree | 18px | 600 | 1.3 | -0.01em |
-| Body | Figtree | 16px | 400 | 1.55 | 0 |
-| Meta (labels, notes, small buttons) | Figtree | 14px | 500 | 1.45 | 0 |
-
-- Five sizes, far apart. Nothing below 13px. Sentence case everywhere, no tracked capitals.
-- Prices: Figtree 700, `tabular-nums`. The big price on the listing page uses the Heading size.
-- Headlines: two lines or fewer at every width, `text-wrap: balance`. Body text `text-wrap: pretty`, max 68ch.
-- iOS: New York (`.serif`) for display and headings, SF Pro (`.default`) for everything else, SF Pro Rounded
-  only for the big upload percentage. `.monospacedDigit()` for numbers.
+Bricolage Grotesque (600/700) for headings and the wordmark, Figtree for everything else. The iOS app uses SF Pro
+Rounded, as it always has. Five sizes, nothing below 13px, sentence case.
 
 ## 4. Components
 
-**Buttons** are full pills, decided once. Height 48px (44px small). Press: `scale(0.97)`.
-- Primary: leaf fill, white text, 600. Hover leaf-press.
+**Buttons** have 14px corners. Height 48px (44px small). Press: `scale(0.97)`.
+- Primary: ink fill, paper text, 600.
 - Secondary: shelf fill, ink text. Hover surface-2. No outline.
 - On pine: oat fill with pine text (primary), or a plain oat text link.
 - Text link: leaf, underline on hover, 600.

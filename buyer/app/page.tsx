@@ -143,7 +143,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Par
                   </li>
                 ))}
               </ul>
-              <Link href="/about" className="inline-flex min-h-11 w-fit items-center font-semibold text-spark underline-offset-4 hover:underline">
+              <Link href="/about" className="inline-flex min-h-11 w-fit items-center font-semibold text-leaf underline-offset-4 hover:underline">
                 How Mint works
               </Link>
             </div>

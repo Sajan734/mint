@@ -9,13 +9,12 @@ const links = [
   { href: "/about", label: "How it works" },
 ];
 
-/** The Mint seal: a pine disc with the scan ring in brand mint (docs/design/DESIGN.md). */
-export function MintMark({ size = 28 }: { size?: number }) {
+/** The Mint mark: a mint disc with the dashed scan ring. */
+export function MintMark({ size = 24 }: { size?: number }) {
   return (
-    <svg aria-hidden viewBox="0 0 32 32" width={size} height={size} fill="none">
-      <circle cx="16" cy="16" r="16" fill="var(--pine)" />
-      <circle cx="16" cy="16" r="9.5" stroke="var(--spark)" strokeWidth="2.4" strokeDasharray="3.2 2.6" strokeLinecap="round" />
-      <circle cx="16" cy="16" r="3.2" fill="var(--spark)" />
+    <svg aria-hidden viewBox="0 0 24 24" width={size} height={size} fill="none">
+      <circle cx="12" cy="12" r="10" fill="var(--mint)" />
+      <circle cx="12" cy="12" r="6.5" stroke="#0b0f0e" strokeWidth="1.5" strokeDasharray="2.2 1.8" />
     </svg>
   );
 }
@@ -28,7 +27,7 @@ export default function SiteHeader() {
     <header className="top-0 z-20 bg-bg md:sticky">
       <div className="mx-auto flex min-h-16 w-full max-w-[1240px] flex-wrap items-center gap-x-2 gap-y-1 px-4 py-2 sm:gap-x-5 sm:px-6 md:min-h-20 lg:px-10">
         {/* aria-label keeps the accessible name "Home" now that Home is not in the nav */}
-        <Link href="/" aria-label="Home" className="order-1 flex min-h-11 items-center gap-2.5 font-display text-[1.75rem] leading-none">
+        <Link href="/" aria-label="Home" className="order-1 flex min-h-11 items-center gap-2 font-display text-xl font-bold tracking-tight">
           <MintMark />
           mint
         </Link>

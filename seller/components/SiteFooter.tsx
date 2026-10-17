@@ -22,7 +22,7 @@ export default function SiteFooter() {
             <ul className="flex flex-wrap gap-x-6 gap-y-1 md:justify-end">
               {LINKS.map((l) => (
                 <li key={l.href}>
-                  <a href={l.href} className="inline-flex min-h-11 items-center font-semibold text-on-pine underline-offset-4 hover:underline">
+                  <a href={l.href} className="inline-flex min-h-11 items-center font-semibold text-ink underline-offset-4 hover:underline">
                     {l.label}
                   </a>
                 </li>
@@ -30,7 +30,7 @@ export default function SiteFooter() {
             </ul>
           </nav>
         </div>
-        <p aria-hidden className="font-display text-[clamp(5rem,22vw,17rem)] leading-[0.8] text-spark">
+        <p aria-hidden className="font-display text-[clamp(5rem,22vw,17rem)] font-bold leading-[0.8] tracking-tight text-ink">
           mint
         </p>
         <p className="text-sm text-on-pine-2">
