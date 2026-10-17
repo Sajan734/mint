@@ -1,0 +1,88 @@
+{
+  "views": [
+    {
+      "view_id": "v00",
+      "item_usable": 0.92,
+      "same_category": 0.93,
+      "same_product": 0.12,
+      "error": null
+    },
+    {
+      "view_id": "v01",
+      "item_usable": 0.9,
+      "same_category": 0.92,
+      "same_product": 0.09,
+      "error": null
+    },
+    {
+      "view_id": "v02",
+      "item_usable": 0.91,
+      "same_category": 0.9,
+      "same_product": 0.07,
+      "error": null
+    },
+    {
+      "view_id": "v03",
+      "item_usable": 0.89,
+      "same_category": 0.88,
+      "same_product": 0.05,
+      "error": null
+    },
+    {
+      "view_id": "v04",
+      "item_usable": 0.88,
+      "same_category": 0.87,
+      "same_product": 0.06,
+      "error": null
+    },
+    {
+      "view_id": "v05",
+      "item_usable": 0.9,
+      "same_category": 0.89,
+      "same_product": 0.08,
+      "error": null
+    },
+    {
+      "view_id": "v06",
+      "item_usable": 0.91,
+      "same_category": 0.91,
+      "same_product": 0.15,
+      "error": null
+    },
+    {
+      "view_id": "v07",
+      "item_usable": 0.93,
+      "same_category": 0.93,
+      "same_product": 0.18,
+      "error": null
+    },
+    {
+      "view_id": "v08",
+      "item_usable": 0.9,
+      "same_category": 0.91,
+      "same_product": 0.11,
+      "error": null
+    },
+    {
+      "view_id": "v09",
+      "item_usable": 0.89,
+      "same_category": 0.89,
+      "same_product": 0.07,
+      "error": null
+    },
+    {
+      "view_id": "v10",
+      "item_usable": 0.87,
+      "same_category": 0.88,
+      "same_product": 0.06,
+      "error": null
+    },
+    {
+      "view_id": "v11",
+      "item_usable": 0.9,
+      "same_category": 0.92,
+      "same_product": 0.14,
+      "error": null
+    }
+  ]
+}
