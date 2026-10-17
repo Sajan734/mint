@@ -5,12 +5,12 @@ import numpy as np
 def sheet(images: list[np.ndarray], cols: int = 4, width: int = 360) -> bytes:
     """RGB images -> one JPEG contact sheet."""
     tiles = [cv2.resize(i, (width, int(width * i.shape[0] / i.shape[1]))) for i in images]
-    th, tw = tiles[0].shape[:2]
+    th, tw = max(t.shape[0] for t in tiles), width
     rows = -(-len(tiles) // cols)
     out = np.zeros((rows * th, cols * tw, 3), np.uint8)
     for k, t in enumerate(tiles):
         r, c = divmod(k, cols)
-        out[r * th:(r + 1) * th, c * tw:(c + 1) * tw] = t[:th, :tw]
+        out[r * th:r * th + t.shape[0], c * tw:(c + 1) * tw] = t
     return cv2.imencode(".jpg", cv2.cvtColor(out, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 85])[1].tobytes()
 
 

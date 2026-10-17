@@ -69,11 +69,13 @@ class Splatter:
 
 
 @app.local_entrypoint()
-def main(video: str, name: str = "", n_frames: int = 80, stop_after: str = ""):
+def main(video: str, name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 4000,
+         cap: int = 300_000):
     src = Path(video)
     out_dir = Path("out") / (name or src.stem)
     out_dir.mkdir(parents=True, exist_ok=True)
-    cfg = {"n_frames": n_frames, "stop_after": stop_after or None}
+    cfg = {"n_frames": n_frames, "stop_after": stop_after or None,
+           "train": {"iters": iters, "cap_max": cap}}
 
     t0 = time.perf_counter()
     res = Splatter().run.remote(src.read_bytes(), cfg)
