@@ -1,18 +1,23 @@
-// "How it matches": plain words for a CompareResponse, the view-image mapping, and the recorded demo runs.
+// "How it matches": plain words for a CompareResponse and the recorded demo runs.
 // Never turn evidence_score, evidence values or p_present into text: they are ordinal model scores (PLAN_UX section 4).
-import type { ClaimsFinding, CompareResponse, EvidenceCategory, VerdictLabel } from "./compare-types";
+import type { ClaimsFinding, CompareResponse, EvidenceCategory, VerdictCause, VerdictLabel } from "./compare-types";
 import r435 from "../mock/compare/435e1251.json";
 import rcce from "../mock/compare/cce6fb01.json";
 
 const HEADINGS: Record<VerdictLabel, string> = {
   same: "Looks like the same item",
   different: "Does not match the listing",
-  uncertain: "We cannot tell",
-  alignment_failed: "The two scans do not line up",
-  scan_quality_poor: "Your scan is not clear enough",
-  listing_rejected: "The listing scan cannot be used",
 };
-export const FAILED_HEADING = "The check did not finish";
+export const FAILED_HEADING = "Could not run the check, try again";
+
+/** Why a "different" could not be confirmed. Shown under the heading. */
+export const CAUSE_WORDS: Record<VerdictCause, string> = {
+  low_quality: "Your scan was not clear enough to confirm a match",
+  misaligned: "The two scans did not line up",
+  listing_rejected: "The listing scan could not be used",
+};
+export const causeLine = (r: CompareResponse): string | null =>
+  r.status === "done" && r.verdict?.cause ? CAUSE_WORDS[r.verdict.cause] : null;
 
 export const heading = (r: CompareResponse): string =>
   r.status === "failed" || !r.verdict ? FAILED_HEADING : HEADINGS[r.verdict.label];
@@ -30,37 +35,8 @@ export const CLAIM_WORDS: Record<ClaimsFinding["status"], string> = {
   unverifiable: "Cannot check from a scan",
 };
 
-// The buyer agent saves pair i (0-based) as a_{ii}.png / b_{ii}.png and labels it "view_{i+1}"
-// (multiagent/buyer_agent/pipeline.py _save_pairs; runs/fc4b95cb.../jev/view_00.json holds "view_01").
-const pad = (n: number) => String(n).padStart(2, "0");
-export const viewLabel = (index: number) => `view_${pad(index + 1)}`;
-export function viewIndex(label: string): number | null {
-  const m = /^view_(\d+)$/.exec(label);
-  const n = m ? Number(m[1]) : 0;
-  return n >= 1 ? n - 1 : null;
-}
-export const viewName = (label: string) => `View ${(viewIndex(label) ?? -1) + 1}`;
 const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jpanyhsifoxxiizkgjno.supabase.co").replace(/\/$/, "");
-/** The recorded demo runs' pairs are 960 px WebP in the gitignored public/local/compare/{run8}/ (T7). A live check's
- *  pairs are the buyer agent's PNG thumbnails, published by gsplat/app.py run_verify to assets/comparisons/{run8}/. */
-export const pairSrc = (run8: string, index: number, side: "a" | "b") =>
-  run8 in RUNS
-    ? `/local/compare/${run8}/${side}_${pad(index)}.webp`
-    : `${SUPABASE_URL}/storage/v1/object/public/assets/comparisons/${run8}/${side}_${pad(index)}.png`;
 export const run8 = (id: string) => id.slice(0, 8);
-
-/** View index -> the flagged categories seen in that view, in `flagged` order. */
-export function flaggedByView(r: CompareResponse): Map<number, EvidenceCategory[]> {
-  const out = new Map<number, EvidenceCategory[]>();
-  const ev = r.verdict?.evidence;
-  for (const c of ev?.flagged ?? []) {
-    for (const v of ev?.categories[c]?.views ?? []) {
-      const i = viewIndex(v);
-      if (i !== null) out.set(i, [...(out.get(i) ?? []), c]);
-    }
-  }
-  return out;
-}
 
 // Recorded demo runs: exact copies of multiagent/runs/{run}/response.json.
 export type MockRun = "435e1251" | "cce6fb01";

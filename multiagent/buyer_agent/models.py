@@ -11,9 +11,8 @@ from buyer_agent.errors import AgentError, ErrorCode
 Prob = Annotated[float, Field(ge=0.0, le=1.0, allow_inf_nan=False)]
 Num = Annotated[float, Field(allow_inf_nan=False)]
 Label = Annotated[str, Field(min_length=1, max_length=80)]
-VerdictLabel = Literal[
-    "same", "different", "uncertain", "alignment_failed", "scan_quality_poor", "listing_rejected"
-]
+VerdictLabel = Literal["same", "different"]  # strictly binary: there is no "cannot tell"
+VerdictCause = Literal["low_quality", "misaligned", "listing_rejected"]
 Category = Literal["shape_diff", "part_diff", "color_diff", "any_diff"]
 ActionCategory = Literal[
     "none", "request_more_photos", "message_seller", "request_refund", "escalate"
@@ -150,7 +149,8 @@ class Evidence(Strict):
 
 class Verdict(Strict):
     label: VerdictLabel
-    evidence_score: Prob | None  # ordinal, not a probability; only for same/different
+    evidence_score: Prob | None  # ordinal, not a probability: match score if same, else strength
+    cause: VerdictCause | None = None  # set only when a gate forced `different` (no measurement)
     reason: str
     evidence: Evidence
     caveats: list[str]

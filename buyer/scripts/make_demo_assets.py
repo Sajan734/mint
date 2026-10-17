@@ -14,7 +14,6 @@ Writes (all from real files, nothing invented):
                                                      and listing.json with only the URLs pointed at these copies
   seller/mock/scan-result.json                       that listing's market_listing: what demo mode's scan flow replays
   buyer/mock/compare/{run8}.json                     byte copies of multiagent/runs/<run>/response.json
-  buyer/public/local/compare/{run8}/{a,b}_NN.webp    the views each comparison used (gitignored, PASLCD licence unverified)
   buyer/public/local/{pots,zen}/fNN.webp             rebuilt by make_paslcd_frames.py when its inputs exist
 """
 import json
@@ -156,8 +155,6 @@ def build_compare() -> None:
             raise SystemExit(f"run {run8} not found under {RUNS}")
         (BUYER / "mock" / "compare").mkdir(parents=True, exist_ok=True)
         shutil.copyfile(run / "response.json", BUYER / "mock" / "compare" / f"{run8}.json")
-        for p in sorted(run.glob("[ab]_[0-9][0-9].png")):
-            webp(Image.open(p).convert("RGB"), BUYER / "public" / "local" / "compare" / run8 / f"{p.stem}.webp", 960, 80)
 
 
 def build_paslcd() -> None:

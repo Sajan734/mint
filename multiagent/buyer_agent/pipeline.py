@@ -107,8 +107,9 @@ def _quality_verdict(issues: tuple[str, ...]) -> Verdict:
         flagged=[], alignment=None, alignment_mode="icp",
     )  # fmt: skip
     return Verdict(
-        label="scan_quality_poor",
-        evidence_score=None,
+        label="different",
+        cause="low_quality",
+        evidence_score=0.0,
         reason="The scans were too incomplete or too different in size to compare.",
         evidence=evidence,
         caveats=[DENT_CAVEAT],
@@ -191,7 +192,7 @@ async def _verdict(ctx: _Ctx, resolved: sources.Resolved) -> tuple[Verdict, list
 def _rejected(ctx: _Ctx) -> CompareResponse:
     """Teammate's match gate said `mismatch`: no resolve, no Jev, no claims (R8 escalate)."""
     verdict = _quality_verdict(()).model_copy(
-        update={"label": "listing_rejected", "reason": REJECTED_REASON, "caveats": []}
+        update={"cause": "listing_rejected", "reason": REJECTED_REASON, "caveats": []}
     )
     rplan = plan(verdict, [], ctx.req.attempt)
     step = template_step(rplan)

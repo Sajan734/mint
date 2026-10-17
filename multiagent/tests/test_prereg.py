@@ -11,12 +11,12 @@ def test_hash_stable_and_key_order_independent():
     assert thresholds_sha256(Thresholds()) == thresholds_sha256(
         Thresholds(**dict(reversed(list(Thresholds().model_dump().items()))))
     )
-    assert thresholds_sha256(Thresholds()) != thresholds_sha256(Thresholds(same=0.2))
+    assert thresholds_sha256(Thresholds()) != thresholds_sha256(Thresholds(match_min=0.6))
 
 
 def test_check_frozen_raises_on_any_threshold_change():
     check_frozen(Thresholds())
-    for k, v in (("same", 0.2), ("support", 3), ("min_answered", 9), ("quality_frac", 0.8)):
+    for k, v in (("match_min", 0.6), ("support", 3), ("min_answered", 9), ("quality_frac", 0.8)):
         with pytest.raises(PreregMismatch):
             check_frozen(Thresholds(**{k: v}))
 

@@ -16,13 +16,15 @@ BANNED = re.compile(
 )
 
 
-def verdict(label="different", score=0.9, flagged=("part_diff",)):
+def verdict(label="different", score=0.9, flagged=("part_diff",), cause=None):
     cats = {c: CategoryEvidence(evidence=0.9, max=0.9, views=["a", "b", "c"]) for c in flagged}
     ev = Evidence(
         requested_views=12, answered_views=12, usable_views=12, failed_views=[],
         categories=cats, flagged=list(flagged), alignment=None, alignment_mode="icp",
     )  # fmt: skip
-    return Verdict(label=label, evidence_score=score, reason="r", evidence=ev, caveats=["c1"])
+    return Verdict(
+        label=label, evidence_score=score, reason="r", evidence=ev, caveats=["c1"], cause=cause
+    )
 
 
 def finding(status, claim="red lid"):
@@ -76,7 +78,7 @@ def test_none_and_no_claims():
 
 
 def test_listing_rejected_steps():
-    v = verdict("listing_rejected", None, ())
+    v = verdict("different", 0.0, (), cause="listing_rejected")
     p = plan(v, [], 1)
     step = run(draft(FakeGroq([]), p, v, [], None, settings()))
     e = build_explanation(p, v, [], step)
@@ -86,8 +88,8 @@ def test_listing_rejected_steps():
 @pytest.mark.parametrize(
     "v",
     [
-        verdict("uncertain", 0.3, ()),
-        verdict("scan_quality_poor", None, ()),
+        verdict("different", 0.0, (), cause="low_quality"),
+        verdict("different", 0.3, ()),
         verdict("different", 0.6),
     ],
 )

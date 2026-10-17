@@ -160,7 +160,7 @@ _TEMPLATES: dict[str, tuple[str, str | None, str | None]] = {
         None,
     ),
     "seller_photos": (
-        "The check was inconclusive, so it likely needs more photos from the seller.",
+        "The scans were too unclear to compare, so it likely needs more photos from the seller.",
         "Hello, could you please share a few more photos of the item from all sides? Thank you.",
         None,
     ),

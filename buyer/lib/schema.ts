@@ -57,7 +57,8 @@ export const OrderSchema = z.object({
 export const CompareResultSchema = z.object({
   comparison_id: z.string(),
   status: z.enum(["done", "failed"]),
-  verdict_label: z.enum(["same", "different", "uncertain", "alignment_failed", "scan_quality_poor", "listing_rejected"]).nullable(),
+  verdict_label: z.enum(["same", "different"]).nullable(),
+  verdict_cause: z.enum(["low_quality", "misaligned", "listing_rejected"]).nullish(),
   explanation: z
     .object({
       headline: z.string(), what_we_compared: z.string(), what_we_found: z.array(z.string()), how_sure: z.string(),

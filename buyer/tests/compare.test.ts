@@ -4,15 +4,12 @@ import {
   CLAIM_WORDS,
   FAILED_HEADING,
   OTHER_ITEM_NOTE,
-  flaggedByView,
+  CAUSE_WORDS,
+  causeLine,
   heading,
   mockRun,
-  pairSrc,
   pickRun,
   runFooter,
-  viewIndex,
-  viewLabel,
-  viewName,
 } from "@/lib/compare";
 import type { CompareResponse } from "@/lib/compare-types";
 import r435 from "@/mock/compare/435e1251.json";
@@ -29,15 +26,26 @@ describe("word maps", () => {
     const cases = {
       same: "Looks like the same item",
       different: "Does not match the listing",
-      uncertain: "We cannot tell",
-      alignment_failed: "The two scans do not line up",
-      scan_quality_poor: "Your scan is not clear enough",
-      listing_rejected: "The listing scan cannot be used",
     } as const;
     for (const [label, text] of Object.entries(cases)) {
       expect(heading({ ...base, verdict: { ...v, label: label as keyof typeof cases } })).toBe(text);
     }
+    expect(Object.keys(cases)).toHaveLength(2);
     expect(heading({ ...base, status: "failed", verdict: null })).toBe(FAILED_HEADING);
+    expect(FAILED_HEADING).toBe("Could not run the check, try again");
+    expect(heading({ ...base, status: "failed" })).not.toBe(cases.same); // a failed run never reads as a match
+  });
+
+  it("maps each cause to a short line, and gives none without a cause", () => {
+    expect(CAUSE_WORDS).toEqual({
+      low_quality: "Your scan was not clear enough to confirm a match",
+      misaligned: "The two scans did not line up",
+      listing_rejected: "The listing scan could not be used",
+    });
+    const base = runs[0];
+    expect(causeLine(base)).toBeNull();
+    expect(causeLine({ ...base, verdict: { ...base.verdict!, cause: "misaligned" } })).toBe(CAUSE_WORDS.misaligned);
+    expect(causeLine({ ...base, status: "failed", verdict: { ...base.verdict!, cause: "misaligned" } })).toBeNull();
   });
 
   it("names every evidence category and claim status in plain words", () => {
@@ -52,38 +60,6 @@ describe("word maps", () => {
       contradicted: "Not seen in your scan",
       unverifiable: "Cannot check from a scan",
     });
-  });
-});
-
-describe("view mapping (file a_NN / b_NN, NN 0-based = label view_{NN+1})", () => {
-  it("maps both ways", () => {
-    expect(viewLabel(0)).toBe("view_01");
-    expect(viewLabel(11)).toBe("view_12");
-    expect(viewIndex("view_01")).toBe(0);
-    expect(viewIndex("view_12")).toBe(11);
-    for (let i = 0; i < 12; i++) expect(viewIndex(viewLabel(i))).toBe(i);
-  });
-  it("rejects labels that are not views", () => {
-    expect(viewIndex("view_00")).toBeNull();
-    expect(viewIndex("front")).toBeNull();
-    expect(viewIndex("")).toBeNull();
-  });
-  it("builds image paths and display names", () => {
-    expect(pairSrc("435e1251", 0, "a")).toBe("/local/compare/435e1251/a_00.webp");
-    expect(pairSrc("435e1251", 10, "b")).toBe("/local/compare/435e1251/b_10.webp");
-    // a live check: the pairs gsplat/app.py run_verify published for it
-    expect(pairSrc("8f2c41aa", 3, "b")).toBe(
-      "https://jpanyhsifoxxiizkgjno.supabase.co/storage/v1/object/public/assets/comparisons/8f2c41aa/b_03.png",
-    );
-    expect(viewName("view_03")).toBe("View 3");
-  });
-  it("lists the flagged categories per view index", () => {
-    const m = flaggedByView(runs[2]); // fc4b95cb: part_diff flagged; color_diff has a view but is not flagged
-    expect(m.get(0)).toEqual(["part_diff"]);
-    expect(m.get(9)).toEqual(["part_diff"]);
-    expect(m.has(2)).toBe(false); // view_03 is in no flagged category
-    expect(flaggedByView(runs[0]).get(0)).toEqual(["part_diff", "color_diff"]);
-    expect(flaggedByView(runs[0]).get(6)).toEqual(["part_diff"]); // view_07: part only
   });
 });
 

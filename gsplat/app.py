@@ -107,7 +107,8 @@ compare_image = (
 def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: bytes, listing: dict,
                   match_check: dict | None) -> dict:
     """The buyer agent on two splats, unchanged: it aligns them, renders matching views, asks Jev (and Groq for the
-    listing's claims) and returns its CompareResponse. -> {"response": CompareResponse JSON, "pairs": {name: png}}."""
+    listing's claims) and returns its CompareResponse. -> {"response": CompareResponse JSON, "align": {"matrix": 4x4 B->A, "ambiguity": float}
+    or None}. (The per-view pairs still feed Jev and the verdict inside the agent; they are not returned or published.)"""
     import asyncio
     import os
 
@@ -120,6 +121,8 @@ def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: byte
     from buyer_agent.render import CpuPointRenderer
     from buyer_agent.runlog import RunLog
 
+    align_out: dict = {}
+
     def upright_resolve(req, settings, renderer):
         """sources.resolve, except that both splats come from our pipeline in the same +Y-up scan frame, so the
         aligner only turns the rescan about +Y (align upright=True): a top-only rescan of an item listed top and
@@ -131,6 +134,7 @@ def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: byte
         result = align_mod.align(a, b, upright=True)
         fit = {k: v for k, v in result["metrics"].items() if k in AlignmentMetrics.model_fields}
         metrics = AlignmentMetrics(**fit | {"scale": result["scale"]})
+        align_out.update(matrix=result["matrix"], ambiguity=result["metrics"].get("ambiguity"))
         return sources.Resolved(renderer.render(a, b, result["matrix"], result["crop"]), metrics, "icp")
 
     folder = Path(os.environ["DATA_ROOT"]) / cid
@@ -149,9 +153,7 @@ def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: byte
         listing_match_check=ListingMatchCheck(verdict=match_check["verdict"], reason=match_check["reason"][:300])
         if match_check and match_check.get("verdict") else None)
     resp = asyncio.run(compare(req, deps))
-    run_dir = settings.runs_root / cid
-    pairs = {p.name: p.read_bytes() for p in sorted(run_dir.glob("[ab]_*.png"))} if run_dir.is_dir() else {}
-    return {"response": json.loads(resp.model_dump_json()), "pairs": pairs}
+    return {"response": json.loads(resp.model_dump_json()), "align": align_out or None}
 
 
 def _gpu_dead(e: BaseException | None = None) -> bool:
@@ -252,8 +254,8 @@ class Splatter:
     def run_verify(self, cid: str) -> dict:
         """A buyer's verify rescan (mint://verify?id=<cid>&listing=<scan_id>): scans/{cid}/rescan.mp4 (+ rescan2.mp4)
         -> the buyer's splat (published as splats/{cid}, kept out of the listing index; the check page shows it)
-        -> the buyer agent against the listing's splat -> assets/comparisons/{cid}.json (CompareResponse) and the view
-        pairs as assets/comparisons/{cid[:8]}/a_NN.png / b_NN.png, which the check page polls for."""
+        -> the buyer agent against the listing's splat -> assets/comparisons/{cid}.json (CompareResponse), which the check page polls for. The buyer's splat manifest
+        gets '#ry=<deg>' on its splat_url (the B->A yaw), so the 3D slider shows both scans in one orientation."""
         import torch
 
         from mintsplat import export as export_mod
@@ -267,10 +269,7 @@ class Splatter:
         ev = Events(sb, cid)
         t0 = time.time()
 
-        def put_result(resp: dict, pairs: dict) -> dict:
-            folder = f"comparisons/{cid[:8]}"
-            for name, png in pairs.items():
-                sb.upload(ASSETS, f"{folder}/{name}", png, "image/png")
+        def put_result(resp: dict) -> dict:
             sb.upload(ASSETS, f"comparisons/{cid}.json", json.dumps(resp, indent=1).encode(), "application/json",
                       cache_control="no-cache")
             return resp
@@ -289,9 +288,9 @@ class Splatter:
                     meta = {**json.loads(sb.download(SCANS, f"{cid}/{name}")), **meta}
             listing_id = meta.get("listing_scan_id")
             if not listing_id:
-                return put_result(failed("INPUT_INVALID", "The rescan does not say which listing it checks."), {})
+                return put_result(failed("INPUT_INVALID", "The rescan does not say which listing it checks."))
             if not HAS_BUYER:
-                return put_result(failed("INTERNAL", "The comparison service has no keys (Modal secret mint-buyer)."), {})
+                return put_result(failed("INTERNAL", "The comparison service has no keys (Modal secret mint-buyer)."))
             # Like for like: a pass one side has and the other doesn't (the underside) would read as a difference.
             listing_inputs = json.loads(sb.download(ASSETS, f"splats/{listing_id}.json")).get("inputs", [])
             listing_two_pass = any(p.rsplit("/", 1)[-1].startswith("bottom.") for p in listing_inputs)
@@ -315,16 +314,37 @@ class Splatter:
             except RuntimeError:
                 match = None
             out = compare_scans.remote(cid, listing_id, listing_ply, res["files"]["splat.ply"], listing, match)
-            resp = put_result(out["response"], out["pairs"])
+            resp = put_result(out["response"])
+            self._rotate_to_listing(sb, cid, resp, out.get("align"))
             ev.send("stage", {"scan_id": cid, "stage": "7_listing", "status": resp["status"],
                               "ms": int((time.time() - t0) * 1000)})
             return resp
         except Exception as e:
             if _gpu_dead(e):
                 _replace_container(str(e)[:120])
-            return put_result(failed("INTERNAL", f"{type(e).__name__}: {e}"), {})
+            return put_result(failed("INTERNAL", f"{type(e).__name__}: {e}"))
         finally:
             ev.close()
+
+    @staticmethod
+    def _rotate_to_listing(sb, cid: str, resp: dict, align: dict | None) -> None:
+        """Tag the buyer's splat_url with '#ry=<deg>' (the viewer's fragmentRotation) so it faces the listing's way.
+        Only when the alignment is trustworthy: the check succeeded, wasn't judged misaligned, ambiguity <= 0.85
+        (aggregate.py's ambiguity_max). Never fails the check."""
+        from mintsplat.yaw import yaw_deg
+        from supabase_setup.storage import ASSETS
+
+        try:
+            amb = (align or {}).get("ambiguity")
+            if (not align or resp.get("status") == "failed" or resp.get("verdict") == "alignment_failed"
+                    or resp.get("cause") == "misaligned" or amb is None or amb > 0.85):
+                return
+            path = f"splats/{cid}.json"
+            man = json.loads(sb.download(ASSETS, path))
+            man["splat_url"] = man["splat_url"].split("#")[0] + f"#ry={yaw_deg(align['matrix']):.1f}"
+            sb.upload(ASSETS, path, json.dumps(man, indent=1).encode(), "application/json", cache_control="no-cache")
+        except Exception as e:  # cosmetic: the slider just stays unrotated
+            print(f"yaw tag skipped: {type(e).__name__}: {e}")
 
     def _listing_top_spz(self, sb, listing_id: str) -> bytes:
         """The listing splatted from its top lap only (video.mp4), for a rescan that has no underside. Made once per

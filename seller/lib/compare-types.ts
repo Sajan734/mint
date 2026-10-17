@@ -3,13 +3,10 @@
 // (Evidence, Verdict, ClaimsFinding, NextStep, Explanation, ErrorInfo). UUIDs are plain strings here.
 // Prob fields are 0..1 floats. Never show evidence_score or p_present as a number to people (PLAN_UX section 4).
 
-export type VerdictLabel =
-  | "same"
-  | "different"
-  | "uncertain"
-  | "alignment_failed"
-  | "scan_quality_poor"
-  | "listing_rejected";
+/** Strictly binary. Why a "different" could not be confirmed is in Verdict.cause. */
+export type VerdictLabel = "same" | "different";
+/** models.py `Cause`: set when the check could not run cleanly; null/absent otherwise (old recorded runs have none). */
+export type VerdictCause = "low_quality" | "misaligned" | "listing_rejected";
 /** models.py `Category`: what kind of difference a view showed. */
 export type EvidenceCategory = "shape_diff" | "part_diff" | "color_diff" | "any_diff";
 export type ActionCategory = "none" | "request_more_photos" | "message_seller" | "request_refund" | "escalate";
@@ -46,6 +43,7 @@ export interface Evidence {
 
 export interface Verdict {
   label: VerdictLabel;
+  cause?: VerdictCause | null;
   evidence_score: number | null; // ordinal, not a probability; only for same/different
   reason: string;
   evidence: Evidence;
