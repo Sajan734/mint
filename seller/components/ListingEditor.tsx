@@ -9,7 +9,7 @@ import { DEMO_SELLER_ID, sampleSplatFor, useMockMode } from "@/lib/mock-mode";
 import type { ListingDoc, MarketListing } from "@/lib/types";
 import scanResult from "@/mock/scan-result.json";
 
-// The recorded listing-agent result (pots) that demo mode replays for every new scan.
+// The real listing (ThinkPad mouse, gsplat/out/scan_a6816dfc) that demo mode replays for every new scan.
 const MOCK_RESULT = scanResult as unknown as MarketListing;
 
 export interface Fields {

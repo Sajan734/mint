@@ -19,7 +19,7 @@ export default async function ScanPage({ params }: { params: Promise<{ id: strin
           Scan this code with your iPhone. The Mint app records the item and sends it here. This page updates by itself.
         </p>
       </header>
-      {/* Demo mode replays the recorded pots listing (real listing-agent output); live mode never reads it. */}
+      {/* Demo mode replays a real listing (ThinkPad mouse, gsplat/out/scan_a6816dfc); live mode never reads it. */}
       <ScanFlow kind="listing" scanId={id} deepLink={deepLink} qrSvg={qrSvg} mockResult={scanResult as MarketListing} />
     </div>
   );

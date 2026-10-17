@@ -23,7 +23,9 @@ vi.mock("next/link", () => ({
 }));
 
 const ID = "0b9c6a2e-5f1d-4c3b-9a8e-7d6c5b4a3f21";
-const pots = scanResult as unknown as MarketListing;
+const real = scanResult as unknown as MarketListing; // the real ThinkPad listing demo mode replays
+const SUGGESTED = real.listing.price_cad;
+const REF = real.reference_price_cad;
 
 describe("validateFields", () => {
   const ok = { title: "Pots", description: "Twenty plants.", price: "30" };
@@ -49,25 +51,25 @@ describe("validateFields", () => {
 
 describe("seedEntry and applyEdits", () => {
   it("demo seed: the wrapper becomes Raj's, the agent's text and prices stay", () => {
-    const e = seedEntry(ID, pots, "mock");
+    const e = seedEntry(ID, real, "mock");
     expect(e.market.listing.item_id).toBe(ID);
     expect(e.market).toMatchObject({ seller_id: "sel_raj", garage_sale_id: "gs_agincourt_tech", status: "available" });
     expect(e.market.location).toEqual({ neighbourhood: "Agincourt", city: "Toronto" });
-    expect(e.market.listing.title).toBe(pots.listing.title);
-    expect(e.suggested_price_cad).toBe(30);
-    expect(e.market.reference_price_cad).toBe(30);
+    expect(e.market.listing.title).toBe(real.listing.title);
+    expect(e.suggested_price_cad).toBe(SUGGESTED);
+    expect(e.market.reference_price_cad).toBe(REF);
     expect(e.state).toBe("draft");
   });
   it("publish writes the edits and never touches the reference price", () => {
-    const seed = seedEntry(ID, pots, "mock");
+    const seed = seedEntry(ID, real, "mock");
     const out = applyEdits(seed, { title: " My pots ", description: "Plants.", price: "45" }, "published", "2026-10-17T15:00:00Z");
     expect(out.state).toBe("published");
     expect(out.published_at).toBe("2026-10-17T15:00:00Z");
     expect(out.market.listing).toMatchObject({ title: "My pots", description: "Plants.", price_cad: 45 });
-    expect(out.market.reference_price_cad).toBe(30);
-    expect(out.suggested_price_cad).toBe(30);
+    expect(out.market.reference_price_cad).toBe(REF);
+    expect(out.suggested_price_cad).toBe(SUGGESTED);
     expect(out.market.status).toBe("available");
-    expect(seed.market.listing.title).toBe(pots.listing.title); // no mutation
+    expect(seed.market.listing.title).toBe(real.listing.title); // no mutation
   });
 });
 
@@ -77,9 +79,9 @@ describe("ListingEditor", () => {
   it("demo mode: prefills from the recorded result and saves it as a draft", () => {
     localStorage.setItem(MOCK_KEY, "1");
     render(<ListingEditor id={ID} doc={null} />);
-    expect(screen.getByLabelText("Name")).toHaveValue(pots.listing.title);
-    expect(screen.getByLabelText("Your price")).toHaveValue("30");
-    expect(screen.getByText("Suggested price $30")).toBeInTheDocument();
+    expect(screen.getByLabelText("Name")).toHaveValue(real.listing.title);
+    expect(screen.getByLabelText("Your price")).toHaveValue(String(SUGGESTED));
+    expect(screen.getByText(`Suggested price $${SUGGESTED}`)).toBeInTheDocument();
     expect(getLocal(ID)?.state).toBe("draft");
   });
 
@@ -105,7 +107,7 @@ describe("ListingEditor", () => {
     expect(saved.state).toBe("published");
     expect(saved.market.listing.title).toBe("Twenty houseplants");
     expect(saved.market.listing.price_cad).toBe(40);
-    expect(saved.market.reference_price_cad).toBe(30);
+    expect(saved.market.reference_price_cad).toBe(REF);
     expect(saved.market.seller_id).toBe("sel_raj");
     expect(screen.getByText("Published on this device.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "View listing" })).toHaveAttribute("href", `/listing/${ID}`);
@@ -122,7 +124,7 @@ describe("ListingEditor", () => {
   });
 
   it("live: a listed document becomes a draft; nothing yet keeps the old copy", () => {
-    const doc: ListingDoc = { v: 1, scan_id: ID, status: "listed", market_listing: pots };
+    const doc: ListingDoc = { v: 1, scan_id: ID, status: "listed", market_listing: real };
     const { unmount } = render(<ListingEditor id={ID} doc={doc} />);
     expect(getLocal(ID)?.source).toBe("live");
     unmount();

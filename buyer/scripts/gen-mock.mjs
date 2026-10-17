@@ -1,4 +1,4 @@
-// Run once: node scripts/gen-mock.mjs  -> writes mock/*.json, public/avatars/*.svg and ../seller/mock/*.json (outputs are committed).
+// Run once: node scripts/gen-mock.mjs  -> writes mock/*.json, public/avatars/*.svg and ../seller/mock/my-listings.json (outputs are committed).
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -154,6 +154,6 @@ out("mock/listings.json", listings);
 out("mock/frame-fallbacks.json", fallbacks);
 out("mock/orders.json", orders);
 out("mock/verify-sample.json", verify);
-out("../seller/mock/scan-result.json", listings[0]); // the pots_i1 entry, real listing-agent output
+// ../seller/mock/scan-result.json (what demo mode's scan flow replays) comes from make_demo_assets.py: a real listing.
 out("../seller/mock/my-listings.json", listings.filter((m) => m.seller_id === "sel_raj"));
 console.log("wrote", listings.length, "listings");

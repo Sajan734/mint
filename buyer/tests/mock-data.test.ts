@@ -88,7 +88,6 @@ describe("mock data", () => {
     }
   });
   it("keeps the seller app's mock copies equal to the buyer entries", () => {
-    expect(readJson("../../seller/mock/scan-result.json")).toEqual(listings.find((m) => m.listing.item_id === "pots_i1"));
     const raj = (listingsRaw as { seller_id: string }[]).filter((m) => m.seller_id === "sel_raj");
     expect(readJson("../../seller/mock/my-listings.json")).toEqual(raj);
   });

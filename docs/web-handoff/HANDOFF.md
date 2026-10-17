@@ -76,7 +76,7 @@ The orchestrator looked at each screen in a browser. The screenshots are in `sho
 | Buyer listing | `/listing/{id}` | `buyer/app/listing/[id]/page.tsx`, `buyer/components/LocalListing.tsx` (exports `ListingView`), `buyer/components/ContactSeller.tsx` | Works, follows the sketch. Tiles, Contact seller, Scan. Reserve and seller card kept. See `shots/2-listing.png`. |
 | Your listings | `/sell` | `seller/app/page.tsx`, `seller/components/ListingRow.tsx` | Works. 2 listed, 1 reserved, 2 sold, plus "Scanned, listing not written yet". Small bug: **New listing** shows twice (header and page). See `shots/3-sell.png`. |
 | Scan flow | `/sell/scan/new` -> `/sell/scan/{uuid}` | `seller/app/scan/[id]/page.tsx`, `components/ScanFlow.tsx`, `components/PhoneRing.tsx`, `lib/scan-feed.ts`, `lib/progress.ts` | Works in demo mode. Mirrors the iOS app (mint ring, % and "SENDING"). See `shots/5-scan.png`. |
-| Editor | `/sell/listing/{id}` | `seller/app/listing/[id]/page.tsx`, `seller/components/ListingEditor.tsx` | Works, follows the sketch. Save draft and Publish write the browser store. In demo mode the 3D view shows a blurry Spark sample splat. Replace it with a real scan (section 4, step 1). See `shots/4-editor.png`. |
+| Editor | `/sell/listing/{id}` | `seller/app/listing/[id]/page.tsx`, `seller/components/ListingEditor.tsx` | Works, follows the sketch. Save draft and Publish write the browser store. In demo mode it replays the real ThinkPad listing (scan `a6816dfc`) with its real `.spz` (done on `sajan/web`, see `PROGRESS.md`). See `shots/4-editor.png`. |
 | Rescan + match | `/listing/{id}/check` -> `/listing/{id}/check/{cid}` | `buyer/app/listing/[id]/check/`, `buyer/components/CheckFlow.tsx`, `CompareResult.tsx`, `WipeSlider.tsx`, `SplatWipe.tsx`, `buyer/lib/compare.ts` | Works in demo mode with real recorded agent runs. Verdict in plain words, flagged views, claims (seen, not seen, cannot check), image wipe slider. The 3D splat wipe (`SplatWipe`) needs a buyer splat. No buyer splat exists yet, so it stays hidden. See `shots/6-check.png`. |
 
 Important: five build agents stopped mid-task at a usage limit. Their code passes all checks, and the screens above
@@ -84,7 +84,7 @@ work. They did not finish their own review passes. Phone-width (390 px) layouts 
 
 ## 4. What to do next (in this order)
 
-1. **Use the real scans in demo mode.** Nikhil pushed real data after the build started:
+1. **Use the real scans in demo mode.** (Done on `sajan/web`: see `PROGRESS.md`.) Nikhil pushed real data after the build started:
    - `.spz` files: `gsplat/out/{backpack,chair,phone,merged,live_check}/splat.spz` (2.3 to 3.0 MB each)
    - real end-to-end runs: `gsplat/out/scan_*/listing.json` and `scan.json` (a ThinkPad mouse scanned on the phone,
      listed by the listing agent)
