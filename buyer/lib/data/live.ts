@@ -7,7 +7,7 @@ const DEFAULT_SUPABASE_URL = "https://jpanyhsifoxxiizkgjno.supabase.co"; // publ
 const TIMEOUT_MS = 3000;
 
 export const liveIndexUrl = () =>
-  `${(process.env.MINT_SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/$/, "")}/storage/v1/object/public/assets/listings/index.json`;
+  `${(process.env.NEXT_PUBLIC_SUPABASE_URL || DEFAULT_SUPABASE_URL).replace(/\/$/, "")}/storage/v1/object/public/assets/listings/index.json`;
 
 /** Listed scans that pass the site's schema, in index order (newest first). Anything else is skipped. */
 export function parseLiveIndex(json: unknown): MarketListing[] {
