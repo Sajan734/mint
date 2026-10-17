@@ -1,0 +1,201 @@
+"""Compare pipeline (U24). Order is fixed by AM-08:
+resolve -> judge -> aggregate -> check_claims -> plan(PRE-claims verdict) -> apply_claims -> advise.
+"""
+
+import asyncio
+import dataclasses
+import logging
+import time
+from collections.abc import Callable
+from dataclasses import dataclass, field
+from typing import Any
+
+from buyer_agent import sources
+from buyer_agent.advisor import draft
+from buyer_agent.aggregate import DENT_CAVEAT, aggregate
+from buyer_agent.claims import ClaimsProvider, apply_claims, check_claims, resolve_claims
+from buyer_agent.config import Settings
+from buyer_agent.errors import AgentError, ErrorCode, user_message
+from buyer_agent.groq_client import GroqAnswer, GroqClient
+from buyer_agent.jev_client import JevAnswer, JevClient
+from buyer_agent.judge import judge_views
+from buyer_agent.models import (
+    ClaimsFinding,
+    CompareRequest,
+    CompareResponse,
+    ErrorInfo,
+    Evidence,
+    JevViewScores,
+    ListingClaims,
+    Verdict,
+    ViewPair,
+)
+from buyer_agent.planner import plan
+from buyer_agent.runlog import RunLog, safe_exc
+
+log = logging.getLogger(__name__)
+UNVALIDATED_CAVEAT = "Rendered with an unvalidated renderer; treat this result as a preview."
+NO_CLAIMS_CAVEAT = "No listing details were available, so the item was not checked against them."
+CLAIMS_FAILED_CAVEAT = "The listing details could not be checked."
+
+
+@dataclass(frozen=True)
+class Deps:
+    settings: Settings
+    jev: JevClient
+    groq: GroqClient
+    renderer: Any
+    runlog_factory: Callable[[str], RunLog]
+    claims_provider: ClaimsProvider | None = None
+    resolver: Callable[..., sources.Resolved] = sources.resolve
+    clock: Callable[[], float] = time.monotonic
+
+
+@dataclass
+class _Ctx:
+    req: CompareRequest
+    deps: Deps
+    run: RunLog
+    t0: float
+    timings: dict[str, int] = field(default_factory=dict)
+
+    def lap(self, name: str, start: float) -> None:
+        self.timings[name] = int((self.deps.clock() - start) * 1000)
+
+
+class _RecordingGroq:
+    """Wraps a Groq client so the run folder gets every call (groq.json)."""
+
+    def __init__(self, inner: GroqClient) -> None:
+        self._inner = inner
+        self.records: list[dict[str, str]] = []
+
+    async def chat(self, model: str, system: str, user: str, *, key: str = "") -> GroqAnswer:
+        answer = await self._inner.chat(model, system, user, key=key)
+        self.records.append({"model": answer.model, "text": answer.text, "key": key})
+        return answer
+
+
+def _quality_verdict(issues: tuple[str, ...]) -> Verdict:
+    evidence = Evidence(
+        requested_views=0, answered_views=0, usable_views=0, failed_views=[], categories={},
+        flagged=[], alignment=None, alignment_mode="icp",
+    )  # fmt: skip
+    return Verdict(
+        label="scan_quality_poor",
+        evidence_score=None,
+        reason="The scans were too incomplete or too different in size to compare.",
+        evidence=evidence,
+        caveats=[DENT_CAVEAT],
+    )
+
+
+def _failed(ctx: _Ctx, code: ErrorCode) -> CompareResponse:
+    ctx.lap("total", ctx.t0)
+    return CompareResponse(
+        comparison_id=ctx.req.comparison_id, status="failed", verdict=None,
+        claims_available=False, claims_findings=[], next_step=None,
+        error=ErrorInfo(code=code.value, message=user_message(code)),
+        model_ids={}, timings_ms=ctx.timings, run_id=str(ctx.req.comparison_id),
+    )  # fmt: skip
+
+
+def _save_pairs(run: RunLog, pairs: list[ViewPair]) -> None:
+    for i, p in enumerate(pairs):
+        run.save_png(f"a_{i:02d}.png", p.png_a)
+        run.save_png(f"b_{i:02d}.png", p.png_b)
+
+
+async def _judge(ctx: _Ctx, pairs: list[ViewPair]) -> tuple[list[JevViewScores], list]:
+    index = {p.label: i for i, p in enumerate(pairs)}
+
+    def on_raw(label: str, answer: JevAnswer) -> None:
+        ctx.run.save_json(
+            f"jev/view_{index[label]:02d}.json", {"view": label, **dataclasses.asdict(answer)}
+        )
+
+    def on_failure(label: str, code: str, detail: str) -> None:
+        ctx.run.save_failure_detail(label, f"{code}: {detail}")
+
+    return await judge_views(ctx.deps.jev, pairs, ctx.deps.settings, on_raw, on_failure)
+
+
+async def _claims(
+    ctx: _Ctx, claims: ListingClaims | None, pairs: list[ViewPair]
+) -> tuple[list[ClaimsFinding], bool, str | None]:
+    """(findings, claims_available, caveat)."""
+    if claims is None:
+        return [], False, NO_CLAIMS_CAVEAT
+    if not pairs:
+        return [], False, None
+    try:
+        return await check_claims(ctx.deps.jev, claims, pairs, ctx.deps.settings), True, None
+    except Exception as exc:  # noqa: BLE001 claims are optional; never fail the comparison
+        log.warning("claims stage failed: %s", safe_exc(exc))
+        return [], False, CLAIMS_FAILED_CAVEAT
+
+
+async def _verdict(ctx: _Ctx, resolved: sources.Resolved) -> tuple[Verdict, list[JevViewScores]]:
+    if resolved.quality_issues:
+        return _quality_verdict(resolved.quality_issues), []
+    start = ctx.deps.clock()
+    scores, failures = await _judge(ctx, resolved.pairs)
+    ctx.lap("judge", start)
+    verdict = aggregate(
+        scores, failures, len(resolved.pairs), resolved.alignment, resolved.alignment_mode
+    )
+    return verdict, scores
+
+
+async def _compare(ctx: _Ctx) -> CompareResponse:
+    req, deps = ctx.req, ctx.deps
+    ctx.run.save_json("request.json", req)
+    start = deps.clock()
+    resolved = await asyncio.to_thread(deps.resolver, req, deps.settings, deps.renderer)
+    ctx.lap("resolve", start)
+    _save_pairs(ctx.run, resolved.pairs)
+    pre, scores = await _verdict(ctx, resolved)
+
+    start = deps.clock()
+    claims = resolve_claims(req.claims, deps.claims_provider, req.listing_id)
+    findings, available, claims_caveat = await _claims(ctx, claims, resolved.pairs)
+    ctx.lap("claims", start)
+
+    next_plan = plan(pre, findings, req.attempt)  # PRE-claims verdict (AM-08)
+    reported = apply_claims(pre, findings)
+    extra = [c for c in (claims_caveat,) if c]
+    if req.view_pairs is None and not deps.settings.renderer_validated:
+        extra.append(UNVALIDATED_CAVEAT)
+    reported = reported.model_copy(update={"caveats": [*reported.caveats, *extra]})
+
+    start = deps.clock()
+    groq = _RecordingGroq(deps.groq)
+    step = await draft(groq, next_plan, reported, findings, claims, deps.settings)
+    ctx.run.save_json("groq.json", {"calls": groq.records})
+    ctx.lap("advise", start)
+    ctx.lap("total", ctx.t0)
+    return CompareResponse(
+        comparison_id=req.comparison_id, status="done", verdict=reported,
+        claims_available=available, claims_findings=findings, next_step=step, error=None,
+        model_ids={
+            "jev": scores[0].model if scores else deps.settings.jev_model,
+            "groq": step.drafted_by,
+        },
+        timings_ms=ctx.timings, run_id=str(req.comparison_id),
+    )  # fmt: skip
+
+
+async def compare(req: CompareRequest, deps: Deps) -> CompareResponse:
+    ctx = _Ctx(req, deps, deps.runlog_factory(str(req.comparison_id)), deps.clock())
+    try:
+        response = await asyncio.wait_for(_compare(ctx), deps.settings.request_cap_s)
+    except AgentError as err:
+        log.warning("compare failed: %s %s", err.code.value, safe_exc(err))
+        response = _failed(ctx, err.code)
+    except TimeoutError:
+        response = _failed(ctx, ErrorCode.INTERNAL)
+    except Exception as exc:  # noqa: BLE001 last line of defence; detail goes to the log only
+        log.error("compare crashed: %s", safe_exc(exc))
+        response = _failed(ctx, ErrorCode.INTERNAL)
+    ctx.run.save_json("response.json", response)  # failed responses are never persisted
+    return response
