@@ -25,7 +25,6 @@ import SellerCard from "@/components/SellerCard";
 import GarageSaleHeader from "@/components/GarageSaleHeader";
 import GarageSaleRail from "@/components/GarageSaleRail";
 import type { GarageSale, MarketListing, Seller } from "@/lib/types";
-import { sampleSplatFor } from "@/lib/mock-mode";
 
 const seller: Seller = {
   id: "s1", name: "Priya", avatar: "", neighbourhood: "Riverside", member_since: "2025-01-01",
@@ -115,13 +114,14 @@ describe("ListingCard hover to 3D", () => {
     expect(screen.queryByTestId("splat")).toBeNull();
   });
 
-  it("in demo mode a card with no splat spins a labelled sample", async () => {
+  it("in demo mode a card with no splat shows no stand-in 3D", async () => {
     desktop();
     localStorage.setItem("mint.mock", "1");
     render(<ListingCard item={item} seller={seller} sale={sale} />);
     fireEvent.focus(screen.getByRole("link", { name: "Clay pot" })); // keyboard focus counts as hover
-    expect(await screen.findByTestId("splat")).toHaveAttribute("data-src", sampleSplatFor("i1"));
-    expect(screen.getByText("Sample 3D")).toBeInTheDocument();
+    await new Promise((r) => setTimeout(r, 300));
+    expect(screen.queryByTestId("splat")).toBeNull();
+    expect(screen.queryByText(/Sample 3D/)).toBeNull();
   });
 
   it("live mode with no splat uses the frame spinner, and a splat error falls back to it", async () => {

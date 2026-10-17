@@ -45,8 +45,8 @@ const FIELDS: { key: keyof Address; label: string; auto: string }[] = [
   { key: "city", label: "City", auto: "address-level2" },
   { key: "postal_code", label: "Postal code", auto: "postal-code" },
 ];
-const btn = "inline-flex min-h-11 items-center justify-center rounded-full px-5 font-semibold transition-[background-color,transform] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]";
-const primary = `${btn} bg-leaf text-btn-fg hover:bg-leaf-press disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-2`;
+const btn = "inline-flex min-h-11 items-center justify-center rounded-md px-5 font-semibold transition-[background-color,transform] active:scale-[0.97] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--focus)]";
+const primary = `${btn} bg-ink text-bg hover:bg-[#2a3330] disabled:cursor-not-allowed disabled:bg-surface-2 disabled:text-ink-2`;
 const STEPS = ["Delivery", "Details", "Confirm"];
 
 const Alert = () => (

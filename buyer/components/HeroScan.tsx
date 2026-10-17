@@ -1,26 +1,31 @@
 "use client";
-// The landing's shop window (docs/design/DESIGN.md §1): a real Mint scan you can turn. The files are the real
-// end-to-end run in buyer/public/demo/listings/a6816dfc (phone upload -> splat -> listing agent), so this is shown in
-// live mode too, and the caption says exactly what it is.
+// The landing's shop window: a real 3D Gaussian splat you can turn. It is the camera listed on the site (itm_sony_a7),
+// captured and shared on SuperSplat by veryos under CC BY 4.0, so the caption credits it and does not call it a Mint
+// scan. Credits for every model: /about#credits.
+import { HERO, heroFrame } from "@/lib/hero";
 import SplatViewer from "./SplatViewer";
 
-const SCAN = "/demo/listings/a6816dfc";
 
-export default function HeroScan() {
+/** `src`: the camera listing's splat_url, which carries its orientation fragment (scripts/gen-mock.mjs ROT). */
+export default function HeroScan({ src = HERO.splat }: { src?: string | null }) {
   return (
     <figure className="flex flex-col gap-3">
       <div className="aspect-[4/3.4] w-full overflow-hidden rounded-[28px] bg-surface md:aspect-square">
         <SplatViewer
-          src={`${SCAN}/splat.spz`}
-          poster={`${SCAN}/spin/f00.webp`}
-          label="A real Mint scan of a black ThinkPad mouse"
+          src={src ?? HERO.splat}
+          poster={heroFrame(0)}
+          label={`3D view of a ${HERO.title}`}
           autoRotate
           interactive
           className="bg-surface"
         />
       </div>
       <figcaption className="text-sm text-ink-2">
-        A real Mint scan of a ThinkPad mouse, made from a phone video in about 40 seconds.
+        A real 3D scan of the{" "}
+        <a href={`/listing/${HERO.item}`} className="font-semibold text-mint-ink underline-offset-2 hover:underline">
+          Sony Alpha 7 for sale here
+        </a>
+        , shared by veryos on SuperSplat (CC BY 4.0).
       </figcaption>
     </figure>
   );

@@ -5,7 +5,6 @@
 // frame spinner when there is no splat. Touch and reduced motion: static only.
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { MarketListing } from "@/lib/types";
-import { sampleSplatFor, useMockMode } from "@/lib/mock-mode";
 import SplatViewer, { preloadSplatScene } from "./SplatViewer";
 import SpinViewer from "./SpinViewer";
 
@@ -28,12 +27,10 @@ export default function CardMedia({
   className?: string;
   children: ReactNode;
 }) {
-  const mock = useMockMode();
   const { listing: l } = item;
   // The first spin frame stands on the shelf (transparent background); preview renders can carry a flat grey backdrop.
   const still = item.frames[0] ?? l.preview_images[0];
-  const splat = item.splat_url ?? (mock ? sampleSplatFor(l.item_id) : null);
-  const sample = !item.splat_url && !!splat;
+  const splat = item.splat_url;
   const canSpin = item.frames.length >= MIN_SPIN_FRAMES;
   const [active, setActive] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -75,7 +72,7 @@ export default function CardMedia({
           <div className="absolute inset-0">
             <SplatViewer
               src={splat}
-              label={sample ? `Sample 3D view, not ${l.title}` : `3D view of ${l.title}`}
+              label={`3D view of ${l.title}`}
               poster={still}
               autoRotate
               className="bg-surface-2"
@@ -88,7 +85,7 @@ export default function CardMedia({
             <SpinViewer frames={item.frames} alt={l.title} variant="card" />
           </div>
         )}
-        {item.splat_url ? <span className={PILL}>3D</span> : showSplat && <span className={PILL}>Sample 3D</span>}
+        {item.splat_url && <span className={PILL}>3D</span>}
       </div>
       {children}
     </article>

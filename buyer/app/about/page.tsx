@@ -1,3 +1,5 @@
+import credits from "@/mock/splat-credits.json";
+
 export const metadata = { title: "About | Mint" };
 
 const steps = [
@@ -36,6 +38,23 @@ export default function AboutPage() {
         <p className="mt-2 text-ink-2">We would rather tell you now than surprise you later.</p>
         <ul className="mt-6 grid gap-3 pl-5 text-[length:var(--t-lg)]" style={{ listStyle: "disc" }}>
           {limits.map((l) => <li key={l}>{l}</li>)}
+        </ul>
+      </section>
+      <section id="credits" aria-labelledby="credits-h" className="mt-14 flex flex-col gap-4">
+        <h2 id="credits-h" className="text-[length:var(--t-2xl)]">3D models on this site</h2>
+        <p className="max-w-[60ch] text-ink-2">
+          The demo listings use real 3D Gaussian splats that people captured and shared on SuperSplat. They were not
+          scanned by Mint, and the listing text and prices around them are demo data. Thank you to their authors:
+        </p>
+        <ul className="grid gap-x-8 gap-y-2 sm:grid-cols-2">
+          {credits.map((c) => (
+            <li key={c.key} className="text-[15px]">
+              <a href={c.url} className="font-semibold text-mint-ink underline-offset-2 hover:underline">
+                {c.title}
+              </a>{" "}
+              by {c.author}, {c.licence}
+            </li>
+          ))}
         </ul>
       </section>
     </article>

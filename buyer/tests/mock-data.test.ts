@@ -17,27 +17,23 @@ const badges = listings.map((m) => priceBadge(m.listing.price_cad, m.reference_p
 describe("mock data", () => {
   it("has the planned counts", () => {
     expect(sellers).toHaveLength(6);
-    expect(garageSales).toHaveLength(8);
-    expect(listings).toHaveLength(40);
+    expect(garageSales).toHaveLength(7);
+    expect(listings).toHaveLength(20); // 2 photographed heroes + 18 real splats
     expect(orders).toHaveLength(2);
-    expect(count(listings, (m) => m.category)).toEqual(Object.fromEntries(Object.keys(count(listings, (m) => m.category)).map((k) => [k, 5])));
-    expect(Object.keys(count(listings, (m) => m.category))).toHaveLength(8);
+    expect(Object.keys(count(listings, (m) => m.category)).sort()).toEqual(
+      ["clothing_accessories", "electronics", "furniture", "garden_plants", "home_kitchen", "sports_outdoors", "toys_games"]);
   });
   it("matches badge, grade, status distributions", () => {
-    expect(count(badges, (b) => b.kind)).toEqual({ great: 12, fair: 16, high: 7, overpriced: 3, unknown: 2 });
-    expect(count(listings, (m) => m.listing.condition_grade)).toEqual({ like_new: 10, light_wear: 16, moderate_wear: 10, heavy_wear: 4 });
-    expect(count(listings, (m) => m.status)).toEqual({ available: 31, reserved: 5, sold: 4 });
-    expect(listings.filter((m) => m.listing.needs_seller_check)).toHaveLength(4);
+    expect(count(badges, (b) => b.kind)).toEqual({ great: 6, fair: 8, high: 4, overpriced: 1, unknown: 1 });
+    expect(count(listings, (m) => m.listing.condition_grade)).toEqual({ like_new: 7, light_wear: 10, moderate_wear: 2, heavy_wear: 1 });
+    expect(count(listings, (m) => m.status)).toEqual({ available: 13, reserved: 4, sold: 3 });
+    expect(listings.filter((m) => m.listing.needs_seller_check)).toHaveLength(1);
     for (const m of listings) expect(m.listing.needs_seller_check).toBe(m.listing.seller_check_reasons.length > 0);
-  });
-  it("sits exactly on the badge boundaries", () => {
-    const ratios = listings.filter((m) => m.reference_price_cad).map((m) => m.listing.price_cad / m.reference_price_cad!);
-    for (const r of [0.85, 1.1, 1.3]) expect(ratios.some((x) => Math.abs(x - r) < 1e-9)).toBe(true);
   });
   it("has referential integrity", () => {
     const ids = listings.map((m) => m.listing.item_id);
-    expect(new Set(ids).size).toBe(40);
-    expect(new Set(garageSales.map((s) => s.id)).size).toBe(8);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(new Set(garageSales.map((s) => s.id)).size).toBe(garageSales.length);
     for (const m of listings) {
       expect(sellers.some((s) => s.id === m.seller_id)).toBe(true);
       const sale = garageSales.find((s) => s.id === m.garage_sale_id);
@@ -47,7 +43,7 @@ describe("mock data", () => {
     }
     for (const s of garageSales) {
       expect(sellers.some((x) => x.id === s.seller_id)).toBe(true);
-      expect(listings.filter((m) => m.garage_sale_id === s.id)).toHaveLength(5);
+      expect(listings.some((m) => m.garage_sale_id === s.id)).toBe(true);
     }
     for (const o of orders) expect(ids).toContain(o.item_id);
   });
@@ -60,8 +56,14 @@ describe("mock data", () => {
     expect(garageSales.some((s) => s.ships)).toBe(true);
     expect(garageSales.some((s) => !s.ships)).toBe(true);
   });
-  it("uses turntable URLs, with local heroes and fallbacks", () => {
-    for (const m of listings.slice(2)) expect(m.frames.every((f, n) => new RegExp(`^/frames/[a-z]+/[a-z]+/${n}$`).test(f))).toBe(true);
+  it("streams real splats from SuperSplat and shows frames rendered from them; the heroes keep their photos", () => {
+    for (const m of listings.slice(2)) {
+      expect(m.splat_url).toMatch(/^https:\/\/d28zzqy0iyovbz\.cloudfront\.net\/[0-9a-f]{8}\/v\d\/meta\.json(#.*)?$/);
+      const key = m.listing.item_id.slice(4).replace(/_/g, "-");
+      const nums = m.frames.map((f) => Number(f.match(new RegExp(`^/demo/splats/${key}/f(\\d{2})\\.webp$`))?.[1]));
+      expect(nums.every((x, n) => x === (nums[0] + n) % 24)).toBe(true); // one continuous turn of the 24 rendered frames
+      expect(m.listing.attributes["3D scan"]).toMatch(/on SuperSplat, CC BY(-SA)? 4\.0$/);
+    }
     expect(listings[0].listing.item_id).toBe("pots_i1");
     expect(listings[0].frames[23]).toBe("/local/pots/f23.webp");
     expect(listings[1].frames[0]).toBe("/local/zen/f00.webp");

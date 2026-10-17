@@ -2,7 +2,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
-  DEMO_SELLER_ID, MOCK_KEY, SAMPLE_SPLATS, isMockMode, sampleSplatFor, setMockMode, useMockMode,
+  DEMO_SELLER_ID, MOCK_KEY, isMockMode, setMockMode, useMockMode,
 } from "../lib/mock-mode";
 
 const url = (qs: string) => window.history.replaceState({}, "", `/${qs}`);
@@ -81,18 +81,4 @@ describe("useMockMode", () => {
   });
 });
 
-describe("sample splats", () => {
-  it("are the five sparkjs.dev samples", () => {
-    expect(SAMPLE_SPLATS).toHaveLength(5);
-    for (const u of SAMPLE_SPLATS) expect(u).toMatch(/^https:\/\/sparkjs\.dev\/assets\/splats\/[a-z-]+\.spz$/);
-  });
-  it("sampleSplatFor is deterministic and spreads ids over the list", () => {
-    expect(sampleSplatFor("pots_i1")).toBe(sampleSplatFor("pots_i1"));
-    const picks = new Set(Array.from({ length: 40 }, (_, i) => sampleSplatFor(`item_${i}`)));
-    expect(picks.size).toBeGreaterThan(2);
-    for (const p of picks) expect(SAMPLE_SPLATS).toContain(p);
-  });
-  it("handles an empty id", () => {
-    expect(SAMPLE_SPLATS).toContain(sampleSplatFor(""));
-  });
-});
+

@@ -7,18 +7,6 @@ import { useSyncExternalStore } from "react";
 export const MOCK_KEY = "mint.mock";
 export const DEMO_SELLER_ID = "sel_raj";
 
-// Sample splats from sparkjs.dev (CORS open). They are NOT the item: the UI must label them "Sample 3D, not this item".
-export const SAMPLE_SPLATS: string[] = ["butterfly", "penguin", "robot-head", "cat", "fireplace"].map(
-  (n) => `https://sparkjs.dev/assets/splats/${n}.spz`,
-);
-
-/** Same id, same sample, on every render and every page. FNV-1a hash. */
-export function sampleSplatFor(id: string): string {
-  let h = 0x811c9dc5;
-  for (let i = 0; i < id.length; i++) h = Math.imul(h ^ id.charCodeAt(i), 0x01000193);
-  return SAMPLE_SPLATS[(h >>> 0) % SAMPLE_SPLATS.length];
-}
-
 function stored(): boolean {
   try {
     return localStorage.getItem(MOCK_KEY) === "1";

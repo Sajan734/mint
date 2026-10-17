@@ -34,7 +34,12 @@ export default function SiteFooter() {
           mint
         </p>
         <p className="text-sm text-on-pine-2">
-          A Hack the Valley 11 project. Items marked &ldquo;Demo data&rdquo; are samples, not real listings.
+          A Hack the Valley 11 project. Items marked &ldquo;Demo data&rdquo; are samples, not real listings. Their 3D
+          models are shared by their authors on SuperSplat:{" "}
+          <a href="/about#credits" className="font-semibold underline underline-offset-2">
+            credits
+          </a>
+          .
         </p>
       </div>
     </footer>

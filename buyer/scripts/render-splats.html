@@ -1,0 +1,93 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>render</title>
+<style>html,body{margin:0;background:transparent}canvas{display:block}</style>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.180.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.180.0/examples/jsm/",
+  "@sparkjsdev/spark": "https://cdn.jsdelivr.net/npm/@sparkjsdev/spark@2.1.0/dist/spark.module.js",
+  "fflate": "https://cdn.jsdelivr.net/npm/fflate@0.8.3/esm/browser.js"
+} }
+</script>
+</head>
+<body>
+<script type="module">
+// Used by scripts/render-splats.mjs. Renders one splat: window.renderFrames(n, elevationDeg) -> webp data URLs.
+import * as THREE from "three";
+import { SparkRenderer, SplatMesh, SplatFileType } from "@sparkjsdev/spark";
+import { zipSync } from "fflate";
+async function sogsZip(metaUrl) {
+  const metaBytes = new Uint8Array(await (await fetch(metaUrl)).arrayBuffer());
+  const meta = JSON.parse(new TextDecoder().decode(metaBytes));
+  const names = new Set();
+  for (const k of ["means", "scales", "quats", "sh0", "shN"]) for (const f of meta[k]?.files ?? []) names.add(f);
+  const files = { "meta.json": metaBytes };
+  await Promise.all([...names].map(async (n) => { files[n] = new Uint8Array(await (await fetch(new URL(n, metaUrl))).arrayBuffer()); }));
+  return zipSync(files, { level: 0 });
+}
+const q = new URLSearchParams(location.search);
+const src = q.get("src");
+const size = Number(q.get("size") || 512);
+const rx = Number(q.get("rx") || 0), ry = Number(q.get("ry") || 0), rz = Number(q.get("rz") || 0);
+const zoom = Number(q.get("zoom") || 1);
+const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: false, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+renderer.setSize(size, size);
+renderer.setClearColor(0x000000, 0);
+document.body.appendChild(renderer.domElement);
+const scene = new THREE.Scene();
+scene.add(new SparkRenderer({ renderer }));
+const camera = new THREE.PerspectiveCamera(32, 1, 0.01, 1000);
+const ext = new URL(src).pathname.split(".").pop().toLowerCase();
+const mesh = ext === "json"
+  ? new SplatMesh({ fileBytes: await sogsZip(src), fileType: SplatFileType.PCSOGSZIP })
+  : new SplatMesh({ url: src, fileType: ext });
+mesh.rotation.set(rx * Math.PI / 180, ry * Math.PI / 180, rz * Math.PI / 180, "XYZ");
+scene.add(mesh);
+window.status = "loading";
+mesh.initialized.then(() => {
+  mesh.updateMatrixWorld(true);
+  // Robust bounds: percentiles of the splat centres (stray background splats would blow up the box).
+  const xs = [], ys = [], zs = [], v = new THREE.Vector3();
+  const n = mesh.packedSplats.numSplats, step = Math.max(1, Math.floor(n / 60000));
+  mesh.packedSplats.forEachSplat((i, center) => {
+    if (i % step) return;
+    v.copy(center).applyMatrix4(mesh.matrixWorld);
+    xs.push(v.x); ys.push(v.y); zs.push(v.z);
+  });
+  const pct = (a, p) => { const s = Float64Array.from(a).sort(); return s[Math.floor(p * (s.length - 1))]; };
+  const lo = new THREE.Vector3(pct(xs, 0.02), pct(ys, 0.02), pct(zs, 0.02));
+  const hi = new THREE.Vector3(pct(xs, 0.98), pct(ys, 0.98), pct(zs, 0.98));
+  window.center = lo.clone().add(hi).multiplyScalar(0.5);
+  window.radius = hi.clone().sub(lo).length() / 2;
+  window.numSplats = n;
+  window.status = "ready";
+}).catch((e) => { window.status = "error " + e; });
+window.renderFrames = async (count, elevDeg) => {
+  const out = [];
+  const d = window.radius / Math.sin(16 * Math.PI / 180) * 0.92 / zoom;
+  const el = elevDeg * Math.PI / 180;
+  // Warm-up: Spark sorts splats asynchronously; the first frames after a move can be empty.
+  const warm = async (n) => { for (let i = 0; i < n; i++) { renderer.render(scene, camera); await new Promise((r) => requestAnimationFrame(r)); } };
+  for (let k = 0; k < count; k++) {
+    const az = (k / count) * Math.PI * 2;
+    camera.position.set(
+      window.center.x + d * Math.cos(el) * Math.sin(az),
+      window.center.y + d * Math.sin(el),
+      window.center.z + d * Math.cos(el) * Math.cos(az));
+    camera.lookAt(window.center);
+    camera.near = window.radius / 100; camera.far = window.radius * 100; camera.updateProjectionMatrix();
+    // render once (the move starts a sort in Spark's worker), give the sort time, then render the sorted frame
+    await warm(2);
+    await new Promise((r) => setTimeout(r, k === 0 ? 2500 : 900));
+    await warm(2);
+    out.push(renderer.domElement.toDataURL("image/webp", 0.86));
+  }
+  return out;
+};
+</script>
+</body>
+</html>
