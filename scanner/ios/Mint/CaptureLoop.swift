@@ -7,8 +7,20 @@ final class CaptureLoop: NSObject, ARSessionDelegate {
     let queue = DispatchQueue(label: "mint.capture", qos: .userInteractive)
     /// Set once before the session runs; called on the main actor.
     var onSight: (@MainActor (PaperReader.Sight) -> Void)?
-    /// Read QR codes too (while the app waits for a product). Set from the main actor; a stale read is harmless.
+    /// The camera came back after an interruption (another app had it), or the session failed: run it again.
+    var onNeedsRestart: (@MainActor (String) -> Void)?
+    /// Read QR codes instead of the paper (while the app waits for a product). Set from the main actor; a stale
+    /// read is harmless.
     var lookForCodes = false
+
+    /// When the last camera frame arrived (system uptime, seconds): the session's watchdog reads it from the
+    /// main actor to spot a camera that has stopped (a frozen preview).
+    var lastFrameAt: TimeInterval {
+        clock.lock(); defer { clock.unlock() }
+        return frameAt
+    }
+    private let clock = NSLock()
+    private var frameAt: TimeInterval = 0
 
     // Touched only on `queue`.
     private var recorder: VideoRecorder?
@@ -44,6 +56,7 @@ final class CaptureLoop: NSObject, ARSessionDelegate {
     }
 
     func session(_ session: ARSession, didUpdate frame: ARFrame) {
+        clock.lock(); frameAt = ProcessInfo.processInfo.systemUptime; clock.unlock()
         sensorSize = frame.camera.imageResolution
         if frame.timestamp - lastRead >= Self.readInterval {
             lastRead = frame.timestamp
@@ -74,6 +87,16 @@ final class CaptureLoop: NSObject, ARSessionDelegate {
             tracking: tracking,
             sharpness: Self.sharpness(frame.capturedImage)
         ))
+    }
+
+    func sessionInterruptionEnded(_ session: ARSession) {
+        DispatchQueue.main.async { MainActor.assumeIsolated { self.onNeedsRestart?("interruption ended") } }
+    }
+
+    func session(_ session: ARSession, didFailWithError error: Error) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            MainActor.assumeIsolated { self.onNeedsRestart?("failed: \(error.localizedDescription)") }
+        }
     }
 
     /// Per-frame sharpness for reconstruction to pick the crispest frames (Accelerate, ~1 ms).

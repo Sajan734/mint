@@ -41,9 +41,12 @@ struct CaptureView: View {
         .preferredColorScheme(.dark)
         .statusBarHidden()
         .onAppear { session.run() }
-        .onChange(of: scenePhase) { old, phase in
+        // Coming back from the background goes background → inactive → active, so run again on any .active
+        // (resume() is a no-op if the camera is already running). Waiting for background → active missed it,
+        // and the preview stayed frozen on its last frame (e.g. after opening the app from the Camera app's QR).
+        .onChange(of: scenePhase) { _, phase in
             if phase == .background { session.pause() }
-            if phase == .active && old == .background { session.run() }
+            if phase == .active { session.resume() }
         }
         .onOpenURL { session.open($0) }
     }
@@ -68,6 +71,9 @@ extension CaptureSession.Phase {
         if case .failed = self { return true }
         return false
     }
+
+    /// Read QR codes only while waiting for a product (or on the done / failed screens).
+    var readsCodes: Bool { self == .waiting || self == .finished || isFailed }
 }
 
 private struct CameraView: UIViewRepresentable {

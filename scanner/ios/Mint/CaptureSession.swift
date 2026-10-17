@@ -50,8 +50,7 @@ final class CaptureSession: NSObject, ObservableObject {
     static let tickCount = 72
 
     @Published private(set) var phase: Phase = .waiting {
-        // Read QR codes only while waiting for a product (or on the done / failed screens).
-        didSet { loop.lookForCodes = phase == .waiting || phase == .finished || phase.isFailed }
+        didSet { loop.lookForCodes = phase.readsCodes }
     }
     @Published private(set) var job: Job?
     @Published private(set) var link: Link = DashboardLink.url == nil ? .notSetUp : .connecting
@@ -81,6 +80,7 @@ final class CaptureSession: NSObject, ObservableObject {
     private var ticker: Timer?
     private var poller: Task<Void, Never>?
     private var handled: Set<String> = []
+    private var sent: Set<String> = []
     private var linkFailures = 0
     private var turn = PaperTurn()
     private var coverage = TurnCoverage()
@@ -94,6 +94,10 @@ final class CaptureSession: NSObject, ObservableObject {
     private var previewing = false   // Debug screen previews only
     private var reportedTenth = -1
     private var exposureLocked = false
+    /// The AR session should be running (between `run()` and `pause()`).
+    private(set) var isRunning = false
+    private var startedAt = Date.distantPast
+    private var lastRestart = Date.distantPast
     private var lastAim: CGPoint?
     private var lastAimAt = Date.distantPast
     private let tick = UIImpactFeedbackGenerator(style: .light)
@@ -108,11 +112,34 @@ final class CaptureSession: NSObject, ObservableObject {
         arView.session.delegate = loop
         arView.session.delegateQueue = loop.queue
         loop.onSight = { [weak self] in self?.apply($0) }
+        loop.onNeedsRestart = { [weak self] _ in self?.restartCamera() }
+        // `phase` starts at .waiting without running its didSet: read QR codes from the very first screen.
+        loop.lookForCodes = phase.readsCodes
     }
 
     // MARK: - Lifecycle
 
+    /// Starts the camera, AR tracking, the 30 Hz tick and the dashboard polling. Safe to call again.
     func run() {
+        arView.session.run(Self.configuration(), options: [.resetTracking])
+        isRunning = true
+        startedAt = Date()
+        ticker?.invalidate()
+        ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onTick() }
+        }
+        startPolling()
+        #if DEBUG
+        if let screen = UserDefaults.standard.string(forKey: "MintPreview") { preview(screen) }
+        #endif
+    }
+
+    /// Back in the foreground (from the Camera app's QR banner, the app switcher, a call…): run again if paused.
+    func resume() {
+        if !isRunning { run() }
+    }
+
+    private static func configuration() -> ARWorldTrackingConfiguration {
         let config = ARWorldTrackingConfiguration()
         // Full 4:3 sensor frames from the main (1x, wide-angle) back camera: ARKit's K refers to exactly these
         // pixels (the poses stay exact). Asking for the wide camera by name: a format is otherwise picked by size
@@ -125,23 +152,26 @@ final class CaptureSession: NSObject, ObservableObject {
             config.videoFormat = format
         }
         config.isAutoFocusEnabled = true
-        arView.session.run(config, options: [.resetTracking])
-        ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.onTick() }
-        }
-        startPolling()
-        #if DEBUG
-        if let screen = UserDefaults.standard.string(forKey: "MintPreview") { preview(screen) }
-        #endif
+        return config
     }
 
     func pause() {
         if phase == .recording { cancelPass() }
         arView.session.pause()
+        isRunning = false
         ticker?.invalidate()
         poller?.cancel()
         poller = nil
+    }
+
+    /// The camera stopped while the app is open (frozen preview: no frames for a while, the camera came back
+    /// from another app, or the session failed). Run the session again; mid-pass, keep its tracking so the
+    /// pass's poses stay in one world. At most once every 2 s.
+    private func restartCamera() {
+        guard isRunning, Date().timeIntervalSince(lastRestart) > 2 else { return }
+        lastRestart = Date()
+        arView.session.run(Self.configuration(), options: phase == .recording ? [] : [.resetTracking])
+        if phase == .recording { CameraLock.lock() }
     }
 
     // MARK: - Getting a product to scan
@@ -175,10 +205,20 @@ final class CaptureSession: NSObject, ObservableObject {
 
     /// A website link (`mint://scan?id=…` / `mint://verify?id=…&listing=…`) opened the app, or its QR code
     /// was read on the waiting screen.
-    func open(_ url: URL) { follow(url.absoluteString) }
+    func open(_ url: URL) { follow(url.absoluteString, explicit: true) }
 
-    private func follow(_ text: String) {
-        guard let link = DashboardLink.parse(text), !inScanner, !isSending, !handled.contains(link.scanID) else { return }
+    /// `explicit`: the link was opened on purpose (tapped, or from the Camera app's QR banner). Such a link
+    /// always wins, unless that scan was already sent or something has been recorded for the current one.
+    /// A QR code read by this app's own camera never reopens an id it has seen: a cancelled scan's QR may
+    /// still be on the laptop's screen.
+    private func follow(_ text: String, explicit: Bool = false) {
+        guard let link = DashboardLink.parse(text), !isSending, !sent.contains(link.scanID), link.scanID != job?.scanID,
+              explicit || !handled.contains(link.scanID) else { return }
+        if inScanner {
+            // In the scanner only before anything was recorded: drop that job for the new one.
+            guard phase == .ready, passes.isEmpty, let old = job else { return }
+            DashboardLink.report(.cancelled, scanID: old.scanID, passes: 0)
+        }
         begin(Job(scanID: link.scanID, fromDashboard: true, title: nil, listingID: link.listingID))
     }
 
@@ -339,6 +379,7 @@ final class CaptureSession: NSObject, ObservableObject {
                         DashboardLink.report(.uploading, scanID: job.scanID, passes: count, progress: p)
                     }
                 }
+                sent.insert(job.scanID)
                 DashboardLink.report(.uploaded, scanID: job.scanID, passes: count, progress: 1)
                 success.notificationOccurred(.success)
                 phase = .finished
@@ -353,6 +394,10 @@ final class CaptureSession: NSObject, ObservableObject {
     /// 30 Hz: the size limit on a pass, whether the paper and item are in view, and easing the item's box
     /// and the ring's turn towards the latest readings (which come ~8 times a second).
     private func onTick() {
+        // Watchdog: frames normally arrive 30–60 times a second. None for 1.5 s (and not just started) = frozen.
+        let now = Date()
+        if isRunning, now.timeIntervalSince(startedAt) > 3,
+           ProcessInfo.processInfo.systemUptime - loop.lastFrameAt > 1.5 { restartCamera() }
         if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.maxPassSeconds { stopPass() }
         let seen = Date().timeIntervalSince(lastPaperAt) < 0.6
         if seen != paperSeen { paperSeen = seen }

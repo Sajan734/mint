@@ -37,29 +37,40 @@ struct WaitingScreen: View {
 
     var body: some View {
         ZStack {
-            // Lighter than the other screens: the camera shows through, since it's reading QR codes.
-            Rectangle().fill(Color.brandPaper.opacity(0.88)).ignoresSafeArea()
+            // Paper over the camera, with a window in the middle where the live camera shows: you can see the QR
+            // code you're aiming at. The camera reads the whole frame, so the code needn't sit exactly in the window.
+            GeometryReader { geo in
+                let window = Self.window(in: geo.size)
+                ZStack(alignment: .top) {
+                    Path { p in
+                        p.addRect(CGRect(origin: .zero, size: geo.size))
+                        p.addRoundedRect(in: window, cornerSize: CGSize(width: 30, height: 30), style: .continuous)
+                    }
+                    .fill(Color.brandPaper.opacity(0.96), style: FillStyle(eoFill: true))
+                    QRWindow()
+                        .frame(width: window.width, height: window.height)
+                        .offset(x: window.minX, y: window.minY)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    VStack(spacing: 0) {
+                        Text("Ready when you are")
+                            .font(.system(size: 30, weight: .heavy, design: .rounded))
+                        Text("Point this phone at the **QR code** on the website\n(Scan an item, or Scan on a listing).")
+                            .font(.system(.body, design: .rounded))
+                            .multilineTextAlignment(.center)
+                            .foregroundStyle(Color.brandInk.opacity(0.75))
+                            .padding(.top, 10)
+                        if session.link == .online {
+                            linkStatus.padding(.top, 18)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, window.maxY + 26)
+                }
+            }
+            .ignoresSafeArea()
+
             VStack(spacing: 0) {
                 HStack { MintMark(); Spacer() }.padding(.top, 6)
-                Spacer()
-                ZStack {
-                    Ripples().frame(width: 300, height: 300)
-                    Circle().fill(Color.brandMint.opacity(0.14)).frame(width: 104, height: 104)
-                    Image(systemName: "qrcode.viewfinder")
-                        .font(.system(size: 44, weight: .semibold))
-                        .foregroundStyle(Color.brandMintInk)
-                }
-                Text("Ready when you are")
-                    .font(.system(size: 30, weight: .heavy, design: .rounded))
-                    .padding(.top, 8)
-                Text("Point this phone at the **QR code** on the website\n(Scan an item, or Scan on a listing).")
-                    .font(.system(.body, design: .rounded))
-                    .multilineTextAlignment(.center)
-                    .foregroundStyle(Color.brandInk.opacity(0.75))
-                    .padding(.top, 10)
-                if session.link == .online {
-                    linkStatus.padding(.top, 22)
-                }
                 Spacer()
                 Button(action: session.scanWithoutDashboard) {
                     Label("Scan without the dashboard", systemImage: "viewfinder")
@@ -75,6 +86,13 @@ struct WaitingScreen: View {
         .foregroundStyle(Color.brandInk)
     }
 
+    /// The camera window, in full-screen points: a square a little above the middle of the screen, which is the
+    /// middle of the camera picture (the part the QR reader looks at twice).
+    static func window(in size: CGSize) -> CGRect {
+        let side = min(size.width - 110, 260)
+        return CGRect(x: (size.width - side) / 2, y: size.height / 2 - side / 2 - 60, width: side, height: side)
+    }
+
     private var linkStatus: some View {
         let (color, text): (Color, String) = switch session.link {
         case .online: (.brandMint, "Connected · New product opens here by itself")
@@ -88,6 +106,37 @@ struct WaitingScreen: View {
         }
         .chip()
         .animation(.easeInOut, value: session.link)
+    }
+}
+
+/// Corner marks and a sweeping line over the camera window on the waiting screen.
+private struct QRWindow: View {
+    var body: some View {
+        TimelineView(.animation) { ctx in
+            Canvas { g, size in
+                let r = CGRect(origin: .zero, size: size).insetBy(dx: 2, dy: 2)
+                let len: CGFloat = 34, bend: CGFloat = 16
+                var marks = Path()
+                for (c, dx, dy) in [(CGPoint(x: r.minX, y: r.minY), 1.0, 1.0), (CGPoint(x: r.maxX, y: r.minY), -1.0, 1.0),
+                                    (CGPoint(x: r.minX, y: r.maxY), 1.0, -1.0), (CGPoint(x: r.maxX, y: r.maxY), -1.0, -1.0)] {
+                    marks.move(to: CGPoint(x: c.x + dx * len, y: c.y))
+                    marks.addLine(to: CGPoint(x: c.x + dx * bend, y: c.y))
+                    marks.addQuadCurve(to: CGPoint(x: c.x, y: c.y + dy * bend), control: c)
+                    marks.addLine(to: CGPoint(x: c.x, y: c.y + dy * len))
+                }
+                g.stroke(marks, with: .color(.brandMint), style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
+                // A line sweeping down and up, like a reader at work.
+                let f = (sin(ctx.date.timeIntervalSinceReferenceDate * 1.6) + 1) / 2
+                let y = r.minY + 22 + f * (r.height - 44)
+                let line = Path(CGRect(x: r.minX + 22, y: y - 1, width: r.width - 44, height: 2))
+                g.drawLayer { l in
+                    l.addFilter(.blur(radius: 6))
+                    l.fill(line, with: .color(.brandMint.opacity(0.9)))
+                }
+                g.fill(line, with: .color(.brandMint))
+            }
+        }
+        .allowsHitTesting(false)
     }
 }
 
