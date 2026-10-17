@@ -140,3 +140,7 @@ The team disliked the pine/oat/Fraunces look, mostly in the app. Layouts stay; t
 - Landing hero: the Sony Alpha 7 (veryos, CC BY 4.0), linked to its listing. The ThinkPad mouse is no longer the
   headline; it stays as the real end-to-end scan in the seller demo.
 - Tests: buyer 195 (1 skipped), seller 91, e2e demo 4.
+
+## Compare result: no view-by-view, binary verdict
+- Removed `WipeSlider`, the "Compare views" section, view chips and the `public/local/compare` WebP generation. Only the overall "Both scans in 3D" `SplatWipe` stays; without splats the text column is full width.
+- Verdict is strictly `same` or `different`, with optional `cause` (`low_quality`, `misaligned`, `listing_rejected`) shown as a sub-line. "We cannot tell" is gone. A failed check says "Could not run the check, try again" and shows no mark.

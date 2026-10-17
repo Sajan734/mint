@@ -74,7 +74,11 @@ python client.py relist <scan_id> [--title "Lenovo ThinkPad wireless mouse"]   #
   splats the rescan (published as `splats/{cid}`, not indexed), compares like with like (a rescan without an underside
   is compared with the listing's top lap only, cached as `splats/{listing}.top.spz`), and runs the buyer agent
   (`multiagent/buyer_agent`, Jev + Groq, in its own container `compare_scans`, upright alignment) on the two splats.
-  Result: `assets/comparisons/{cid}.json` (CompareResponse) + view pairs `assets/comparisons/{cid[:8]}/a_NN.png`.
+  Result: `assets/comparisons/{cid}.json` (CompareResponse); the per-view pairs are no longer published (they
+  still feed Jev). If the alignment is trusted (ok, not misaligned, ambiguity <= 0.85) the rescan's manifest
+  `splats/{cid}.json` gets `splat_url#ry=<deg>`: the B->A yaw `atan2(R[0][2], R[0][0])` of the aligner's matrix, which
+  equals three.js `rotation.y` (R_y = [[c,0,s],[0,1,0],[-s,0,c]]), so the viewer (`fragmentRotation`) shows both scans
+  in one orientation (`mintsplat/yaw.py` is the extraction; `poses.py` fixes the X sign by footprint skew, ~random for near-symmetric objects).
   Tested: the same mouse -> `same`; another object -> `alignment_failed` ("we could not tell"), by the agent's design.
 - **A broken GPU context** (CUDA assert) makes the container exit; Modal retries the scan on a fresh one.
 

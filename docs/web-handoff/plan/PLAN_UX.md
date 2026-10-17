@@ -153,24 +153,22 @@ Never show `evidence_score` or `p_present` as numbers. `evidence_score` is ordin
    |---|---|
    | same | Looks like the same item |
    | different | Does not match the listing |
-   | uncertain | We cannot tell |
-   | alignment_failed | The two scans do not line up |
-   | scan_quality_poor | Your scan is not clear enough |
-   | listing_rejected | The listing scan cannot be used |
-   | (status failed) | The check did not finish, then `error.message` and **Try again** |
+   | (status failed) | Could not run the check, try again, then `error.message` and **Try again**. No verdict mark. |
+
+   The verdict is strictly binary. `verdict.cause` (optional, null in old recorded runs) adds a sub-line under the
+   heading: low_quality "Your scan was not clear enough to confirm a match", misaligned "The two scans did not line
+   up", listing_rejected "The listing scan could not be used". The mark is a check for same, a cross for different.
 
 2. **How sure:** `explanation.how_sure`. 4 of 7 recorded runs have no `explanation`. Then omit it.
 3. **Compared:** "{usable_views} usable views of {requested_views}", plus "{n} failed" for non-empty `failed_views`.
 4. **What looks different:** one row per `evidence.flagged` category. part_diff "A part looks different or missing",
    color_diff "Colours look different", shape_diff "The shape looks different", any_diff "Something looks different".
-   Add "in {categories[c].views.length} of {usable_views} views" and view chips. A chip moves the slider.
+   Add "in {categories[c].views.length} of {usable_views} views".
 5. **What the listing says** (`claims_findings`): supported ✓ "Seen in your scan", contradicted ✗ "Not seen in your
    scan", unverifiable (dash icon) "Cannot check from a scan". Claim text and views. Icon and word, never colour only. For
    `claims_available: false`: "The listing has no claims to check."
-6. **Compare views:** `WipeSlider` per pair. Left "Listing" (`a_NN`), right "Your scan" (`b_NN`). Native range input
-   for the keyboard. Thumbnail strip below, flagged views marked with a coral dot and their words. **Mapping:** file
-   `a_NN` = label `view_{NN+1}` (`multiagent/buyer_agent/pipeline.py:139` saves by 0-based index,
-   `runs/fc4b95cb.../jev/view_00.json` holds `"view_01"`).
+6. **No view-by-view compare.** The per-view `WipeSlider`, view chips and `a_NN`/`b_NN` image mapping were removed.
+   Views appear only as counts in the text.
 7. **3D side by side:** both the listing `splat_url` and `assets/splats/{cid}.json` must exist. Two `SplatViewer`s.
    Hidden in mock (no buyer splat).
 8. **Next step:** `next_step.summary`, `message_to_seller` with **Copy message**, "Drafted by AI" for
@@ -215,7 +213,7 @@ reserved, but live scans post as `sel_raj` (`market.py:28`). Orchestrator decide
 | `components/SiteHeader.tsx` | each | changed | Buyer: search, **Sell an item**. Seller: **New listing**, "Back to Mint" `<a>`. Both: "Demo data" pill. |
 | `ListingCard.tsx`, `CardMedia.tsx` | buyer | changed, new | §2.1 |
 | `JustListed`, `LocalListing`, `ContactSeller` | buyer | new | |
-| `CompareResult`, `WipeSlider`, `lib/compare.ts` | buyer | new | `CompareResponse` type, word maps, run loader. |
+| `CompareResult`, `lib/compare.ts` | buyer | new | `CompareResponse` type, word maps, run loader. |
 | `ListingEditor`, `ListingRow` | seller | new | |
 | `Spin.tsx` | seller | unchanged | Editor `fallback3d`. |
 
@@ -244,9 +242,7 @@ New dependencies: `three@0.180.0`, `@sparkjsdev/spark@2.1.0`, `@types/three` (bo
 - **Compare results:** exact copies of `multiagent/runs/{run}/response.json` as `buyer/mock/compare/{run8}.json`:
   `435e1251` (default: supported, contradicted and unverifiable claims, has `explanation`), `fc4b95cb`, `cce6fb01`
   (zen). `pots_i1` and pots publishes use 435e1251, `zen_i1` uses cce6fb01, others 435e1251 with the note.
-- **View pairs:** extend `make_paslcd_frames.py` to write each `a_NN.png`/`b_NN.png` (1024×576, ~1 MB) as 960 px WebP
-  q80 to `buyer/public/local/compare/{run8}/`. Gitignored like the hero frames (PASLCD licence unverified). Missing:
-  "Comparison photos are not on this machine. Run python buyer/scripts/make_paslcd_frames.py."
+- **View pairs:** dropped. No `public/local/compare/` images are generated or shown.
 - **Sample splats:** sparkjs.dev `butterfly`, `penguin`, `robot-head`, `cat`, `fireplace` `.spz`. Mock mode only,
   always with the pill.
 - Mock rejected and failed show UI copy only (fallback at `ScanSession.tsx:125`). No invented reasons.
@@ -260,7 +256,7 @@ New dependencies: `three@0.180.0`, `@sparkjsdev/spark@2.1.0`, `@types/three` (bo
 | T3 | 3D, media, card | both `components/SplatViewer.tsx`, `components/MediaPanel.tsx`, plus `buyer/components/ListingCard.tsx`, `CardMedia.tsx`, `buyer/tests/components.test.tsx` (Reserve checks `:42-46`) | T1 |
 | T4 | Seller pages | `seller/app/page.tsx`, `seller/app/listing/[id]/page.tsx`, `seller/components/{ListingEditor,ListingRow,PriceBadge}.tsx`, `seller/lib/price-badge.ts`, `seller/mock/my-listings.json`, tests, `seller/README.md` | T1, T2, T3 |
 | T5 | Buyer landing + listing | `buyer/app/page.tsx`, `buyer/app/listing/[id]/page.tsx`, `buyer/components/{JustListed,LocalListing,ContactSeller}.tsx`, `buyer/lib/types.ts`, `buyer/lib/schema.ts`, `buyer/mock/sellers.json`, tests | T1, T3 |
-| T6 | Check + result | `buyer/app/listing/[id]/check/**`, `buyer/components/{CompareResult,WipeSlider}.tsx`, `buyer/lib/compare.ts`, `buyer/mock/compare/*.json`, `buyer/scripts/make_paslcd_frames.py`, tests | T1, T2, T3 |
+| T6 | Check + result | `buyer/app/listing/[id]/check/**`, `buyer/components/{CompareResult}.tsx`, `buyer/lib/compare.ts`, `buyer/mock/compare/*.json`, `buyer/scripts/make_paslcd_frames.py`, tests | T1, T2, T3 |
 
 Order: T1 first (short, mostly interfaces). Then T2-T6 in parallel against the §6 signatures. Last, one pass on
 :3000 with `?mock=1` over the full flow, and `pnpm check` in both apps. Tests first: `local-listings`, the

@@ -18,6 +18,7 @@ from buyer_agent.models import (
     JevViewScores,
     Strict,
     Verdict,
+    VerdictCause,
     VerdictLabel,
     ViewFailure,
     unique_labels,
@@ -34,7 +35,7 @@ class Thresholds(Strict):
     viewpoint_min: Unit = 0.5
     min_views: Annotated[int, Field(ge=1, le=12)] = 6
     different: Unit = 0.5
-    same: Unit = 0.25
+    match_min: Unit = 0.70
     support: Annotated[int, Field(ge=1, le=12)] = 2
     quality_min: Unit = 0.5
     ambiguity_max: Unit = 0.85
@@ -44,8 +45,6 @@ class Thresholds(Strict):
 
     @model_validator(mode="after")
     def _ordered(self) -> "Thresholds":
-        if not 0 <= self.same < self.different <= 1:
-            raise ValueError("need 0 <= same < different <= 1")
         if not 1 <= self.support <= self.min_views <= 12:
             raise ValueError("need 1 <= support <= min_views <= 12")
         return self
@@ -67,36 +66,40 @@ def _evidence_for(usable: list[JevViewScores], th: Thresholds) -> dict[Category,
     return out
 
 
+def _match_score(cats: dict[Category, CategoryEvidence]) -> float:
+    """1 - strongest category evidence (support-th highest view). Missing or NaN -> 0.0."""
+    top = max((c.evidence for c in cats.values()), default=math.nan)
+    return round(1 - top, 6) if math.isfinite(top) else 0.0
+
+
 def _classify(
     cats: dict[Category, CategoryEvidence], usable: int, answered: int, th: Thresholds
-) -> tuple[VerdictLabel, str, list[Category]]:
+) -> tuple[VerdictLabel, str, list[Category], float, list[str]]:
+    """(label, reason, flagged, evidence_score, extra caveats). Same iff match_score >= match_min."""
+    match = _match_score(cats)
     flagged = [c for c in CATEGORIES if c != "any_diff" and cats[c].evidence >= th.different]
+    caveats: list[str] = []
+    if any(c.max >= th.different for c in cats.values()) and not flagged:
+        caveats.append(ONE_ANGLE)
+    strength = max((cats[c].evidence for c in flagged or CATEGORIES), default=0.0)
     if flagged:
         n = th.support
         where = "one view" if n == 1 else f"at least {n} views"
-        return "different", f"Seen in {where}: {', '.join(flagged)}.", flagged
-    if cats["any_diff"].evidence >= th.different:
-        return "uncertain", "Only a general difference was seen; have a person look.", []
-    lone = any(c.max >= th.different for c in cats.values())
-    enough = usable >= max(th.min_views, math.ceil(th.same_usable_frac * answered))
-    if all(c.evidence <= th.same for c in cats.values()):
-        if lone:
-            return "uncertain", ONE_ANGLE, []
-        if enough:
-            return "same", "No view showed a real difference.", []
-        return "uncertain", "Too few views were clear enough to be sure.", []
-    top = max(cats, key=lambda c: cats[c].max)
-    return "uncertain", f"Mixed signals (strongest: {top} at {cats[top].max:.2f}).", []
-
-
-def _score(
-    label: VerdictLabel, cats: dict[Category, CategoryEvidence], flagged: list[Category], cov: float
-) -> float | None:
-    if label == "different":
-        return min(1.0, max(cats[c].evidence for c in flagged) * cov)
-    if label == "same":
-        return min(1.0, (1 - max(c.evidence for c in cats.values())) * cov)
-    return None
+        return "different", f"Seen in {where}: {', '.join(flagged)}.", flagged, strength, caveats
+    if match < th.match_min:
+        top = max(cats, key=lambda c: cats[c].evidence)
+        reason = f"Not a close enough match (strongest signal: {top} at {cats[top].evidence:.2f})."
+        return "different", reason, [], strength, caveats
+    if usable < max(th.min_views, math.ceil(th.same_usable_frac * answered)):
+        caveats.append("Few views were clear enough to check, so this match is less certain.")
+        return (
+            "different",
+            "Too few views were clear enough to confirm a match.",
+            [],
+            strength,
+            caveats,
+        )
+    return "same", "No view showed a real difference.", [], match, caveats
 
 
 def aggregate(
@@ -119,23 +122,25 @@ def aggregate(
 
     quality_ok = [s for s in scores if s.scan_quality_ok >= th.quality_min]
     usable = [s for s in quality_ok if s.viewpoint_match >= th.viewpoint_min]
-    label: VerdictLabel
     cats: dict[Category, CategoryEvidence] = {}
     flagged: list[Category] = []
+    extra: list[str] = []
+    cause: VerdictCause | None = None
+    label: VerdictLabel = "different"
+    score = 0.0
     if len(quality_ok) < math.ceil(th.quality_frac * answered):
-        label, reason = "scan_quality_poor", "The buyer's scan was too unclear to compare."
+        cause, reason = "low_quality", "The buyer's scan was too unclear to compare."
     elif len(usable) < th.min_views:
-        label = "alignment_failed"
+        cause = "misaligned"
         reason = f"Only {len(usable)} of {answered} views looked aligned; rescan and retry."
     else:
         cats = _evidence_for(usable, th)
-        label, reason, flagged = _classify(cats, len(usable), answered, th)
-        if label in ("same", "different") and alignment and alignment.ambiguity > th.ambiguity_max:
-            label, reason = (
-                "uncertain",
-                "The item looks symmetric; we could not tell its orientation.",
-            )
-    caveats = [DENT_CAVEAT]
+        label, reason, flagged, score, extra = _classify(cats, len(usable), answered, th)
+        if label == "different":
+            score = min(1.0, score * len(usable) / requested)
+        if alignment and alignment.ambiguity > th.ambiguity_max:
+            extra.append("The item looks symmetric, so its orientation may be off.")
+    caveats = [DENT_CAVEAT, *extra]
     if failures:
         caveats.append(f"{_plural(len(failures), 'view')} could not be checked.")
     skipped = alignment_mode == "skipped_view_pairs"
@@ -151,7 +156,7 @@ def aggregate(
         alignment=alignment,
         alignment_mode="skipped_view_pairs" if skipped else "icp",
     )
-    score = _score(label, cats, flagged, len(usable) / requested)
     return Verdict(
-        label=label, evidence_score=score, reason=reason, evidence=evidence, caveats=caveats
-    )
+        label=label, evidence_score=score, cause=cause, reason=reason, evidence=evidence,
+        caveats=caveats,
+    )  # fmt: skip

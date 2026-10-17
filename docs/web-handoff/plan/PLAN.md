@@ -76,7 +76,7 @@ export function watchScan(o: { scanId: string; kind: "listing" | "verify"; listi
 | 2 | T3 3D + media + card | opus | both `lib/splat-scene.ts`, `lib/viewer-slots.ts`, `components/SplatViewer.tsx`, `components/MediaPanel.tsx`, `buyer/components/ListingCard.tsx`, `buyer/components/CardMedia.tsx`, `buyer/tests/components.test.tsx`, viewer tests |
 | 2 | T4 Seller pages | opus | `seller/app/page.tsx`, `seller/app/listing/[id]/page.tsx`, `seller/components/{ListingEditor,ListingRow,PriceBadge}.tsx`, `seller/lib/price-badge.ts`, seller page tests, `seller/README.md` |
 | 2 | T5 Buyer landing + listing | opus | `buyer/app/page.tsx`, `buyer/app/listing/[id]/page.tsx`, `buyer/components/{JustListed,LocalListing,ContactSeller}.tsx`, buyer page tests, `buyer/README.md` |
-| 2 | T6 Check + compare | opus | `buyer/app/listing/[id]/check/**`, `buyer/components/{CompareResult,WipeSlider,SplatWipe}.tsx`, `buyer/lib/compare.ts`, compare tests |
+| 2 | T6 Check + compare | opus | `buyer/app/listing/[id]/check/**`, `buyer/components/{CompareResult,SplatWipe}.tsx`, `buyer/lib/compare.ts`, compare tests |
 | 3 | T8 End-to-end + review | sonnet + reviewers | `buyer/e2e/**`, `seller/e2e/**` (new), reviewers are read-only |
 
 Order: T1 and T7 in parallel. The orchestrator checks T1 (typecheck, lint, tests in both apps, and the zone proxy

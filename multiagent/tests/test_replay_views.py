@@ -21,6 +21,6 @@ def test_replay_hand_built_folder_and_missing(tmp_path, capsys):
     for i in range(8):
         raw = {"view": f"v{i}", "model": "m", "nouls": good, "latency_ms": 1}
         (tmp_path / "jev" / f"view_{i:02d}.json").write_text(json.dumps(raw))
-    assert replay(tmp_path).label in {"same", "uncertain"}
+    assert replay(tmp_path).label in {"same"}
     main([str(tmp_path / "nope")])
     assert "cannot replay" in capsys.readouterr().out

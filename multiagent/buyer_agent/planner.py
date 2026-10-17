@@ -3,7 +3,7 @@
 from buyer_agent.models import ActionCategory, ClaimsFinding, Label, Strict, Verdict
 
 REFUND_SCORE = 0.7
-ESCALATING = frozenset({"uncertain", "alignment_failed", "scan_quality_poor"})
+ESCALATING = frozenset({"low_quality", "misaligned"})  # causes that escalate on a retry
 
 
 class Plan(Strict):
@@ -23,23 +23,20 @@ def _verdict_views(verdict: Verdict) -> list[Label]:
 def plan(verdict: Verdict, findings: list[ClaimsFinding], attempt: int) -> Plan:
     """Pick the next step. Pass the PRE-claims verdict (AM-08).
 
-    R0 escalates only uncertain/alignment_failed/scan_quality_poor from attempt 2 (AM-12).
-    A `different` verdict still goes to R4/R5 on any attempt.
+    The verdict is binary; `cause` marks a `different` that came from a gate, not a measurement.
+    R0 escalates a low_quality/misaligned cause from attempt 2 (AM-12). A measured `different`
+    still goes to R4/R5 on any attempt.
     """
-    label = verdict.label
+    label, cause = verdict.label, verdict.cause
     views = _verdict_views(verdict)
-    if label == "listing_rejected":  # R8: the listing itself failed the product match
+    if cause == "listing_rejected":  # R8: the listing itself failed the product match
         return Plan(category="escalate", audience="support", reason_code="R8", cited_views=[])
-    if attempt >= 2 and label in ESCALATING:
+    if attempt >= 2 and cause in ESCALATING:
         return Plan(category="escalate", audience="support", reason_code="R0", cited_views=views)
-    if label in ("scan_quality_poor", "alignment_failed"):
-        code = "R1" if label == "scan_quality_poor" else "R2"
+    if cause in ESCALATING:
+        code = "R1" if cause == "low_quality" else "R2"
         return Plan(
             category="request_more_photos", audience="buyer", reason_code=code, cited_views=[]
-        )
-    if label == "uncertain":
-        return Plan(
-            category="request_more_photos", audience="seller", reason_code="R3", cited_views=views
         )
     contradicted = [f for f in findings if f.status == "contradicted"]
     if label == "different":

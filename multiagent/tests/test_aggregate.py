@@ -54,46 +54,58 @@ def test_support_1_reason_says_one_view():
     assert v.label == "different" and "one view" in v.reason
 
 
-def test_mixed_signal_is_uncertain():
+def test_mixed_signal_is_different():
     v = run(views(shape=0.4))
-    assert v.label == "uncertain" and "shape_diff" in v.reason and v.evidence_score is None
+    assert v.label == "different" and v.cause is None and "shape_diff" in v.reason
+    assert v.evidence_score == pytest.approx(0.4 * 12 / 12)
 
 
-def test_misaligned_is_alignment_failed():
+def test_match_boundary_030_same_031_different():
+    assert run(views(shape=0.30)).label == "same"
+    assert run(views(shape=0.30)).evidence_score == pytest.approx(0.70)
+    v = run(views(shape=0.31))
+    assert v.label == "different" and v.cause is None
+
+
+def test_misaligned_gate_is_different_with_cause():
     s = [view(f"m{i}", vp=0.1) for i in range(8)] + views(4)
     v = run(s, requested=12)
-    assert v.label == "alignment_failed" and v.evidence.usable_views == 4
+    assert (v.label, v.cause, v.evidence_score) == ("different", "misaligned", 0.0)
+    assert v.evidence.usable_views == 4
 
 
-def test_same_requires_75pct_usable():
+def test_low_usable_fraction_forces_different_with_caveat():
     s = views(8) + [view(f"x{i}", vp=0.1) for i in range(4)]
     v = run(s)
-    assert v.evidence.usable_views == 8 and v.label == "uncertain"
+    assert v.evidence.usable_views == 8 and v.label == "different" and v.cause is None
+    assert any("less certain" in c for c in v.caveats)
 
 
-def test_lone_strong_view_is_uncertain():
-    s = [view("a", shape=0.9)] + views(11)
-    v = run(s)
-    assert v.label == "uncertain" and "one view only" in v.reason
+def test_lone_strong_view_is_same_with_caveat():
+    v = run([view("a", shape=0.9)] + views(11))
+    assert v.label == "same" and any("one view only" in c for c in v.caveats)
 
 
-def test_any_diff_alone_is_uncertain():
+def test_any_diff_alone_counts_in_the_score():
     s = [view("a", any_=0.9), view("b", any_=0.9)] + views(10)
-    assert run(s).label == "uncertain"
+    v = run(s)
+    assert v.label == "different" and v.evidence.flagged == []
+    assert v.evidence_score == pytest.approx(0.9)
 
 
 def test_quality_gate_needs_75pct():
     ok = views(9) + [view(f"q{i}", q=0.1) for i in range(3)]
     assert run(ok).label == "same"  # 9 == ceil(.75*12)
     bad = views(8) + [view(f"q{i}", q=0.1) for i in range(4)]
-    assert run(bad).label == "scan_quality_poor"
+    v = run(bad)
+    assert (v.label, v.cause, v.evidence_score) == ("different", "low_quality", 0.0)
 
 
 def test_evidence_score_formula_uses_usable_over_requested():
     d = run([view("a", part=0.8), view("b", part=0.8)] + views(10), requested=16)
     assert d.label == "different" and d.evidence_score == pytest.approx(0.8 * 12 / 16)
-    s = run(views(), requested=16)
-    assert s.evidence_score == pytest.approx(0.95 * 12 / 16)
+    s = run(views(), requested=16)  # same: match score, coverage is not applied
+    assert s.label == "same" and s.evidence_score == pytest.approx(0.95)
 
 
 def test_duplicate_view_labels_rejected():
@@ -104,7 +116,7 @@ def test_duplicate_view_labels_rejected():
 
 def test_threshold_validators():
     for bad in (
-        {"same": 0.5, "different": 0.5},
+        {"match_min": 1.5},
         {"support": 7},
         {"min_views": 13},
         {"quality_frac": 0.4},
@@ -121,12 +133,12 @@ def test_fewer_than_min_answered_raises_jev_unavailable():
     assert e.value.code == ErrorCode.JEV_UNAVAILABLE
 
 
-def test_ambiguity_cap_both_labels_none_when_no_alignment():
+def test_ambiguity_is_a_caveat_not_an_override():
     al = AlignmentMetrics(rmse=0.1, a_covered=0.9, b_covered=0.9, ambiguity=0.9, scale=1.0)
-    assert run(views(), alignment=al).label == "uncertain"
+    v = run(views(), alignment=al)
+    assert v.label == "same" and any("symmetric" in c for c in v.caveats)
     diff = [view("a", part=0.9), view("b", part=0.9)] + views(10)
-    assert run(diff, alignment=al).label == "uncertain"
-    assert run(diff, alignment=None).label == "different"
+    assert run(diff, alignment=al).label == "different"
 
 
 def test_caveats_dent_always_failed_views_when_any():
@@ -163,7 +175,7 @@ def test_property_usable_below_75pct_never_same():
             assert v.evidence.usable_views * 4 >= 3 * len(s)
 
 
-def test_property_lone_strong_view_never_same():
+def test_property_lone_strong_view_scored_by_second_highest():
     rng = random.Random(0)
     for _ in range(2000):
         n = rng.randint(8, 12)
@@ -180,7 +192,8 @@ def test_property_lone_strong_view_never_same():
         k = rng.randrange(n)
         cat = rng.choice(["shape", "part", "color", "any_"])
         s[k] = view(f"l{k}", **{cat: rng.uniform(0.5, 1.0)})
-        assert run(s, requested=n).label != "same"
+        v = run(s, requested=n)  # one strong view cannot reach the 2nd-highest evidence
+        assert v.label == "same" or v.cause is not None or v.evidence.usable_views < n
 
 
 def test_property_quality_poor_or_misaligned_never_same():
@@ -192,7 +205,7 @@ def test_property_quality_poor_or_misaligned_never_same():
         s = [view(f"b{i}", **{bad_kind: rng.random() * 0.4} if i < n_bad else {}) for i in range(n)]
         v = run(s, requested=n)
         if n - n_bad < max(6, -(-3 * n // 4)):
-            assert v.label != "same"
+            assert v.label == "different"
 
 
 def test_unknown_alignment_mode_rejected_not_defaulted():
