@@ -1,1 +1,11 @@
+.venv/
+runs/
+/data/
+eval/out/
+.worktrees/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.coverage
 session_context/
+.env

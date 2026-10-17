@@ -1,0 +1,31 @@
+[
+  {
+    "id": "ord_seed_meetup",
+    "item_id": "itm_0004",
+    "created_at": "2026-10-16T14:05:00Z",
+    "method": "meetup",
+    "pickup_slot": "2026-10-24T11:00:00-04:00",
+    "price_cad": 85,
+    "shipping_cad": 0,
+    "total_cad": 85,
+    "status": "reserved",
+    "comparison_id": "fc4b95cb"
+  },
+  {
+    "id": "ord_seed_shipped",
+    "item_id": "itm_0010",
+    "created_at": "2026-10-12T18:40:00Z",
+    "method": "shipping",
+    "ship_to": {
+      "name": "Sam Okafor",
+      "street": "48 Willowdale Ave",
+      "city": "Toronto",
+      "postal_code": "M2N 4Y5"
+    },
+    "price_cad": 95,
+    "shipping_cad": 12,
+    "total_cad": 107,
+    "status": "delivered",
+    "comparison_id": "fc4b95cb"
+  }
+]
