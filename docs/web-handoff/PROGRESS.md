@@ -102,3 +102,41 @@ systems from awesome-design-md.
 - CSS lesson: base and component rules must sit in `@layer base` / `@layer components`, or Tailwind v4 utilities
   lose to them. Turbopack dev sometimes serves stale CSS after `globals.css` edits: restart `pnpm dev`.
 - Tests: buyer 207 (1 skipped; +20 contrast checks in `tests/design-tokens.test.ts`), seller 91, e2e demo 4.
+
+## Theme back to the original, light only (Oct 17)
+
+The team disliked the pine/oat/Fraunces look, mostly in the app. Layouts stay; the theme goes back.
+
+- Web: the original palette (paper `#FAF7F2`, ink `#0B0F0E`, brand mint `#3DDC97`, leaf `#1B6B49` for green text),
+  Bricolage Grotesque + Figtree, the original mint mark and wordmark, 14px button corners, ink primary buttons.
+  Light mode only: the pine bands and footer are now the light mint wash `#DDF6EA`. Contrast tests cover light only.
+- iOS: full-screen moments are light (paper, ink, mint); only the scanner HUD over the camera stays dark.
+- Text emphasis and font changes are on hold until the team asks.
+
+## Scanner camera and QR (iOS, untested on a device)
+
+- "Zoomed in": the preview filled the screen and cropped the 4:3 sensor. It now shows the whole 4:3 frame that is
+  recorded (letterboxed).
+- "Edges blur": ARKit could pick a format on another lens and autofocus hunted during the turn. The session now picks
+  the back wide-angle camera at 1920x1440, aims focus and exposure at the item while lining up, and locks focus,
+  exposure and white balance when the scan starts (`CameraLock.lock()`).
+- QR on another computer: likely a small code in the full 1920x1440 frame. `PaperReader.qrCode` now retries on the
+  frame's centre (60%). Root cause not confirmed; needs a try on the phone.
+
+## Real Gaussian splats in the demo catalogue
+
+- 18 downloadable scenes from SuperSplat (superspl.at), CC BY 4.0 (the planter is CC BY-SA 4.0), replace the
+  generated items and the old sample splats. Each is a listing with its own title, price, grade and description.
+  Credits: About `#credits`, the listing's "3D scan" attribute, and a footer link. `mock/splat-credits.json` lists
+  scene, author and licence. Left out: CC BY-NC scenes, LOD scenes (Spark can't read `lod-meta.json`), and sources
+  without a licence.
+- Streamed live from SuperSplat's CDN (`.../<id>/<v>/meta.json`, CORS open). Spark 2.1 reads SOGS only as a zip, so
+  `splat-scene.ts` fetches `meta.json` and its webp textures and zips them in the browser with `fflate` (no
+  compression). A `#rx=..&ry=..` fragment sets the scene's rotation; framing uses the 2nd-98th percentile of splat
+  centres so stray background splats don't shrink the item.
+- Stills: `node buyer/scripts/render-splats.mjs` renders 24 frames per scene at 512px into
+  `buyer/public/demo/splats/<key>/` (21 MB) with Playwright on the GPU (`SOFTWARE=1` for SwiftShader, which is far
+  too slow for 1M splats). Cards and spin strips use these, so only the 2 live viewers stream splats.
+- Landing hero: the Sony Alpha 7 (veryos, CC BY 4.0), linked to its listing. The ThinkPad mouse is no longer the
+  headline; it stays as the real end-to-end scan in the seller demo.
+- Tests: buyer 195 (1 skipped), seller 91, e2e demo 4.
