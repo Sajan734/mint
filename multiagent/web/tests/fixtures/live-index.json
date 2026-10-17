@@ -1,0 +1,140 @@
+{
+ "v": 3,
+ "updated_at": "2026-10-17T14:30:48Z",
+ "scans": [
+  {
+   "v": 3,
+   "scan_id": "33333333-0000-4000-8000-000000000003",
+   "batch_id": null,
+   "splat_url": "https://fake.supabase.co/storage/v1/object/public/assets/splats/x.spz",
+   "spin_urls": [
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f00.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f01.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f02.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f03.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f04.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f05.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f06.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f07.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f08.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f09.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f10.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f11.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f12.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f13.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f14.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f15.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f16.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f17.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f18.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f19.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f20.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f21.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f22.webp",
+    "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f23.webp"
+   ],
+   "created_at": "2026-10-17T14:30:48Z",
+   "status": "failed",
+   "error": "ModuleNotFoundError: No module named 'torch'",
+   "timings_ms": {
+    "listing_pipeline": 181
+   }
+  },
+  {
+   "v": 3,
+   "scan_id": "11111111-0000-4000-8000-000000000001",
+   "status": "listed",
+   "market_listing": {
+    "listing": {
+     "item_id": "11111111-0000-4000-8000-000000000001",
+     "title": "Sony WH-1000XM4 Wireless Noise-Cancelling Headphones (Black)",
+     "description": "Sony WH-1000XM4 over-ear wireless headphones in black. Industry-leading noise cancelling, up to 30 hours of battery life, touch controls on the right ear cup, and a foldable design for travel.",
+     "attributes": {
+      "brand": "Sony",
+      "model": "WH-1000XM4",
+      "colour": "black",
+      "type": "over-ear",
+      "connectivity": "Bluetooth"
+     },
+     "tags": [
+      "headphones",
+      "sony",
+      "noise-cancelling",
+      "wireless",
+      "over-ear"
+     ],
+     "condition_grade": "light_wear",
+     "condition_notes": [
+      "2 views show a scuff: right, low (10\u00b0); back-right, low (10\u00b0).",
+      "3 views show signs of wear: back, low (10\u00b0); back-left, low (10\u00b0); left, low (10\u00b0)."
+     ],
+     "price_cad": 150,
+     "price_justification": [
+      "We estimate the used market price at about $230.00; x 0.65 for light wear gives $149.50, rounded to $150."
+     ],
+     "preview_images": [
+      "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f00.webp",
+      "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f06.webp",
+      "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f12.webp",
+      "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f18.webp"
+     ],
+     "viewer_url": null,
+     "needs_seller_check": false,
+     "seller_check_reasons": []
+    },
+    "seller_id": "sel_raj",
+    "garage_sale_id": "gs_agincourt_tech",
+    "category": "electronics",
+    "location": {
+     "neighbourhood": "Agincourt",
+     "city": "Toronto"
+    },
+    "reference_price_cad": 150,
+    "frames": [
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f00.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f01.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f02.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f03.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f04.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f05.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f06.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f07.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f08.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f09.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f10.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f11.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f12.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f13.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f14.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f15.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f16.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f17.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f18.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f19.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f20.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f21.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f22.webp",
+     "https://fake.supabase.co/storage/v1/object/public/assets/views/x/spin/f23.webp"
+    ],
+    "splat_url": "https://fake.supabase.co/storage/v1/object/public/assets/splats/x.spz",
+    "usable_view_count": 11,
+    "listed_at": "2026-10-17T14:30:48Z",
+    "status": "available"
+   }
+  },
+  {
+   "v": 3,
+   "scan_id": "22222222-0000-4000-8000-000000000002",
+   "status": "rejected",
+   "rejection": {
+    "item_id": "22222222-0000-4000-8000-000000000002",
+    "match_check": {
+     "same_category": 0.905,
+     "same_product": 0.15,
+     "verdict": "mismatch",
+     "reason": "This scan looks like a different model from Bose QuietComfort 45 white smoke. Check the product name, or rescan if the wrong item was captured."
+    }
+   }
+  }
+ ]
+}
