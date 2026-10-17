@@ -41,6 +41,7 @@ HAS_SUPABASE = _has_secret("mint-supabase", "MINT_SUPABASE", "storage mode (run_
 HAS_LISTING = _has_secret("mint-listing", "MINT_LISTING", "the listing step after the splat (Jev + Gemini)")
 LISTING_DIR = Path(__file__).resolve().parent.parent / "listing"
 LIVE_GPU = "H100"  # scans started by the upload webhook
+PREWARM_ON = {"session.json", "bottom.mp4"}  # a scan has started: get a GPU container ready before video.mp4
 FLAGS = {"MINT_SUPABASE": "1" if HAS_SUPABASE else "0", "MINT_LISTING": "1" if HAS_LISTING else "0"}
 
 # The first layers match the legacy image exactly so Modal reuses the cached build
@@ -142,7 +143,9 @@ class Splatter:
             ev.send("passport_ready", manifest)
             if HAS_LISTING and (cfg or {}).get("listing", True):
                 ev.send("stage", {"scan_id": scan_id, "stage": "7_listing", "status": "started", "ms": 0})
-                doc = list_scan(sb, scan_id, manifest, res["files"]["splat.spz"], cfg)
+                # the product name the seller typed on the dashboard lets listing/ search for a reference photo
+                title = (cfg or {}).get("seller_name") or (io.get("session") or {}).get("title")
+                doc = list_scan(sb, scan_id, manifest, res["files"]["splat.spz"], {**(cfg or {}), "seller_name": title})
                 ev.send("stage", {"scan_id": scan_id, "stage": "7_listing", "status": doc["status"],
                                   "ms": doc.get("timings_ms", {}).get("listing_pipeline", 0)})
                 ev.send("listing_ready" if doc["status"] == "listed" else f"listing_{doc['status']}", doc)
@@ -154,6 +157,46 @@ class Splatter:
         finally:
             ev.close()
 
+    @modal.method()
+    def prewarm(self) -> str:
+        """on_upload calls this as soon as a scan starts (session.json, bottom.mp4), so the cold start happens while
+        the seller is still recording. Loading the models is not all of it: the first real job on a container also
+        pays ~8 s for CUDA loading kernels lazily (measured: SAM 2, VGGT, registration and training each slower the
+        first time). So, once per container, run one tiny real job on the newest published scan (12 frames per
+        video, 60 steps, nothing published)."""
+        if getattr(self, "_warm", False) or not HAS_SUPABASE:
+            return "warm"
+        self._warm = True
+        try:
+            from mintsplat.pipeline import run
+            from mintsplat.publish import fetch_inputs
+            from supabase_setup.storage import ASSETS, Supabase
+
+            sb = Supabase()
+            scans = json.loads(sb.download(ASSETS, "splats/index.json")).get("scans", [])
+            if scans:
+                t0 = time.time()
+                _, videos, io = fetch_inputs(sb, scans[0]["scan_id"])
+                run(self, videos if len(videos) > 1 else videos[0], {"n_frames": 12, "debug": False, "views": False,
+                                                                    "rotate_cw": io["rotate_cw"], "train": {"iters": 60}})
+                print(f"[time] warm_up: {time.time() - t0:.1f}s", flush=True)
+        except Exception as e:  # a warm-up must never break anything
+            print(f"warm-up skipped: {e}", flush=True)
+        return "warm"
+
+    @modal.method()
+    def relist(self, scan_id: str, seller_name: str | None = None) -> dict:
+        """Run only the listing step again on a published splat (after a Gemini/Jev outage, or with a product name),
+        and republish assets/listings/{scan_id}.json."""
+        from mintsplat.market import list_scan
+        from supabase_setup.storage import ASSETS, Supabase
+
+        sb = Supabase()
+        manifest = json.loads(sb.download(ASSETS, f"splats/{scan_id}.json"))
+        session = (manifest.get("io") or {}).get("session") or {}
+        return list_scan(sb, scan_id, manifest, sb.download(ASSETS, f"splats/{scan_id}.spz"),
+                         {"seller_name": seller_name or session.get("title")})
+
 
 hook_image = (modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]").env(FLAGS)
               .add_local_python_source("supabase_setup"))
@@ -163,8 +206,10 @@ hook_image = (modal.Image.debian_slim(python_version="3.11").pip_install("fastap
 @modal.fastapi_endpoint(method="POST")
 def on_upload(body: dict) -> dict:
     """Supabase webhook (supabase_setup/webhook.sql): a file landed in Storage. For scans/{uuid}/video.mp4 (what the
-    iOS app uploads) it starts Splatter.run_scan on an H100 and returns at once. The URL is public, so it only acts
-    on a video that really is in the bucket, and only once per scan (Dict `mint-scan-jobs`)."""
+    iOS app uploads last) it starts Splatter.run_scan on an H100 and returns at once. Earlier files of the same scan
+    (session.json when the scan is requested or picked up, bottom.mp4) only warm a container up, once per scan.
+    The URL is public, so it only acts on a video that really is in the bucket, and only once per scan
+    (Dict `mint-scan-jobs`)."""
     import re
 
     from supabase_setup.storage import SCANS, Supabase
@@ -173,7 +218,13 @@ def on_upload(body: dict) -> dict:
     bucket, name = rec.get("bucket_id"), str(rec.get("name") or "")
     scan_id, _, file = name.partition("/")
     uuid = r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"
-    if bucket != SCANS or file != "video.mp4" or not re.fullmatch(uuid, scan_id):
+    if bucket != SCANS or not re.fullmatch(uuid, scan_id):
+        return {"ok": True, "ignored": f"{bucket}/{name}"}
+    splatter = modal.Cls.from_name("mint-gsplat", "Splatter").with_options(gpu=LIVE_GPU)
+    if file != "video.mp4":
+        if file in PREWARM_ON and jobs.put(f"prewarm:{scan_id}", time.time(), skip_if_exists=True):
+            splatter().prewarm.spawn()
+            return {"ok": True, "prewarm": scan_id}
         return {"ok": True, "ignored": f"{bucket}/{name}"}
     if not HAS_SUPABASE:
         return {"ok": False, "error": "Modal secret mint-supabase missing; create it and redeploy"}
@@ -181,7 +232,7 @@ def on_upload(body: dict) -> dict:
         return {"ok": False, "error": f"scans/{name} not found"}
     if not jobs.put(scan_id, time.time(), skip_if_exists=True):
         return {"ok": True, "duplicate": scan_id}
-    call = modal.Cls.from_name("mint-gsplat", "Splatter").with_options(gpu=LIVE_GPU)().run_scan.spawn(scan_id)
+    call = splatter().run_scan.spawn(scan_id)
     return {"ok": True, "scan_id": scan_id, "call_id": call.object_id}
 
 

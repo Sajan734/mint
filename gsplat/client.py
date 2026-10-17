@@ -4,6 +4,7 @@
     python client.py run orbit.mp4 [--name x]   # mp4 -> out/<name>/splat.spz on the warm container
     python client.py run orbit.mp4 orbit_reverse.mp4 --name merged   # top + flipped-over bottom
     python client.py cold [--gpu H100]          # back to scale-to-zero after the demo
+    python client.py relist <scan_id> [--title "Lenovo ThinkPad mouse"]   # re-run only the listing step
     python client.py scan orbit.mp4 [orbit_reverse.mp4]
         # the live pipeline end to end, exactly like the iPhone (scanner/HANDOFF.md): the scan-upload Edge Function
         # signs the uploads (no key on the client), bottom.mp4 goes first, video.mp4 last; its arrival fires the
@@ -73,8 +74,8 @@ def phone_upload(scan_id: str, files: dict[str, Path]) -> None:
         put(signed[name], path)
 
 
-def scan(videos: list[Path], timeout_s: float = 900) -> dict:
-    scan_id = str(uuid.uuid4())
+def scan(videos: list[Path], scan_id: str | None = None, timeout_s: float = 900) -> dict:
+    scan_id = scan_id or str(uuid.uuid4())
     t: dict[str, float] = {"upload_mb": sum(p.stat().st_size for p in videos) / 1e6}
     start = time.perf_counter()
     files = {"bottom.mp4": videos[1]} if len(videos) > 1 else {}
@@ -113,9 +114,22 @@ def main():
     s = sub.add_parser("scan")
     s.add_argument("video", help="the main lap (uploaded as video.mp4)")
     s.add_argument("video2", nargs="?", help="the item flipped over (uploaded first, as bottom.mp4)")
+    s.add_argument("--scan-id", default=None, help="upload into this scan (e.g. one the dashboard requested)")
+    rl = sub.add_parser("relist", help="re-run only the listing step on a published splat")
+    rl.add_argument("scan_id")
+    rl.add_argument("--title", default=None, help="product name, as the seller would type it")
     args = ap.parse_args()
+    if args.cmd == "relist":
+        t0 = time.perf_counter()
+        doc = modal.Cls.from_name(APP, CLS)().relist.remote(args.scan_id, args.title)
+        ml = (doc.get("market_listing") or {}).get("listing") or {}
+        print(json.dumps({"status": doc["status"], "error": doc.get("error"), "title": ml.get("title"),
+                          "price_cad": ml.get("price_cad"), "needs_seller_check": ml.get("needs_seller_check"),
+                          "seller_check_reasons": ml.get("seller_check_reasons"), "run_url": doc.get("run_url"),
+                          "timings_ms": doc.get("timings_ms"), "wall_s": round(time.perf_counter() - t0, 1)}, indent=2))
+        return
     if args.cmd == "scan":  # no Modal call: the upload alone starts the pipeline, as from the phone
-        m = scan([Path(args.video)] + ([Path(args.video2)] if args.video2 else []))
+        m = scan([Path(args.video)] + ([Path(args.video2)] if args.video2 else []), args.scan_id)
         out = Path("out") / f"scan_{m['scan_id'][:8]}"
         out.mkdir(parents=True, exist_ok=True)
         (out / "scan.json").write_text(json.dumps(m, indent=2))

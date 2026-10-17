@@ -4,6 +4,8 @@ MarketListing (buyer/lib/types.ts) to the public bucket.
   assets/listings/{scan_id}.json      {"v", "scan_id", "status": listed | rejected | failed, "market_listing" |
                                        "rejection" | "error", "timings_ms", ...}
   assets/listings/{scan_id}/vNN.png   the listing pipeline's preview renders (Listing.preview_images point here)
+  assets/listings/{scan_id}/run/      each stage's JSON (identify, baseline_lookup, match_gate, condition, ...):
+                                       where to look when a listing comes out wrong or fails
   assets/listings/index.json          every scan, newest first, documents inline (one fetch for the website)
 
 listing/ runs unchanged, in-process: the item folder is built the way listing/ingest.py builds it, and the
@@ -129,6 +131,15 @@ def upload_previews(sb, scan_id: str, listing: dict) -> list[str]:
                                                "image/png"), paths))
 
 
+def upload_run(sb, scan_id: str, run_dir: Path) -> list[str]:
+    """The listing pipeline's per-stage JSON (whatever stages ran, also after a failure). Returns the file names."""
+    files = sorted(run_dir.glob("*.json")) if run_dir.is_dir() else []
+    with ThreadPoolExecutor(8) as ex:
+        list(ex.map(lambda p: sb.upload(ASSETS, f"listings/{scan_id}/run/{p.name}", p.read_bytes(), "application/json"),
+                    files))
+    return [p.name for p in files]
+
+
 def put_doc(sb, scan_id: str, doc: dict) -> dict:
     sb.upload(ASSETS, f"listings/{scan_id}.json", json.dumps(doc, indent=1).encode(), "application/json",
               cache_control="no-cache")
@@ -153,7 +164,8 @@ def list_scan(sb, scan_id: str, manifest: dict, spz: bytes, cfg: dict | None = N
     cfg = cfg or {}
     t0 = time.perf_counter()
     doc = {"v": 3, "scan_id": scan_id, "batch_id": manifest.get("batch_id"), "splat_url": manifest.get("splat_url"),
-           "spin_urls": manifest.get("spin_urls", []), "created_at": now_iso()}
+           "spin_urls": manifest.get("spin_urls", []), "seller_name": cfg.get("seller_name"), "created_at": now_iso()}
+    run_dir = LISTING_DIR / "runs" / scan_id  # listing/pipeline.py RUNS_ROOT / item id
     try:
         item = prepare_item(scan_id, spz, cfg.get("seller_name"))
         result, kind, run_dir = run_listing_pipeline(item)
@@ -167,4 +179,9 @@ def list_scan(sb, scan_id: str, manifest: dict, spz: bytes, cfg: dict | None = N
     except Exception as e:  # noqa: BLE001 - recorded and reported, see docstring
         doc.update(status="failed", error=f"{type(e).__name__}: {e}"[:500],
                    timings_ms={"listing_pipeline": int((time.perf_counter() - t0) * 1000)})
+    try:
+        doc["run_files"] = upload_run(sb, scan_id, run_dir)
+        doc["run_url"] = sb.public_url(ASSETS, f"listings/{scan_id}/run/")
+    except Exception as e:  # noqa: BLE001 - debugging aid only
+        doc["run_files"], doc["run_error"] = [], str(e)[:200]
     return put_doc(sb, scan_id, doc)
