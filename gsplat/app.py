@@ -89,8 +89,29 @@ LISTING_SECRETS = ([modal.Secret.from_name("mint-listing", required_keys=["TYPES
 jobs = modal.Dict.from_name("mint-scan-jobs", create_if_missing=True)  # scan_id -> claimed at, so each runs once
 
 
+def _gpu_dead(e: BaseException | None = None) -> bool:
+    """A CUDA error (e.g. a device-side assert) poisons the GPU context for the rest of the process: every later
+    call on this container fails. True if `e` is one, or (no `e`) if the context is already broken."""
+    if e is not None:
+        return "CUDA error" in str(e) or "device-side assert" in str(e)
+    import torch
+
+    try:
+        torch.cuda.synchronize()
+        return False
+    except RuntimeError:
+        return True
+
+
+def _replace_container(why: str) -> None:
+    """Exit so Modal starts a fresh container and retries the input there (see `retries` below)."""
+    print(f"GPU context is broken ({why}); exiting so the input is retried on a fresh container", flush=True)
+    os._exit(1)
+
+
 @app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol},
-         secrets=SECRETS + LISTING_SECRETS, timeout=900, scaledown_window=300)
+         secrets=SECRETS + LISTING_SECRETS, timeout=900, scaledown_window=300,
+         retries=modal.Retries(max_retries=1, initial_delay=1.0))  # only crashes reach it: see run_scan
 class Splatter:
     @modal.enter()
     def load(self):
@@ -131,6 +152,8 @@ class Splatter:
 
         if not HAS_SUPABASE:
             raise RuntimeError("storage mode needs the Modal secret `mint-supabase`; create it, then redeploy")
+        if _gpu_dead():
+            _replace_container("found broken before the scan")
         sb = Supabase()
         batch_id = batch_id or scan_id
         ev = Events(sb, batch_id)
@@ -152,36 +175,20 @@ class Splatter:
                 manifest = {**manifest, "listing": doc}
             return manifest
         except Exception as e:
+            if _gpu_dead(e):  # not the scan's fault: retry it on a fresh GPU, and don't tell the page it failed
+                _replace_container(str(e)[:120])
+            # anything else would fail the same way again: report it and return (no retry)
             ev.send("error", {"stage": "splat", "message": str(e)[:300], "scan_id": scan_id})
-            raise
+            return {"scan_id": scan_id, "error": f"{type(e).__name__}: {e}"[:500]}
         finally:
             ev.close()
 
     @modal.method()
     def prewarm(self) -> str:
-        """on_upload calls this as soon as a scan starts (session.json, bottom.mp4), so the cold start happens while
-        the seller is still recording. Loading the models is not all of it: the first real job on a container also
-        pays ~8 s for CUDA loading kernels lazily (measured: SAM 2, VGGT, registration and training each slower the
-        first time). So, once per container, run one tiny real job on the newest published scan (12 frames per
-        video, 60 steps, nothing published)."""
-        if getattr(self, "_warm", False) or not HAS_SUPABASE:
-            return "warm"
-        self._warm = True
-        try:
-            from mintsplat.pipeline import run
-            from mintsplat.publish import fetch_inputs
-            from supabase_setup.storage import ASSETS, Supabase
-
-            sb = Supabase()
-            scans = json.loads(sb.download(ASSETS, "splats/index.json")).get("scans", [])
-            if scans:
-                t0 = time.time()
-                _, videos, io = fetch_inputs(sb, scans[0]["scan_id"])
-                run(self, videos if len(videos) > 1 else videos[0], {"n_frames": 12, "debug": False, "views": False,
-                                                                    "rotate_cw": io["rotate_cw"], "train": {"iters": 60}})
-                print(f"[time] warm_up: {time.time() - t0:.1f}s", flush=True)
-        except Exception as e:  # a warm-up must never break anything
-            print(f"warm-up skipped: {e}", flush=True)
+        """No-op: on_upload calls it as soon as a scan starts (session.json, bottom.mp4), so this container is up with
+        its models loaded (@modal.enter) by the time video.mp4 lands; the cold start happens while the seller is still
+        recording. (A tiny real warm-up job here saved ~5 s more but once tripped a CUDA assert that poisoned the
+        container for the real scan, so it is gone.)"""
         return "warm"
 
     @modal.method()
@@ -199,7 +206,53 @@ class Splatter:
 
 
 hook_image = (modal.Image.debian_slim(python_version="3.11").pip_install("fastapi[standard]").env(FLAGS)
-              .add_local_python_source("supabase_setup"))
+              .add_local_python_source("supabase_setup", "mintsplat"))
+UUID_RE = r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"
+
+
+@app.function(image=hook_image, secrets=SECRETS, timeout=60)
+@modal.asgi_app()
+def api():
+    """The website's write path (no key in the browser; the service key stays here). CORS is open: the scan id, a
+    UUID the seller's browser made, is what names a listing.
+      POST /listings/{scan_id}/publish  {state: published | draft, title, description, price_cad}
+        -> the listing document (gsplat/mintsplat/market.py set_published)"""
+    import re
+    from typing import Literal
+
+    from fastapi import FastAPI, HTTPException
+    from fastapi.middleware.cors import CORSMiddleware
+    from pydantic import BaseModel, Field
+
+    from mintsplat.market import set_published
+    from supabase_setup.storage import Supabase
+
+    web = FastAPI(title="Mint listings API")
+    web.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["POST", "OPTIONS"],
+                       allow_headers=["Content-Type"])
+
+    class PublishBody(BaseModel):
+        state: Literal["published", "draft"]
+        title: str = Field(min_length=1, max_length=120)
+        description: str = Field(min_length=1, max_length=4000)
+        price_cad: int = Field(ge=1, le=100_000)
+
+    @web.post("/listings/{scan_id}/publish")
+    def publish_listing(scan_id: str, body: PublishBody) -> dict:
+        if not re.fullmatch(UUID_RE, scan_id):
+            raise HTTPException(404, "unknown scan")
+        if not HAS_SUPABASE:
+            raise HTTPException(503, "Modal secret mint-supabase missing")
+        try:
+            doc = set_published(Supabase(), scan_id, body.state == "published", body.title.strip(),
+                                body.description.strip(), body.price_cad)
+        except RuntimeError as e:  # Supabase: no such listing document
+            raise HTTPException(404, f"no listing for scan {scan_id}") from e
+        except ValueError as e:
+            raise HTTPException(409, str(e)) from e
+        return {"scan_id": scan_id, "published": doc["published"], "price_cad": body.price_cad}
+
+    return web
 
 
 @app.function(image=hook_image, secrets=SECRETS, timeout=60)

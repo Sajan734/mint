@@ -21,7 +21,7 @@ const serve = (body: unknown, ok = true) => {
 };
 
 describe("parseLiveIndex", () => {
-  it("keeps only listed scans that pass the MarketListing schema", () => {
+  it("keeps only published listed scans that pass the MarketListing schema", () => {
     const live = parseLiveIndex(liveIndex);
     expect(live.map((m) => m.listing.item_id)).toEqual([LISTED]);
     expect(live[0].frames).toHaveLength(24);
@@ -29,8 +29,13 @@ describe("parseLiveIndex", () => {
     expect(live[0].reference_price_cad).toBe(live[0].listing.price_cad);
   });
 
+  it("hides a listing the seller has not published yet", () => {
+    const draft = { scans: liveIndex.scans.map((d) => ({ ...d, published: false })) };
+    expect(parseLiveIndex(draft)).toEqual([]);
+  });
+
   it("skips documents that break the schema and tolerates junk", () => {
-    const bad = { scans: [{ status: "listed", market_listing: { listing: { title: "x" } } }] };
+    const bad = { scans: [{ status: "listed", published: true, market_listing: { listing: { title: "x" } } }] };
     expect(parseLiveIndex(bad)).toEqual([]);
     expect(parseLiveIndex(null)).toEqual([]);
     expect(parseLiveIndex({ scans: "nope" })).toEqual([]);

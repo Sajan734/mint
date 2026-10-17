@@ -7,6 +7,7 @@ import PriceBadge from "@/components/PriceBadge";
 import { GRADE_LABEL, formatPrice } from "@/lib/format";
 import { getLocal, upsertLocal, useLocalListings, type LocalListing, type LocalState } from "@/lib/local-listings";
 import { DEMO_SELLER_ID, sampleSplatFor, useMockMode } from "@/lib/mock-mode";
+import { publishRemote } from "@/lib/api";
 import type { ListingDoc, MarketListing } from "@/lib/types";
 import scanResult from "@/mock/scan-result.json";
 
@@ -142,6 +143,9 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
   const [toast, setToast] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [published, setPublished] = useState(false);
+  const [busy, setBusy] = useState(false);
+  // A live scan is published for every buyer through the backend; demo listings stay in this browser.
+  const remote = entry.source === "live" && !mock;
   const titleRef = useRef<HTMLTextAreaElement>(null);
   const priceRef = useRef<HTMLInputElement>(null);
   const descRef = useRef<HTMLTextAreaElement>(null);
@@ -158,7 +162,8 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
     if (errors[k]) setErrors((x) => ({ ...x, [k]: undefined }));
   };
 
-  function save(state: LocalState) {
+  async function save(state: LocalState) {
+    if (busy) return;
     const errs = validateFields(fields);
     setErrors(errs);
     setSaveError(null);
@@ -174,11 +179,20 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
       setSaveError("Could not save on this device. This browser is blocking storage.");
       return;
     }
+    if (remote) {
+      setBusy(true);
+      const r = await publishRemote(entry.id, fields, state);
+      setBusy(false);
+      if (!r.ok) {
+        setSaveError(`Saved on this device, but Mint could not ${state === "published" ? "publish it for buyers" : "update it"} (${r.error}). Try again.`);
+        return;
+      }
+    }
     if (state === "published") setPublished(true);
     else setToast(wasPublished ? "Saved as a draft. Buyers no longer see it." : "Saved");
   }
 
-  if (published) return <Published entry={entry} />;
+  if (published) return <Published entry={entry} remote={remote} />;
 
   const splatUrl = m.splat_url ?? (mock ? sampleSplatFor(entry.id) : null);
   const priceOk = !validateFields({ ...fields, title: "x", description: "x" }).price;
@@ -203,14 +217,14 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
           ← Your listings
         </Link>
         <p className="font-semibold text-mint-ink">
-          {entry.state === "published" ? "Published on this device" : "Draft · written by Mint from your scan"}
+          {entry.state === "published" ? (remote ? "Published on Mint" : "Published on this device") : "Draft · written by Mint from your scan"}
         </p>
       </div>
       <form
         noValidate
         onSubmit={(e) => {
           e.preventDefault();
-          save("published");
+          void save("published");
         }}
         className="grid gap-6 md:grid-cols-12 md:gap-x-8"
       >
@@ -328,11 +342,11 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
               {saveError}
             </p>
           )}
-          <button type="button" onClick={() => save("draft")} className="btn-secondary min-h-11 px-4 text-sm">
+          <button type="button" onClick={() => void save("draft")} disabled={busy} className="btn-secondary min-h-11 px-4 text-sm">
             Save draft
           </button>
-          <button type="submit" className="btn-primary">
-            Publish
+          <button type="submit" disabled={busy} aria-busy={busy || undefined} className="btn-primary">
+            {busy ? "Publishing…" : "Publish"}
           </button>
         </div>
       </form>
@@ -340,17 +354,18 @@ function EditorForm({ entry, mock }: { entry: LocalListing; mock: boolean }) {
   );
 }
 
-function Published({ entry }: { entry: LocalListing }) {
+function Published({ entry, remote }: { entry: LocalListing; remote: boolean }) {
   const heading = useRef<HTMLHeadingElement>(null);
   useEffect(() => heading.current?.focus(), []);
   const l = entry.market.listing;
   return (
     <section aria-labelledby="published" className="mx-auto flex max-w-xl flex-col items-start gap-5 pt-8">
       <h1 id="published" ref={heading} tabIndex={-1} className="text-[length:var(--t-2xl)] font-bold">
-        Published on this device.
+        {remote ? "Published." : "Published on this device."}
       </h1>
       <p className="text-ink-2">
-        {l.title} · {formatPrice(l.price_cad)}. Anyone using this browser sees it on Mint now.
+        {l.title} · {formatPrice(l.price_cad)}.{" "}
+        {remote ? "Buyers see it on Mint now, on any device." : "Anyone using this browser sees it on Mint now."}
       </p>
       <div className="flex flex-wrap gap-3">
         {/* Plain <a>: the listing page lives in the buyer zone, next/link would add /sell. */}
