@@ -42,7 +42,7 @@ def verdict(label="different"):
     return Verdict(label=label, evidence_score=0.68, reason="Part differs", evidence=ev, caveats=[])
 
 
-def reply(text=None, model="llama-3.3-70b-versatile", **kw):
+def reply(text=None, model="openai/gpt-oss-120b", **kw):
     body = {
         "summary": "The item appears to differ, so message the seller about it.",
         "message_to_seller": "Hello, could you clarify the lid?",
@@ -60,7 +60,7 @@ def run_draft(groq, p=None, claims=None, findings=(), st=None):
 def test_good_draft_accepted_with_one_call():
     g = FakeGroq([reply()])
     step = run_draft(g)
-    assert not step.is_template and step.drafted_by == "groq:llama-3.3-70b-versatile"
+    assert not step.is_template and step.drafted_by == "groq:openai/gpt-oss-120b"
     assert len(g.calls) == 1 and "JSON" in g.calls[0][1]
 
 
@@ -97,13 +97,13 @@ def test_retry_with_validator_error_appended():
     g = FakeGroq([reply(summary="Tell the seller."), reply()])
     step = run_draft(g)
     assert not step.is_template and "missing_likely" in g.calls[1][2]
-    assert g.calls[1][0] == "llama-3.3-70b-versatile"
+    assert g.calls[1][0] == "openai/gpt-oss-120b"
 
 
 def test_api_error_switches_to_8b():
-    g = FakeGroq([GroqCallError(True, "429"), reply(model="llama-3.1-8b-instant")])
+    g = FakeGroq([GroqCallError(True, "429"), reply(model="openai/gpt-oss-20b")])
     step = run_draft(g)
-    assert g.calls[1][0] == "llama-3.1-8b-instant" and step.drafted_by.endswith("8b-instant")
+    assert g.calls[1][0] == "openai/gpt-oss-20b" and step.drafted_by.endswith("gpt-oss-20b")
 
 
 def test_non_retryable_error_goes_straight_to_template():
