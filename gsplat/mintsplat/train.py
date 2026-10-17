@@ -15,10 +15,10 @@ import torch.nn.functional as F
 C0 = 0.28209479177387814
 
 DEFAULTS = {
-    "iters": 4000,
-    "cap_max": 300_000,
+    "iters": 1000,  # optimizer steps; each step renders `batch` views
+    "batch": 4,
+    "cap_max": 200_000,
     "sh_degree": 3,
-    "sh_every": 500,  # raise SH degree every N steps
     "holdout_every": 10,  # every Nth view is held out for evaluation (0 = none)
     "crop_margin": 0.12,
     "edge_band_px": 2,
@@ -27,8 +27,9 @@ DEFAULTS = {
     "opacity_reg": 0.01,
     "scale_reg": 0.01,
     "pose_lr": 1e-4,
-    "pose_start": 300,
+    "pose_start": 100,
     "init_scale": 0.5,
+    "train_scale": 0.75,  # training resolution relative to the video frames
 }
 
 
@@ -48,49 +49,86 @@ def ssim_map(a, b, win):
 
 
 def se3_exp(xi):
-    """(N,6) twist [v, w] -> (N,4,4) rigid transform."""
-    n = xi.shape[0]
-    hat = torch.zeros(n, 4, 4, device=xi.device)
+    """(N,6) twist [v, w] -> (N,4,4) rigid transform (Rodrigues rotation, translation = v).
+
+    Closed form built with stack/cat: matrix_exp and in-place slice writes cost ~4 ms of CPU
+    launch overhead per step, more than the rasteriser.
+    """
     v, w = xi[:, :3], xi[:, 3:]
-    hat[:, 0, 1], hat[:, 0, 2], hat[:, 1, 2] = -w[:, 2], w[:, 1], -w[:, 0]
-    hat[:, 1, 0], hat[:, 2, 0], hat[:, 2, 1] = w[:, 2], -w[:, 1], w[:, 0]
-    hat[:, :3, 3] = v
-    return torch.linalg.matrix_exp(hat)
+    th = w.norm(dim=1, keepdim=True).clamp_min(1e-8)[..., None]
+    z = torch.zeros_like(w[:, 0])
+    Kx = torch.stack([z, -w[:, 2], w[:, 1], w[:, 2], z, -w[:, 0], -w[:, 1], w[:, 0], z], 1).view(-1, 3, 3)
+    R = torch.eye(3, device=xi.device) + torch.sin(th) / th * Kx + (1 - torch.cos(th)) / th ** 2 * (Kx @ Kx)
+    bottom = torch.tensor([0.0, 0, 0, 1], device=xi.device).expand(len(xi), 1, 4)
+    return torch.cat([torch.cat([R, v[..., None]], 2), bottom], 1)
+
+
+def rigid_inv(T):
+    """Inverse of a (4,4) rigid transform without a general solver."""
+    Rt = T[:3, :3].T
+    return torch.cat([torch.cat([Rt, -Rt @ T[:3, 3:]], 1), T[3:]], 0)
+
+
+def _pad_to(a, h, w):
+    """Zero-pad bottom/right so a downscaled frame still holds a full crop."""
+    if a.shape[0] >= h and a.shape[1] >= w:
+        return a
+    out = np.zeros((max(h, a.shape[0]), max(w, a.shape[1])) + a.shape[2:], a.dtype)
+    out[:a.shape[0], :a.shape[1]] = a
+    return out
 
 
 def prep_views(frames, masks, K, margin, band_px):
-    """Crop each view around its mask. Returns dicts of GPU tensors + crop-adjusted K."""
-    views = []
-    for f, m, k in zip(frames, masks, K):
-        H, W = m.shape
+    """Crop every view around its mask with ONE shared crop size (so views batch in a single
+    rasterisation call). Returns stacked GPU tensors + crop-adjusted K."""
+    H, W = masks[0].shape
+    boxes = []
+    for m in masks:
         ys, xs = np.nonzero(m)
-        x0, x1, y0, y1 = xs.min(), xs.max() + 1, ys.min(), ys.max() + 1
-        pad = int(margin * max(x1 - x0, y1 - y0))
-        x0, y0 = max(0, x0 - pad), max(0, y0 - pad)
-        x1, y1 = min(W, x1 + pad), min(H, y1 + pad)
+        boxes.append((xs.min(), xs.max() + 1, ys.min(), ys.max() + 1))
+    bw = np.array([x1 - x0 for x0, x1, _, _ in boxes])
+    bh = np.array([y1 - y0 for _, _, y0, y1 in boxes])
+    pad = 2 * margin * np.maximum(bw, bh)
+    # crop size from the 80th percentile view; the few larger (close-up) views are downscaled to fit
+    cw = min(W, int(np.percentile(bw + pad, 80)) // 16 * 16 + 16)
+    ch = min(H, int(np.percentile(bh + pad, 80)) // 16 * 16 + 16)
+    kern = np.ones((2 * band_px + 1, 2 * band_px + 1), np.uint8)
+    imgs, msk, wts, Ks = [], [], [], []
+    for f, m, k, (x0, x1, y0, y1), p in zip(frames, masks, K, boxes, pad):
+        s = min(1.0, cw / (x1 - x0 + p), ch / (y1 - y0 + p))
+        k = k.clone()
+        if s < 1.0:
+            f = cv2.resize(f, (round(W * s), round(H * s)), interpolation=cv2.INTER_AREA)
+            m = cv2.resize(m.astype(np.uint8), (round(W * s), round(H * s)), interpolation=cv2.INTER_NEAREST)
+            k[:2] *= s
+            x0, x1, y0, y1 = (int(c * s) for c in (x0, x1, y0, y1))
+        fh, fw = m.shape
+        cx0 = int(np.clip((x0 + x1) // 2 - cw // 2, 0, max(0, fw - cw)))
+        cy0 = int(np.clip((y0 + y1) // 2 - ch // 2, 0, max(0, fh - ch)))
+        valid = _pad_to(np.ones((fh, fw), np.uint8), cy0 + ch, cx0 + cw)  # 0 where padding was added
+        f, m = _pad_to(f, cy0 + ch, cx0 + cw), _pad_to(m, cy0 + ch, cx0 + cw)
         mu8 = m.astype(np.uint8)
-        kern = np.ones((2 * band_px + 1, 2 * band_px + 1), np.uint8)
         band = cv2.dilate(mu8, kern) - cv2.erode(mu8, kern)
+        imgs.append(f[cy0:cy0 + ch, cx0:cx0 + cw])
+        msk.append(mu8[cy0:cy0 + ch, cx0:cx0 + cw])
+        wts.append(((1 - band) * valid)[cy0:cy0 + ch, cx0:cx0 + cw])
         kc = k.clone()
-        kc[0, 2] -= x0
-        kc[1, 2] -= y0
-        views.append({
-            "img": torch.from_numpy(f[y0:y1, x0:x1]).cuda(),
-            "mask": torch.from_numpy(mu8[y0:y1, x0:x1]).cuda().float(),
-            "weight": torch.from_numpy(1 - band[y0:y1, x0:x1]).cuda().float(),
-            "K": kc, "W": int(x1 - x0), "H": int(y1 - y0),
-        })
-    return views
+        kc[0, 2] -= cx0
+        kc[1, 2] -= cy0
+        Ks.append(kc)
+    return {"img": torch.from_numpy(np.stack(imgs)).cuda(), "mask": torch.from_numpy(np.stack(msk)).cuda().float(),
+            "weight": torch.from_numpy(np.stack(wts)).cuda().float(), "K": torch.stack(Ks), "W": cw, "H": ch}
 
 
-def render(params, viewmat, K, W, H, sh_degree, bg):
+def render(params, viewmats, Ks, W, H, sh_degree, bgs):
+    """viewmats (B,4,4), Ks (B,3,3), bgs (B,3) -> rgb (B,H,W,3), alpha (B,H,W), info."""
     from gsplat import rasterization
 
     colors = torch.cat([params["sh0"], params["shN"]], 1)
     rgb, alpha, info = rasterization(
         params["means"], params["quats"], torch.exp(params["scales"]), torch.sigmoid(params["opacities"]),
-        colors, viewmat[None], K[None], W, H, sh_degree=sh_degree, backgrounds=bg[None], packed=False)
-    return rgb[0], alpha[0, ..., 0], info
+        colors, viewmats, Ks, W, H, sh_degree=sh_degree, backgrounds=bgs, packed=False)
+    return rgb, alpha[..., 0], info
 
 
 def init_params(pts, cols, init_scale):
@@ -119,44 +157,60 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     from gsplat.strategy import MCMCStrategy
 
     cfg = {**DEFAULTS, **(cfg or {})}
-    iters = cfg["iters"]
+    iters, B = cfg["iters"], cfg["batch"]
     torch.manual_seed(0)
     train_ids, test_ids = split_views(len(frames), cfg["holdout_every"])
+    ts = cfg["train_scale"]
+    if ts != 1.0:
+        h, w = masks[0].shape
+        size = (round(w * ts), round(h * ts))
+        frames = [cv2.resize(f, size, interpolation=cv2.INTER_AREA) for f in frames]
+        masks = [cv2.resize(m.astype(np.uint8), size, interpolation=cv2.INTER_NEAREST).astype(bool) for m in masks]
+        K = K.clone()
+        K[:, :2] *= ts
     views = prep_views(frames, masks, K, cfg["crop_margin"], cfg["edge_band_px"])
+    W, H = views["W"], views["H"]
+    print(f"  crop {W}x{H}, {len(train_ids)} train / {len(test_ids)} held-out views, batch {B}", flush=True)
 
     scene_scale = 1.1 * float((c2w[:, :3, 3] - pts.mean(0)).norm(dim=1).max())
     params = init_params(pts, cols, cfg["init_scale"])
     lrs = {"means": 1.6e-4 * scene_scale, "scales": 5e-3, "quats": 1e-3, "opacities": 5e-2,
            "sh0": 2.5e-3, "shN": 2.5e-3 / 20}
-    optimizers = {k: torch.optim.Adam([{"params": params[k], "lr": lr, "name": k}], eps=1e-15)
+    # batch scaling as in gsplat's simple_trainer
+    optimizers = {k: torch.optim.Adam([{"params": params[k], "lr": lr * B ** 0.5, "name": k}], eps=1e-15 / B ** 0.5,
+                                      betas=(1 - B * 0.1, 1 - B * 0.001), fused=True)
                   for k, lr in lrs.items()}
     means_sched = torch.optim.lr_scheduler.ExponentialLR(optimizers["means"], 0.01 ** (1 / iters))
 
-    strategy = MCMCStrategy(cap_max=cfg["cap_max"], refine_start_iter=500,
-                            refine_stop_iter=int(iters * 0.8), refine_every=100)
+    strategy = MCMCStrategy(cap_max=cfg["cap_max"], refine_start_iter=int(iters * 0.12),
+                            refine_stop_iter=int(iters * 0.8), refine_every=max(10, iters // 40))
     strategy.check_sanity(params, optimizers)
     state = strategy.initialize_state()
 
+    w2c = torch.linalg.inv(c2w)
     cam_delta = torch.nn.Parameter(torch.zeros(len(frames), 6, device="cuda"))
-    cam_opt = torch.optim.Adam([cam_delta], lr=cfg["pose_lr"])
+    cam_opt = torch.optim.Adam([cam_delta], lr=cfg["pose_lr"] * B ** 0.5)
 
     win = _ssim_window("cuda")
-    order = torch.randint(len(train_ids), (iters,)).tolist()
+    tid = torch.tensor(train_ids, device="cuda")
+    sh_every = max(1, int(iters * 0.4) // max(1, cfg["sh_degree"]))
     for step in range(iters):
-        v = train_ids[order[step]]
-        view = views[v]
-        pose = c2w[v] @ se3_exp(cam_delta[v:v + 1])[0] if step >= cfg["pose_start"] else c2w[v]
-        deg = min(cfg["sh_degree"], step // cfg["sh_every"])
-        bg = torch.rand(3, device="cuda")
-        rgb, alpha, info = render(params, torch.linalg.inv(pose), view["K"], view["W"], view["H"], deg, bg)
+        v = tid[torch.randint(len(tid), (B,), device="cuda")]
+        if step >= cfg["pose_start"]:
+            viewmats = torch.stack([rigid_inv(T) for T in c2w[v] @ se3_exp(cam_delta[v])])
+        else:
+            viewmats = w2c[v]
+        deg = min(cfg["sh_degree"], step // sh_every)
+        bg = torch.rand(B, 3, device="cuda")
+        rgb, alpha, info = render(params, viewmats, views["K"][v], W, H, deg, bg)
 
-        m, w = view["mask"], view["weight"]
-        gt = view["img"].float() / 255 * m[..., None] + bg * (1 - m[..., None])
+        m, w = views["mask"][v][..., None], views["weight"][v][..., None]
+        gt = views["img"][v].float() / 255 * m + bg[:, None, None] * (1 - m)
         wsum = w.sum() * 3
-        l1 = ((rgb - gt).abs() * w[..., None]).sum() / wsum
-        s = ssim_map(rgb.permute(2, 0, 1)[None], gt.permute(2, 0, 1)[None], win)[0].permute(1, 2, 0)
-        dssim = ((1 - s) * w[..., None]).sum() / wsum
-        a_loss = ((alpha - m).abs() * w).sum() / w.sum()
+        l1 = ((rgb - gt).abs() * w).sum() / wsum
+        s = ssim_map(rgb.permute(0, 3, 1, 2), gt.permute(0, 3, 1, 2), win).permute(0, 2, 3, 1)
+        dssim = ((1 - s) * w).sum() / wsum
+        a_loss = ((alpha[..., None] - m).abs() * w).sum() / w.sum()
         loss = ((1 - cfg["ssim_w"]) * l1 + cfg["ssim_w"] * dssim + cfg["alpha_w"] * a_loss
                 + cfg["opacity_reg"] * torch.sigmoid(params["opacities"]).mean()
                 + cfg["scale_reg"] * torch.exp(params["scales"]).mean())
@@ -171,8 +225,8 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
         cam_opt.zero_grad(set_to_none=True)
         means_sched.step()
         strategy.step_post_backward(params, optimizers, state, step, info, lr=means_sched.get_last_lr()[0])
-        if step % 500 == 0 or step == iters - 1:
-            print(f"  iter {step:5d} loss {loss.item():.4f} l1 {l1.item():.4f} n={len(params['means'])}", flush=True)
+        if step % 200 == 0 or step == iters - 1:
+            print(f"  step {step:5d} loss {loss.item():.4f} l1 {l1.item():.4f} n={len(params['means'])}", flush=True)
 
     with torch.no_grad():
         refined = c2w.clone()
@@ -187,10 +241,11 @@ def evaluate(params, c2w, views, ids, sh_degree):
     psnrs, ssims, pairs = [], [], []
     bg = torch.zeros(3, device="cuda")
     for v in ids:
-        view = views[v]
-        rgb, _, _ = render(params, torch.linalg.inv(c2w[v]), view["K"], view["W"], view["H"], sh_degree, bg)
-        m = view["mask"][..., None]
-        gt = view["img"].float() / 255 * m
+        rgb, _, _ = render(params, torch.linalg.inv(c2w[v])[None], views["K"][v][None], views["W"], views["H"],
+                           sh_degree, bg[None])
+        rgb = rgb[0]
+        m = views["mask"][v][..., None]
+        gt = views["img"][v].float() / 255 * m
         r = rgb.clamp(0, 1) * m
         mse = ((r - gt) ** 2).sum() / (m.sum() * 3)
         psnrs.append(float(10 * torch.log10(1 / mse.clamp_min(1e-10))))
@@ -230,6 +285,6 @@ def turntable(params, c2w, K, center, sh_degree, n=72, W=640, H=480, elev_deg=No
         az = 2 * math.pi * i / n
         pos = center + dist * torch.tensor([math.cos(elev) * math.cos(az), math.sin(elev),
                                             math.cos(elev) * math.sin(az)], device="cuda")
-        rgb, _, _ = render(params, torch.linalg.inv(look_at(pos, center)), k, W, H, sh_degree, bg)
-        out.append((rgb.clamp(0, 1).cpu().numpy() * 255).astype(np.uint8))
+        rgb, _, _ = render(params, torch.linalg.inv(look_at(pos, center))[None], k[None], W, H, sh_degree, bg[None])
+        out.append((rgb[0].clamp(0, 1).cpu().numpy() * 255).astype(np.uint8))
     return out

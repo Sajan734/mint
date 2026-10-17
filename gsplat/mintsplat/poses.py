@@ -39,23 +39,20 @@ def unproject(depth, K_small, ext, sel):
     return ((xc - t) @ R)[sel]  # R^T (x_cam - t)
 
 
-def fit_plane(pts: np.ndarray, thresh: float, iters: int = 400, seed: int = 0):
-    """RANSAC plane -> (unit normal, point on plane, inlier fraction)."""
-    rng = np.random.default_rng(seed)
-    best, best_n = None, -1
-    for _ in range(iters):
-        a, b, c = pts[rng.choice(len(pts), 3, replace=False)]
-        n = np.cross(b - a, c - a)
-        if np.linalg.norm(n) < 1e-12:
-            continue
-        n /= np.linalg.norm(n)
-        inl = np.abs((pts - a) @ n) < thresh
-        if inl.sum() > best_n:
-            best, best_n = inl, inl.sum()
-    p = pts[best]
+def fit_plane(pts: np.ndarray, thresh: float, iters: int = 512, seed: int = 0):
+    """RANSAC plane (all hypotheses scored at once on the GPU) -> (unit normal, point on plane, inlier fraction)."""
+    g = torch.Generator(device="cuda").manual_seed(seed)
+    P = torch.from_numpy(pts).float().cuda()
+    tri = P[torch.randint(len(P), (iters, 3), device="cuda", generator=g)]
+    n = torch.linalg.cross(tri[:, 1] - tri[:, 0], tri[:, 2] - tri[:, 0])
+    n = n / n.norm(dim=1, keepdim=True).clamp_min(1e-12)
+    d = ((P[None] - tri[:, :1]) * n[:, None]).sum(-1).abs()  # (iters, M)
+    counts = (d < thresh).sum(1)
+    best = d[counts.argmax()] < thresh
+    p = P[best]
     ctr = p.mean(0)
-    n = np.linalg.svd(p - ctr, full_matrices=False)[2][2]  # least-squares refit on inliers
-    return n, ctr, best_n / len(pts)
+    normal = torch.linalg.svd(p - ctr, full_matrices=False)[2][2]  # least-squares refit on inliers
+    return normal.cpu().numpy(), ctr.cpu().numpy(), float(best.float().mean())
 
 
 def align_transform(n: np.ndarray, plane_pt: np.ndarray, obj_ctr: np.ndarray, cam_ctrs: np.ndarray,
@@ -102,7 +99,7 @@ def estimate(model, frames: list[np.ndarray], masks: list[np.ndarray], n_init: i
     # support plane from the background near the object (paper can curl further out)
     bg = bg_P.cpu().numpy()
     bg = bg[np.linalg.norm(bg - obj_ctr, axis=1) < 3 * obj_r]
-    bg = bg[np.random.default_rng(0).choice(len(bg), min(len(bg), 50_000), replace=False)]
+    bg = bg[np.random.default_rng(0).choice(len(bg), min(len(bg), 20_000), replace=False)]
     n, plane_pt, inlier_frac = fit_plane(bg, thresh=0.02 * obj_r)
 
     c2w = torch.linalg.inv(torch.cat([ext, torch.tensor([[[0, 0, 0, 1.0]]], device=dev).expand(N, 1, 4)], 1))

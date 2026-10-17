@@ -1,6 +1,6 @@
 """Phone video -> clean object-only Gaussian splat on a Modal GPU.
 
-    modal run app.py --video orbit.mp4                      # full run -> out/<video stem>/
+    modal run app.py --video orbit.mp4                      # full run (~28 s warm) -> out/<video stem>/
     modal run app.py --video orbit.mp4 --stop-after masks   # iterate on one stage
 
 Outputs land in out/<name>/: splat.ply plus debug JPEGs and timings.json.
@@ -42,7 +42,7 @@ app = modal.App("mint-gsplat", image=image)
 models_vol = modal.Volume.from_name("mint-models", create_if_missing=True)
 
 
-@app.cls(gpu="L40S", volumes={"/models": models_vol}, timeout=900, scaledown_window=300)
+@app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol}, timeout=900, scaledown_window=300)
 class Splatter:
     @modal.enter()
     def load(self):
@@ -69,13 +69,13 @@ class Splatter:
 
 
 @app.local_entrypoint()
-def main(video: str, name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 4000,
-         cap: int = 300_000):
+def main(video: str, name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 1000,
+         batch: int = 4, cap: int = 200_000, scale: float = 0.75):
     src = Path(video)
     out_dir = Path("out") / (name or src.stem)
     out_dir.mkdir(parents=True, exist_ok=True)
     cfg = {"n_frames": n_frames, "stop_after": stop_after or None,
-           "train": {"iters": iters, "cap_max": cap}}
+           "train": {"iters": iters, "batch": batch, "cap_max": cap, "train_scale": scale}}
 
     t0 = time.perf_counter()
     res = Splatter().run.remote(src.read_bytes(), cfg)
