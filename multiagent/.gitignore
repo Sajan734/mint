@@ -1,6 +1,6 @@
 .venv/
 runs/
-data/
+/data/
 eval/out/
 .worktrees/
 __pycache__/
