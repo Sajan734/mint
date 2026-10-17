@@ -6,7 +6,8 @@ import UIKit
 
 /// The app, start to finish, for one product at a time:
 ///
-///   waiting  ── "New product" on the seller's dashboard (or its QR link, or "scan without the dashboard")
+///   waiting  ── a mint:// link from the website (QR code read by the iPhone camera or by this screen),
+///      │        the dashboard's auto-pickup, or "scan without the dashboard"
 ///      ↓
 ///   ready → recording (until the stop button) → saving → review ─┬─ Scan again → ready (the next pass)
 ///                                                                ├─ Discard the last pass
@@ -14,8 +15,9 @@ import UIKit
 ///                                                                                       ↓ (next request, or Next product)
 ///                                                                                    waiting
 ///
-/// One product = one scan_id = one or more passes (a lap, then maybe flipped over, …). The ring shows
-/// how much of one lap has been seen, measured from the paper's turn; it's a guide and never ends a pass.
+/// One product = one scan_id = one or more passes (a lap, then maybe flipped over, …). A job is either a
+/// seller's listing scan or a buyer's verify rescan of a listing (in-person deal). The ring shows how
+/// much of one lap has been seen, measured from the paper's turn; it's a guide and never ends a pass.
 @MainActor
 final class CaptureSession: NSObject, ObservableObject {
     enum Phase: Equatable {
@@ -34,6 +36,9 @@ final class CaptureSession: NSObject, ObservableObject {
         let scanID: String
         let fromDashboard: Bool
         let title: String?
+        /// A buyer's verify rescan of this listing (nil: a seller's listing scan).
+        var listingID: String? = nil
+        var isVerify: Bool { listingID != nil }
     }
 
     /// Whether the dashboard can be reached (shown on the waiting screen).
@@ -44,17 +49,27 @@ final class CaptureSession: NSObject, ObservableObject {
     /// Ticks round the ring: 5° each, clockwise from the top, like the item's sides seen from above.
     static let tickCount = 72
 
-    @Published private(set) var phase: Phase = .waiting
+    @Published private(set) var phase: Phase = .waiting {
+        // Read QR codes only while waiting for a product (or on the done / failed screens).
+        didSet { loop.lookForCodes = phase == .waiting || phase == .finished || phase.isFailed }
+    }
     @Published private(set) var job: Job?
     @Published private(set) var link: Link = DashboardLink.url == nil ? .notSetUp : .connecting
     @Published private(set) var recordStart: Date?
     @Published private(set) var passes: [VideoRecorder.Summary] = []
     /// How much of one lap has been seen (`TurnCoverage`): measured from the paper's turn, nothing scripted.
     @Published private(set) var percent = 0
-    /// ticks[i], 0…1: how well the side at tick i (clockwise from the top) has been seen head-on.
+    /// ticks[i], 0…1: how well the item's side i × 5° (clockwise from above, from the side that faced the
+    /// camera at the start) has been seen head-on.
     @Published private(set) var ticks: [Double] = Array(repeating: 0, count: tickCount)
-    /// Where the camera is looking round the item now, as a ring angle (radians, clockwise from the top).
-    @Published private(set) var facingAngle: Double = 0
+    /// How far the paper has turned this pass (radians, clockwise from above), eased for display: the ring
+    /// turns with it, so side i sits at i × 5° + ringTurn round the item, 0 = the side facing the camera.
+    @Published private(set) var ringTurn: Double = 0
+    /// The item's box on screen (view points, eased), and whether it's in view right now.
+    @Published private(set) var itemBox: CGRect?
+    @Published private(set) var itemVisible = false
+    /// The camera's elevation above the item (radians, eased): how flat the ring on the table looks.
+    @Published private(set) var elevation: Double = 0.75
     @Published private(set) var lapCompletedAt: Date?
     /// The sheet's edges were read in the last moment (false: no paper, or hands covering it).
     @Published private(set) var paperSeen = false
@@ -74,6 +89,11 @@ final class CaptureSession: NSObject, ObservableObject {
     private var lastObservation: TimeInterval?
     private var lastPaperAt = Date.distantPast
     private var fullSlices = 0
+    private var targetBox: CGRect?
+    private var pendingBox: CGRect?
+    private var pendingCount = 0
+    private var lastItemAt = Date.distantPast
+    private var previewing = false   // Debug screen previews only
     private var reportedTenth = -1
     private var exposureLocked = false
     private let tick = UIImpactFeedbackGenerator(style: .light)
@@ -102,7 +122,7 @@ final class CaptureSession: NSObject, ObservableObject {
         }
         arView.session.run(config, options: [.resetTracking])
         ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 15, repeats: true) { [weak self] _ in
+        ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.onTick() }
         }
         startPolling()
@@ -135,7 +155,8 @@ final class CaptureSession: NSObject, ObservableObject {
                         self.link = .online
                         if let request, !self.handled.contains(request.scan_id),
                            self.phase == .waiting || self.phase == .finished {
-                            self.begin(Job(scanID: request.scan_id, fromDashboard: true, title: request.title))
+                            let listing = request.kind == "verify" ? request.listing_scan_id : nil
+                            self.begin(Job(scanID: request.scan_id, fromDashboard: true, title: request.title, listingID: listing))
                         }
                     } catch {
                         self.linkFailures += 1
@@ -147,10 +168,13 @@ final class CaptureSession: NSObject, ObservableObject {
         }
     }
 
-    /// The dashboard's QR link (`mintscan://scan?scan_id=…`) opened the app.
-    func open(_ url: URL) {
-        guard let id = DashboardLink.scanID(from: url), !inScanner, !isSending, !handled.contains(id) else { return }
-        begin(Job(scanID: id, fromDashboard: true, title: nil))
+    /// A website link (`mint://scan?id=…` / `mint://verify?id=…&listing=…`) opened the app, or its QR code
+    /// was read on the waiting screen.
+    func open(_ url: URL) { follow(url.absoluteString) }
+
+    private func follow(_ text: String) {
+        guard let link = DashboardLink.parse(text), !inScanner, !isSending, !handled.contains(link.scanID) else { return }
+        begin(Job(scanID: link.scanID, fromDashboard: true, title: nil, listingID: link.listingID))
     }
 
     /// No dashboard: scan anyway (the product gets its own scan_id).
@@ -218,7 +242,7 @@ final class CaptureSession: NSObject, ObservableObject {
         lastObservation = nil
         fullSlices = 0
         lapCompletedAt = nil
-        facingAngle = 0
+        ringTurn = 0
         publishCoverage()
     }
 
@@ -226,7 +250,7 @@ final class CaptureSession: NSObject, ObservableObject {
         guard let job else { return }
         let recorder: VideoRecorder
         do {
-            recorder = try VideoRecorder(scanID: job.scanID, pass: nextPass)
+            recorder = try VideoRecorder(scanID: job.scanID, pass: nextPass, listingID: job.listingID)
         } catch {
             phase = .failed("Couldn't start recording: \(error.localizedDescription)")
             return
@@ -301,7 +325,7 @@ final class CaptureSession: NSObject, ObservableObject {
         DashboardLink.report(.uploading, scanID: job.scanID, passes: count, progress: 0)
         Task {
             do {
-                _ = try await SupabaseUploader.upload(scanID: job.scanID, passes: list) { p in
+                _ = try await SupabaseUploader.upload(scanID: job.scanID, passes: list, verify: job.isVerify) { p in
                     guard self.isSending else { return }
                     self.phase = .sending(p)
                     let tenth = Int(p * 10)
@@ -321,15 +345,34 @@ final class CaptureSession: NSObject, ObservableObject {
 
     // MARK: - Measuring
 
-    /// 15 Hz: the size limit on a pass, and whether the paper is in view.
+    /// 30 Hz: the size limit on a pass, whether the paper and item are in view, and easing the item's box
+    /// and the ring's turn towards the latest readings (which come ~8 times a second).
     private func onTick() {
         if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.maxPassSeconds { stopPass() }
         let seen = Date().timeIntervalSince(lastPaperAt) < 0.6
         if seen != paperSeen { paperSeen = seen }
+        let visible = Date().timeIntervalSince(lastItemAt) < 0.9
+        if visible != itemVisible { itemVisible = visible }
+        if let target = targetBox {
+            if let box = itemBox {
+                let k: CGFloat = 0.3
+                itemBox = CGRect(x: box.minX + (target.minX - box.minX) * k, y: box.minY + (target.minY - box.minY) * k,
+                                 width: box.width + (target.width - box.width) * k, height: box.height + (target.height - box.height) * k)
+            } else {
+                itemBox = target
+            }
+        }
+        // The ring follows the paper while recording, then stays where the paper stopped.
+        let goal = Double(turn.turned)
+        if phase == .recording, !previewing, abs(goal - ringTurn) > 0.0005 { ringTurn += (goal - ringTurn) * 0.3 }
     }
 
-    /// A new reading of the frame: how far the paper has turned, which while recording fills the coverage.
+    /// A new reading of the frame: a QR code (while waiting), where the item is, and how far the paper has
+    /// turned, which while recording fills the coverage.
     private func apply(_ sight: PaperReader.Sight) {
+        if let code = sight.code { follow(code) }
+        if let box = sight.itemBox { track(box) }
+        if let e = sight.elevation { elevation += (Double(e) - elevation) * 0.15 }
         guard let reading = sight.paper, turn.update(reading, time: sight.timestamp) else { return }
         lastPaperAt = Date()
         guard phase == .recording, let elevation = sight.elevation else { return }
@@ -338,15 +381,37 @@ final class CaptureSession: NSObject, ObservableObject {
         publishCoverage()
     }
 
+    /// The item's box from a reading, on screen. The paper finder only ever reports what the sheet
+    /// encloses, but a sudden jump (a hand, a shadow) has to repeat 3 times before the brackets follow.
+    private func track(_ sensorBox: CGRect) {
+        guard let frame = arView.session.currentFrame else { return }
+        let size = arView.bounds.size
+        guard size.width > 0 else { return }
+        let toView = frame.displayTransform(for: .portrait, viewportSize: size)
+        let corners = [CGPoint(x: sensorBox.minX, y: sensorBox.minY), CGPoint(x: sensorBox.maxX, y: sensorBox.minY),
+                       CGPoint(x: sensorBox.minX, y: sensorBox.maxY), CGPoint(x: sensorBox.maxX, y: sensorBox.maxY)]
+            .map { $0.applying(toView) }.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
+        let xs = corners.map(\.x), ys = corners.map(\.y)
+        let box = CGRect(x: xs.min()!, y: ys.min()!, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
+        let area = box.width * box.height / (size.width * size.height)
+        guard area > 0.002, area < 0.5 else { return }
+        func far(_ a: CGRect, _ b: CGRect) -> Bool { hypot(a.midX - b.midX, a.midY - b.midY) > 0.25 * size.width }
+        if let target = targetBox, Date().timeIntervalSince(lastItemAt) < 1.5, far(box, target) {
+            if let p = pendingBox, !far(box, p) { pendingCount += 1 } else { pendingCount = 1 }
+            pendingBox = box
+            guard pendingCount >= 3 else { return }
+        }
+        pendingBox = nil
+        pendingCount = 0
+        targetBox = box
+        lastItemAt = Date()
+    }
+
     private func publishCoverage() {
         percent = coverage.percent
-        // Tick i sits at i × 5° clockwise from the top and shows the side that faces the camera when the
-        // paper has turned that far clockwise (`TurnCoverage.facing` = −turned), so turning the paper
-        // clockwise lights the ring clockwise.
         ticks = (0..<Self.tickCount).map { i in
-            Double(coverage.level(side: -Float(i) / Float(Self.tickCount) * 2 * .pi))
+            Double(coverage.level(side: Float(i) / Float(Self.tickCount) * 2 * .pi))
         }
-        facingAngle = Double(-coverage.facing)
         // A tick of the phone for every 10° slice that fills, a big one when the lap is done (the pass carries on).
         let full = coverage.fill[0].filter { $0 >= 0.98 }.count
         if full > fullSlices && phase == .recording { tick.impactOccurred(intensity: 0.45) }
@@ -363,18 +428,27 @@ final class CaptureSession: NSObject, ObservableObject {
     /// Never in a Release build, never on stage.
     private func preview(_ screen: String) {
         poller?.cancel()
-        job = Job(scanID: UUID().uuidString.lowercased(), fromDashboard: true, title: "Logitech M325 mouse")
+        previewing = true
+        job = Job(scanID: UUID().uuidString.lowercased(), fromDashboard: true, title: "Logitech M325 mouse",
+                  listingID: screen.hasPrefix("verify") ? UUID().uuidString.lowercased() : nil)
         let fake = VideoRecorder.Summary(directory: URL(fileURLWithPath: "/nonexistent"), scanID: job!.scanID, pass: 1,
                                          seconds: 23, frames: 690, megabytes: 23)
         lastPaperAt = .distantFuture
+        lastItemAt = .distantFuture
+        targetBox = CGRect(x: 125, y: 330, width: 150, height: 120)
+        elevation = 0.8
+        // Made-up coverage: the paper turned `deg` clockwise, so sides −deg…0 have been seen.
         let fill = { (deg: Double) in
-            self.ticks = (0..<Self.tickCount).map { i in Double(i) * 5 < deg ? 1 : (Double(i) * 5 < deg + 25 ? 0.4 : 0) }
-            self.facingAngle = deg * .pi / 180
+            self.ticks = (0..<Self.tickCount).map { i in
+                let side = (360 - Double(i) * 5).truncatingRemainder(dividingBy: 360)
+                return side <= deg ? 1 : (side <= deg + 20 ? 0.4 : 0)
+            }
+            self.ringTurn = deg * .pi / 180
             self.percent = Int(min(100, deg / 3.15))
         }
         switch screen {
         case "ready": phase = .ready
-        case "recording": recordStart = Date().addingTimeInterval(-9); fill(205); phase = .recording
+        case "recording", "verify": recordStart = Date().addingTimeInterval(-9); fill(205); phase = .recording
         case "full": recordStart = Date().addingTimeInterval(-17); fill(360); lapCompletedAt = Date(); phase = .recording
         case "review": fill(360); passes = [fake]; phase = .review
         case "sending": passes = [fake, fake]; phase = .sending(0.62)

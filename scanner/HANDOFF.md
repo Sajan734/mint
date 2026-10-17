@@ -15,6 +15,8 @@ An item can have **several passes** (recordings): the main lap, then usually the
   pass3.mp4              pass 3+ (if any), + pass3.poses.jsonl, pass3.capture.json. gsplat uses only the first two today
 ```
 
+**Buyer verify rescans** (handover, CLAUDE.md M14: a buyer at an in-person deal rescans the item from the listing page's "Scan" button, `mint://verify?id=…&listing=…`): same layout but named `rescan.mp4`, `rescan.poses.jsonl`, `rescan.capture.json`, `thumb.jpg` (more passes: `rescan2.*`…), so `on_upload` (which fires on `video.mp4`) never makes a listing out of them. `rescan.capture.json` has `"kind": "handover"` and `"listing_scan_id"`: the listing it must be compared with (its own `scans/<listing_scan_id>/` and published splat). `rescan.mp4` is uploaded last, so a webhook on it sees the whole rescan. Listing scans' capture.json say `"kind": "listing"`.
+
 **Upload order:** every later pass first, `video.mp4` last. Its arrival is what the Storage webhook (`on_upload`) starts the pipeline on, so `bottom.mp4` is already there when the job starts.
 
 **Also in the bucket (ignore for reconstruction):** `{scan_id}/session.json` (the dashboard hand-off's status for that product: waiting → scanning → uploading → uploaded, see [DASHBOARD.md](DASHBOARD.md)) and `_requests/current.json` (the latest "New product" request). Neither is a video, so `on_upload` and `fetch_scan.py` skip them.

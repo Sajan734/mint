@@ -32,6 +32,8 @@ final class VideoRecorder {
 
     let scanID: String
     let pass: Int
+    /// The listing a verify rescan is checked against (nil: a seller's listing scan).
+    let listingID: String?
     let directory: URL
 
     private let writer: AVAssetWriter
@@ -44,9 +46,10 @@ final class VideoRecorder {
     private var lastTimestamp: TimeInterval = 0
     private var frameIndex = 0
 
-    init(scanID: String, pass: Int) throws {
+    init(scanID: String, pass: Int, listingID: String? = nil) throws {
         self.scanID = scanID
         self.pass = pass
+        self.listingID = listingID
         directory = Self.folder(scanID: scanID).appendingPathComponent("pass\(pass)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
@@ -135,6 +138,8 @@ final class VideoRecorder {
                 )
                 info.coverage_pct = coveragePct
                 info.pass = pass
+                info.kind = listingID == nil ? "listing" : "handover"
+                info.listing_scan_id = listingID
                 try CaptureJSON.encode(info, pretty: true).write(to: directory.appendingPathComponent("capture.json"))
                 return Summary(directory: directory, scanID: scanID, pass: pass, seconds: seconds, frames: frames,
                                megabytes: Double(Self.folderSize(directory)) / 1_000_000)

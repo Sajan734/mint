@@ -41,26 +41,29 @@ struct WaitingScreen: View {
 
     var body: some View {
         ZStack {
-            Backdrop()
+            // Lighter than the other screens: the camera shows through, since it's reading QR codes.
+            Rectangle().fill(Color.brandStageBg.opacity(0.72)).ignoresSafeArea()
             VStack(spacing: 0) {
                 HStack { MintMark(); Spacer() }.padding(.top, 6)
                 Spacer()
                 ZStack {
                     Ripples().frame(width: 300, height: 300)
                     Circle().fill(Color.brandMint.opacity(0.14)).frame(width: 104, height: 104)
-                    Image(systemName: "laptopcomputer.and.iphone")
-                        .font(.system(size: 40, weight: .semibold))
+                    Image(systemName: "qrcode.viewfinder")
+                        .font(.system(size: 44, weight: .semibold))
                         .foregroundStyle(Color.brandMint)
                 }
                 Text("Ready when you are")
                     .font(.system(size: 30, weight: .heavy, design: .rounded))
                     .padding(.top, 8)
-                Text("On your computer, click **New product**.\nThe scanner opens here by itself.")
+                Text("Point this phone at the **QR code** on the website\n(Scan an item, or Scan on a listing).")
                     .font(.system(.body, design: .rounded))
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.white.opacity(0.7))
+                    .foregroundStyle(.white.opacity(0.75))
                     .padding(.top, 10)
-                linkStatus.padding(.top, 22)
+                if session.link == .online {
+                    linkStatus.padding(.top, 22)
+                }
                 Spacer()
                 Button(action: session.scanWithoutDashboard) {
                     Label("Scan without the dashboard", systemImage: "viewfinder")
@@ -78,7 +81,7 @@ struct WaitingScreen: View {
 
     private var linkStatus: some View {
         let (color, text): (Color, String) = switch session.link {
-        case .online: (.brandMint, "Connected to your dashboard")
+        case .online: (.brandMint, "Connected · New product opens here by itself")
         case .connecting: (.white.opacity(0.6), "Connecting to your dashboard…")
         case .offline: (.brandAmber, "Can't reach your dashboard. Check the Wi-Fi.")
         case .notSetUp: (.brandAmber, "Dashboard link isn't set up on this phone")
@@ -230,12 +233,14 @@ struct FinishedScreen: View {
                     .padding(.top, 6)
                 HStack(spacing: 12) {
                     Image(systemName: "laptopcomputer").font(.system(size: 30, weight: .semibold))
-                    Text("Look back at\nyour computer")
+                    Text(session.job?.isVerify == true ? "Look back at\nthe listing" : "Look back at\nyour computer")
                         .font(.system(size: 34, weight: .heavy, design: .rounded))
                         .multilineTextAlignment(.leading)
                 }
                 .padding(.top, 10)
-                Text(session.job?.fromDashboard == false
+                Text(session.job?.isVerify == true
+                     ? "Mint is checking this scan against the seller's."
+                     : session.job?.fromDashboard == false
                      ? "Your scan is on its way. Open your dashboard to see it."
                      : "Your 3D scan and listing are being built there.")
                     .font(.system(.body, design: .rounded))
@@ -247,7 +252,7 @@ struct FinishedScreen: View {
                     Text("Next product").fontWeight(.bold).frame(maxWidth: .infinity, minHeight: 52)
                 }
                 .buttonStyle(.borderedProminent).tint(.brandMint).foregroundStyle(Color.brandStageBg)
-                Text("Or click New product on your computer. This phone is listening.")
+                Text("Or point this phone at the next QR code.")
                     .font(.footnote).foregroundStyle(.white.opacity(0.5))
                     .padding(.top, 8)
             }

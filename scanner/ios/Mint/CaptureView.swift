@@ -54,6 +54,11 @@ extension CaptureSession.Phase {
 
     /// Saving or reviewing: the pass is over and its coverage stays on screen.
     var isFinished: Bool { self == .saving || self == .review }
+
+    var isFailed: Bool {
+        if case .failed = self { return true }
+        return false
+    }
 }
 
 private struct CameraView: UIViewRepresentable {
@@ -62,48 +67,51 @@ private struct CameraView: UIViewRepresentable {
     func updateUIView(_ uiView: ARView, context: Context) {}
 }
 
-// MARK: - The scanner: a lens on the item, ringed by the item's sides lighting up as they're seen
+// MARK: - The scanner: brackets on the item, and a wide ring on the table around it that turns with the paper
 
 struct ScannerHUD: View {
     @ObservedObject var session: CaptureSession
     @State private var confirmCancel = false
 
     var body: some View {
-        GeometryReader { geo in
-            let lens = Lens(size: geo.size)
-            ZStack {
-                TimelineView(.animation) { ctx in
-                    // The ring's canvas fills the screen (to dim all of it), so shift the lens by the safe area.
-                    LensRing(session: session, lens: lens.offset(by: CGPoint(x: geo.safeAreaInsets.leading, y: geo.safeAreaInsets.top)),
-                             time: ctx.date)
-                }
+        ZStack {
+            // Legibility only: the top and bottom edges darken a little; the camera stays wide open.
+            LinearGradient(stops: [.init(color: .black.opacity(0.6), location: 0), .init(color: .clear, location: 0.2),
+                                   .init(color: .clear, location: 0.66), .init(color: .black.opacity(0.75), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
-                coverageReadout
-                    .position(x: lens.centre.x, y: lens.centre.y + lens.radius + 98)
-
-                VStack(spacing: 14) {
-                    topBar
-                    jobChip
-                    Spacer()
-                    if session.phase == .review {
-                        ReviewCard(session: session)
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-                    } else {
-                        Caption(session: session)
-                        controls
-                    }
+            GeometryReader { geo in
+                TimelineView(.animation) { ctx in
+                    ScanCanvas(session: session, time: ctx.date,
+                               offset: CGPoint(x: geo.safeAreaInsets.leading, y: geo.safeAreaInsets.top))
                 }
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+                .ignoresSafeArea()
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: session.phase)
+            .allowsHitTesting(false)
+
+            VStack(spacing: 10) {
+                topBar
+                jobChip
+                coverageReadout.padding(.top, 4)
+                Spacer()
+                if session.phase == .review {
+                    ReviewCard(session: session)
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    Caption(session: session)
+                    controls
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 10)
         }
-        .confirmationDialog("Discard this product?", isPresented: $confirmCancel, titleVisibility: .visible) {
+        .animation(.spring(response: 0.4, dampingFraction: 0.85), value: session.phase)
+        .confirmationDialog("Discard this scan?", isPresented: $confirmCancel, titleVisibility: .visible) {
             Button("Discard \(session.passes.count) pass\(session.passes.count == 1 ? "" : "es")", role: .destructive) { session.cancelJob() }
         } message: {
-            Text("Nothing will be sent to your dashboard.")
+            Text("Nothing will be sent.")
         }
     }
 
@@ -147,33 +155,34 @@ struct ScannerHUD: View {
         Text("PASS \(n)").font(.system(.caption, design: .rounded).weight(.heavy)).tracking(1.2).foregroundStyle(Color.brandMint)
     }
 
-    // Which product this is for.
+    // What this scan is for.
     @ViewBuilder private var jobChip: some View {
         if let job = session.job {
             HStack(spacing: 6) {
-                Image(systemName: job.fromDashboard ? "laptopcomputer" : "bolt.fill")
-                Text(job.fromDashboard ? (job.title.map { "NEW PRODUCT · \($0.uppercased())" } ?? "NEW PRODUCT · FROM YOUR DASHBOARD") : "QUICK SCAN")
+                Image(systemName: job.isVerify ? "checkmark.shield.fill" : (job.fromDashboard ? "laptopcomputer" : "bolt.fill"))
+                Text(job.isVerify ? "VERIFY · MATCHING THE LISTING"
+                     : job.fromDashboard ? (job.title.map { "NEW PRODUCT · \($0.uppercased())" } ?? "NEW PRODUCT") : "QUICK SCAN")
                     .lineLimit(1)
             }
             .font(.system(.caption2, design: .rounded).weight(.bold)).tracking(1.1)
-            .foregroundStyle(.white.opacity(0.75))
+            .foregroundStyle(job.isVerify ? Color.brandMint : .white.opacity(0.8))
         }
     }
 
-    // The measured coverage of one lap, under the lens.
+    // The measured coverage of one lap.
     @ViewBuilder private var coverageReadout: some View {
         if session.phase != .ready {
             let done = session.percent >= 100
-            VStack(spacing: 2) {
-                (Text("\(session.percent)").font(.system(size: 58, weight: .heavy, design: .rounded)).monospacedDigit()
-                    + Text("%").font(.system(size: 26, weight: .bold, design: .rounded)))
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                (Text("\(session.percent)").font(.system(size: 52, weight: .heavy, design: .rounded)).monospacedDigit()
+                    + Text("%").font(.system(size: 24, weight: .bold, design: .rounded)))
                     .foregroundStyle(done ? Color.brandMint : .white)
-                    .shadow(color: done ? .brandMint.opacity(0.6) : .clear, radius: 14)
+                    .shadow(color: done ? .brandMint.opacity(0.6) : .black.opacity(0.4), radius: 12)
                     .contentTransition(.numericText(value: Double(session.percent)))
                     .animation(.snappy(duration: 0.25), value: session.percent)
-                Label(done ? "FULL LAP" : "LAP COVERAGE", systemImage: done ? "checkmark.circle.fill" : "rotate.right")
-                    .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.6)
-                    .foregroundStyle(done ? Color.brandMint : .white.opacity(0.7))
+                Label(done ? "FULL LAP" : "LAP COVERAGE", systemImage: done ? "checkmark.circle.fill" : "arrow.clockwise")
+                    .font(.system(.caption, design: .rounded).weight(.bold)).tracking(1.4)
+                    .foregroundStyle(done ? Color.brandMint : .white.opacity(0.75))
             }
             .transition(.opacity.combined(with: .scale(scale: 0.9)))
         }
@@ -190,7 +199,7 @@ struct ScannerHUD: View {
             }
             .opacity(session.phase == .ready ? 1 : 0)
             .disabled(session.phase != .ready)
-            .accessibilityLabel("Cancel this product")
+            .accessibilityLabel("Cancel this scan")
             Spacer()
             Shutter(phase: session.phase, action: session.primaryAction)
             Spacer()
@@ -200,101 +209,103 @@ struct ScannerHUD: View {
     }
 }
 
-/// Where the lens sits on screen.
-struct Lens {
-    let centre: CGPoint
-    let radius: CGFloat
-    init(size: CGSize) {
-        centre = CGPoint(x: size.width / 2, y: size.height * 0.40)
-        radius = min(size.width * 0.38, size.height * 0.24)
-    }
-
-    private init(centre: CGPoint, radius: CGFloat) {
-        self.centre = centre
-        self.radius = radius
-    }
-
-    func offset(by d: CGPoint) -> Lens { Lens(centre: CGPoint(x: centre.x + d.x, y: centre.y + d.y), radius: radius) }
-}
-
-/// The lens: the camera clear inside, darkened outside, ringed by 72 ticks (the item's sides, clockwise
-/// from the top as seen from above). A tick lights mint as its side is seen head-on; a bright comet
-/// follows the side facing the camera right now, so it turns with the paper.
-struct LensRing: View {
+/// Draws, over the camera: corner brackets on the item (what the paper encloses), and a wide ring lying
+/// flat on the table around it, seen in perspective (flatter the lower the camera). The ring is 72 ticks,
+/// one per 5° of the item's sides, and it turns with the paper: a side's tick lights mint once that side
+/// has been seen head-on, and the bright spot at the front of the ring is where the camera is looking now.
+struct ScanCanvas: View {
     @ObservedObject var session: CaptureSession
-    let lens: Lens
     let time: Date
+    let offset: CGPoint   // view (safe area) → canvas (full screen)
 
     var body: some View {
         Canvas { ctx, size in
-            let c = lens.centre, r = lens.radius
             let t = time.timeIntervalSinceReferenceDate
             let recording = session.isRecording
             let live = recording || session.phase.isFinished
             let mint = Color.brandMint
+            let box = session.itemBox?.offsetBy(dx: offset.x, dy: offset.y)
 
-            // Everything outside the lens dims, so the eye goes to the item.
-            var mask = Path(CGRect(origin: .zero, size: size))
-            mask.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
-            ctx.fill(mask, with: .color(.black.opacity(recording ? 0.62 : 0.5)), style: FillStyle(eoFill: true))
-            var rim = Path()
-            rim.addEllipse(in: CGRect(x: c.x - r, y: c.y - r, width: 2 * r, height: 2 * r))
-            ctx.stroke(rim, with: .color(.white.opacity(0.22)), lineWidth: 1)
-
+            // The ring: centred under the item (or mid-screen until it's found), nearly as wide as the screen.
+            let a = size.width * 0.46
+            let b = a * max(0.28, min(0.85, sin(session.elevation)))
+            let centre = box.map { CGPoint(x: $0.midX, y: $0.maxY - min($0.height * 0.35, b * 0.6)) }
+                ?? CGPoint(x: size.width / 2, y: size.height * 0.56)
             let n = CaptureSession.tickCount
-            let facingDeg = session.facingAngle * 180 / .pi
-            // The lap-complete flourish: one bright sweep round the ring.
-            let sweep: Double? = session.lapCompletedAt.map { t - $0.timeIntervalSinceReferenceDate }.flatMap { $0 < 1.1 ? $0 / 1.1 * 360 : nil }
+            let sweep: Double? = session.lapCompletedAt.map { t - $0.timeIntervalSinceReferenceDate }.flatMap { $0 < 1.2 ? $0 / 1.2 : nil }
 
-            var lit = Path(), dim = Path(), hot = Path()
-            for i in 0..<n {
-                let deg = Double(i) * 360 / Double(n)
-                let a = (deg - 90) * .pi / 180
-                var level = live ? session.ticks[i] : 0
-                var boost = 0.0
-                if recording && session.paperSeen {
-                    // Comet: brightest at the side facing the camera, trailing behind it (anticlockwise).
-                    let behind = (facingDeg - deg).truncatingRemainder(dividingBy: 360)
-                    let d = behind < 0 ? behind + 360 : behind
-                    if d < 36 { boost = 1 - d / 36 } else if d > 354 { boost = (d - 354) / 6 }
+            // Back half first (behind the item), then the front half.
+            for front in [false, true] {
+                var dim = Path(), lit = Path(), hot = Path()
+                var partial: [(Path, Double, Double)] = []
+                for i in 0..<n {
+                    // Where side i is now, round the item: 0 = facing the camera (front), clockwise from above.
+                    let alpha = Double(i) / Double(n) * 2 * .pi + session.ringTurn
+                    let depth = (cos(alpha) + 1) / 2          // 1 = front, 0 = back
+                    guard (depth >= 0.5) == front else { continue }
+                    var level = live ? session.ticks[i] : 0
+                    if session.phase == .ready {
+                        // Idle: a slow wave runs round the ring, waiting for the start.
+                        level = 0.22 * max(0, sin(t * 2.0 + alpha * 3))
+                    }
+                    // The camera's view: brightest at the front of the ring.
+                    let frontness = recording && session.paperSeen ? max(0, 1 - abs(atan2(sin(alpha), cos(alpha))) / 0.45) : 0
+                    var boost = frontness
+                    if let sweep {
+                        let d = abs(atan2(sin(alpha - sweep * 2 * .pi), cos(alpha - sweep * 2 * .pi)))
+                        boost = max(boost, max(0, 1 - d / 0.4))
+                    }
+                    let scale = 0.55 + 0.45 * depth           // nearer ticks are bigger
+                    let len = (10 + 16 * level + 12 * boost) * scale
+                    // On the ellipse: front = bottom, clockwise from above = to the left along the front.
+                    let ux = -sin(alpha), uy = cos(alpha)
+                    let p0 = CGPoint(x: centre.x + ux * a, y: centre.y + uy * b)
+                    let p1 = CGPoint(x: centre.x + ux * (a + len), y: centre.y + uy * (b + len * b / a))
+                    var seg = Path()
+                    seg.move(to: p0)
+                    seg.addLine(to: p1)
+                    if boost > 0.4 { hot.addPath(seg) } else if level > 0.85 { lit.addPath(seg) } else if level > 0.03 {
+                        partial.append((seg, level, scale))
+                    } else { dim.addPath(seg) }
                 }
-                if let sweep {
-                    let d = abs((deg - sweep).truncatingRemainder(dividingBy: 360))
-                    boost = max(boost, max(0, 1 - min(d, 360 - d) / 24))
+                let fade = front ? 1.0 : 0.45
+                ctx.stroke(dim, with: .color(.white.opacity(0.3 * fade)), style: StrokeStyle(lineWidth: front ? 3 : 2, lineCap: .round))
+                for (seg, level, scale) in partial {
+                    ctx.stroke(seg, with: .color(mint.opacity((0.3 + 0.6 * level) * fade)), style: StrokeStyle(lineWidth: 3.2 * scale, lineCap: .round))
                 }
-                if session.phase == .ready {
-                    // Idle: a slow wave travels clockwise, waiting for the start.
-                    level = 0.18 * max(0, sin(t * 2.2 - Double(i) * 0.17))
+                ctx.drawLayer { l in
+                    l.addFilter(.blur(radius: front ? 6 : 4))
+                    l.stroke(lit, with: .color(mint.opacity(0.85 * fade)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                    l.stroke(hot, with: .color(.white.opacity(0.8 * fade)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
                 }
-                let len = 9 + 15 * level + 10 * boost
-                let r0 = r + 12
-                let p0 = CGPoint(x: c.x + cos(a) * r0, y: c.y + sin(a) * r0)
-                let p1 = CGPoint(x: c.x + cos(a) * (r0 + len), y: c.y + sin(a) * (r0 + len))
-                var seg = Path()
-                seg.move(to: p0)
-                seg.addLine(to: p1)
-                if boost > 0.35 { hot.addPath(seg) } else if level > 0.85 { lit.addPath(seg) } else { dim.addPath(seg) }
-                if level > 0.02 && level <= 0.85 && boost <= 0.35 {
-                    ctx.stroke(seg, with: .color(mint.opacity(0.25 + 0.6 * level)), style: StrokeStyle(lineWidth: 3.2, lineCap: .round))
-                }
+                ctx.stroke(lit, with: .color(mint.opacity(fade)), style: StrokeStyle(lineWidth: front ? 3.6 : 2.4, lineCap: .round))
+                ctx.stroke(hot, with: .color(.white.opacity(fade)), style: StrokeStyle(lineWidth: 3.8, lineCap: .round))
             }
-            ctx.stroke(dim, with: .color(.white.opacity(0.22)), style: StrokeStyle(lineWidth: 3, lineCap: .round))
-            ctx.drawLayer { l in
-                l.addFilter(.blur(radius: 6))
-                l.stroke(lit, with: .color(mint.opacity(0.9)), style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                l.stroke(hot, with: .color(.white.opacity(0.8)), style: StrokeStyle(lineWidth: 6, lineCap: .round))
-            }
-            ctx.stroke(lit, with: .color(mint), style: StrokeStyle(lineWidth: 3.4, lineCap: .round))
-            ctx.stroke(hot, with: .color(.white), style: StrokeStyle(lineWidth: 3.6, lineCap: .round))
 
-            // A pointer outside the ticks: where the camera is looking round the item now.
-            if recording {
-                let a = (facingDeg - 90) * .pi / 180
-                let rp = r + 48
-                let tip = CGPoint(x: c.x + cos(a) * rp, y: c.y + sin(a) * rp)
-                let dot = CGRect(x: tip.x - 4.5, y: tip.y - 4.5, width: 9, height: 9)
-                ctx.fill(Path(ellipseIn: dot.insetBy(dx: -5, dy: -5)), with: .color(mint.opacity(session.paperSeen ? 0.25 : 0.08)))
-                ctx.fill(Path(ellipseIn: dot), with: .color(session.paperSeen ? .white : .white.opacity(0.35)))
+            // Brackets: the item, found. They fade when it's out of sight.
+            if let box {
+                let vis = session.itemVisible ? 1.0 : 0.25
+                let r = box.insetBy(dx: -16, dy: -16)
+                let len = min(30, r.width / 3.5, r.height / 3.5)
+                var brackets = Path()
+                for (c, dx, dy) in [(CGPoint(x: r.minX, y: r.minY), 1.0, 1.0), (CGPoint(x: r.maxX, y: r.minY), -1.0, 1.0),
+                                    (CGPoint(x: r.minX, y: r.maxY), 1.0, -1.0), (CGPoint(x: r.maxX, y: r.maxY), -1.0, -1.0)] {
+                    brackets.move(to: CGPoint(x: c.x + dx * len, y: c.y))
+                    brackets.addLine(to: c)
+                    brackets.addLine(to: CGPoint(x: c.x, y: c.y + dy * len))
+                }
+                let colour = recording || live ? mint : Color.white
+                let pulse = 0.75 + 0.25 * sin(t * (recording ? 4 : 2))
+                ctx.drawLayer { l in
+                    l.addFilter(.blur(radius: 6))
+                    l.stroke(brackets, with: .color(colour.opacity(0.7 * pulse * vis)), style: StrokeStyle(lineWidth: 7, lineCap: .round, lineJoin: .round))
+                }
+                ctx.stroke(brackets, with: .color(colour.opacity(vis)), style: StrokeStyle(lineWidth: 3.5, lineCap: .round, lineJoin: .round))
+                // A small tag on the top-left bracket.
+                let tag = Text(recording ? "SCANNING" : "ITEM")
+                    .font(.system(size: 11, weight: .heavy, design: .rounded))
+                    .foregroundColor(colour.opacity(vis))
+                ctx.draw(tag, at: CGPoint(x: r.minX + 2, y: r.minY - 12), anchor: .leading)
             }
         }
     }
@@ -349,7 +360,8 @@ private struct Caption: View {
         switch session.phase {
         case .ready:
             if session.passes.isEmpty {
-                return session.paperSeen ? ("Item in the ring · tap to start", "viewfinder") : ("Put the item on the paper, in the ring", "doc")
+                if session.job?.isVerify == true && !session.itemVisible { return ("Put the item you're buying on the paper", "checkmark.shield") }
+                return session.itemVisible ? ("Item found · tap to start", "viewfinder") : ("Put the item on a sheet of paper", "doc")
             }
             return ("Pass \(session.nextPass) · flip it or try another angle", "arrow.uturn.down")
         case .recording:

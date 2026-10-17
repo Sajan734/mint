@@ -136,6 +136,11 @@ public struct CaptureInfo: Codable, Equatable, Sendable {
     /// Which recording of the item this is (1 = the main lap; 2 = usually the item flipped over; …).
     /// All passes of one item share `scan_id`.
     public var pass: Int?
+    /// "listing" (a seller scanning an item to sell) or "handover" (a buyer rescanning it at an in-person
+    /// deal to check it matches the listing; CLAUDE.md M14).
+    public var kind: String?
+    /// Handover: the scan_id of the listing this rescan is checked against.
+    public var listing_scan_id: String?
 
     public init(scan_id: String, device: String, os: String, created_at: String, duration_ms: Int,
                 video: String, video_width: Int, video_height: Int, video_frames: Int,

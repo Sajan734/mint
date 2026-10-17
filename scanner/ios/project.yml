@@ -49,10 +49,11 @@ targets:
         # Supabase Edge Function that hands out signed upload URLs (see scanner/supabase/README.md).
         MintUploadURL: $(MINT_UPLOAD_URL)
         MintSessionURL: $(MINT_SESSION_URL)
-        # mintscan://scan?scan_id=<uuid>: the QR code on the dashboard's "check your phone" page opens the scanner.
+        # mint://scan?id=<uuid> (sell an item) and mint://verify?id=<uuid>&listing=<uuid> (a buyer checking it):
+        # the website's QR codes open the scanner for that id (scanner/DASHBOARD.md). mintscan:// = older alias.
         CFBundleURLTypes:
           - CFBundleURLName: ca.htv11.mint.scanner
-            CFBundleURLSchemes: [mintscan]
+            CFBundleURLSchemes: [mint, mintscan]
 schemes:
   Mint:
     build:

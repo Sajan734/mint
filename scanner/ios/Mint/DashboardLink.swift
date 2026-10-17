@@ -1,14 +1,25 @@
 import Foundation
 
-/// The phone's side of the hand-off with the seller's dashboard (`scanner/supabase/functions/scan-session`,
-/// see scanner/DASHBOARD.md): while the app waits on its home screen it asks for the next "New product"
-/// request; during a scan it reports progress so the dashboard can show it live. Reports never block
-/// or fail a scan.
+/// How the website reaches the scanner (scanner/DASHBOARD.md):
+/// 1. Links (the main way): the website shows a QR code of `mint://scan?id=<uuid>` (sell an item) or
+///    `mint://verify?id=<uuid>&listing=<listing scan id>` (a buyer checking the item at an in-person deal).
+///    The iPhone camera, or Mint's own waiting screen, reads it and the scanner opens for that id.
+/// 2. Optional auto-pickup (`scanner/supabase/functions/scan-session`, once deployed): while the app
+///    waits it asks for the next request, and during a scan it reports progress so the page can show it
+///    live. Reports never block or fail a scan.
 struct DashboardLink {
     struct Request: Decodable, Equatable {
         let scan_id: String
         let title: String?
         let seller: String?
+        let kind: String?             // "listing" (default) or "verify"
+        let listing_scan_id: String?  // verify: the listing to check against
+    }
+
+    /// What a link asks for: a scan under `scanID`; with `listingID`, a buyer's verify rescan of that listing.
+    struct Link: Equatable {
+        let scanID: String
+        let listingID: String?
     }
 
     enum Status: String {
@@ -55,13 +66,25 @@ struct DashboardLink {
         return data
     }
 
-    /// `mintscan://scan?scan_id=<uuid>` (the QR code on the dashboard's "check your phone" page): the
-    /// scan it asks for, or nil if the link isn't one of ours.
-    static func scanID(from link: URL) -> String? {
-        guard link.scheme == "mintscan", link.host == "scan" else { return nil }
-        let id = URLComponents(url: link, resolvingAgainstBaseURL: false)?.queryItems?
-            .first(where: { $0.name == "scan_id" })?.value?.lowercased()
-        guard let id, id.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", options: .regularExpression) != nil else { return nil }
-        return id
+    /// `mint://scan?id=<uuid>`, `mint://verify?id=<uuid>&listing=<uuid>` (also `scan_id=` and the older
+    /// `mintscan://` scheme), from a tapped link or a QR code's text. nil if it isn't one of ours.
+    static func parse(_ text: String) -> Link? {
+        guard let url = URL(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              url.scheme == "mint" || url.scheme == "mintscan" else { return nil }
+        let q = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
+        func uuid(_ names: String...) -> String? {
+            let v = names.lazy.compactMap { n in q.first(where: { $0.name == n })?.value?.lowercased() }.first
+            guard let v, v.range(of: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$", options: .regularExpression) != nil else { return nil }
+            return v
+        }
+        switch url.host {
+        case "scan":
+            return uuid("id", "scan_id").map { Link(scanID: $0, listingID: nil) }
+        case "verify":
+            guard let id = uuid("id", "scan_id"), let listing = uuid("listing", "listing_scan_id"), id != listing else { return nil }
+            return Link(scanID: id, listingID: listing)
+        default:
+            return nil
+        }
     }
 }

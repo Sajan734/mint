@@ -7,6 +7,8 @@ import Foundation
 ///   pass n   pass{n}.mp4 pass{n}.poses.jsonl pass{n}.capture.json (kept; the pipeline uses the first two)
 /// `video.mp4` goes last: its arrival starts the pipeline (Storage webhook → `on_upload`), so every
 /// other pass must already be there.
+/// A buyer's verify rescan (handover) is named `rescan.mp4` … `rescan{n}.mp4` instead (+ thumb.jpg), so
+/// the listing pipeline never turns it into a new listing; `rescan.mp4` goes last, for whatever compares it.
 /// The app holds no keys: it asks our Edge Function (`scanner/supabase/functions/scan-upload`) for
 /// one-time signed upload URLs, then PUTs each file to its URL.
 enum SupabaseUploader {
@@ -27,11 +29,11 @@ enum SupabaseUploader {
     static let types = ["mp4": "video/mp4", "jsonl": "application/x-ndjson", "json": "application/json", "jpg": "image/jpeg"]
 
     /// Storage names for one pass's files, in upload order (the video last).
-    static func items(passDirectory dir: URL, pass: Int) -> [Item] {
-        let prefix = pass == 1 ? "" : (pass == 2 ? "bottom." : "pass\(pass).")
+    static func items(passDirectory dir: URL, pass: Int, verify: Bool = false) -> [Item] {
+        let prefix = verify ? (pass == 1 ? "rescan." : "rescan\(pass).") : (pass == 1 ? "" : (pass == 2 ? "bottom." : "pass\(pass)."))
         var out: [(String, String)] = [("poses.jsonl", prefix + "poses.jsonl"), ("capture.json", prefix + "capture.json")]
         if pass == 1 { out.append(("thumb.jpg", "thumb.jpg")) }
-        out.append(("video.mp4", pass == 1 ? "video.mp4" : prefix + "mp4"))
+        out.append(("video.mp4", pass == 1 && !verify ? "video.mp4" : prefix + "mp4"))
         return out.compactMap { local, key in
             let url = dir.appendingPathComponent(local)
             guard FileManager.default.fileExists(atPath: url.path) else { return nil }
@@ -39,9 +41,9 @@ enum SupabaseUploader {
         }
     }
 
-    /// Every file of a scan in upload order: later passes first, then pass 1, ending with video.mp4.
-    static func plan(passes: [(directory: URL, pass: Int)]) -> [Item] {
-        passes.sorted { $0.pass > $1.pass }.flatMap { items(passDirectory: $0.directory, pass: $0.pass) }
+    /// Every file of a scan in upload order: later passes first, then pass 1, ending with its video.
+    static func plan(passes: [(directory: URL, pass: Int)], verify: Bool = false) -> [Item] {
+        passes.sorted { $0.pass > $1.pass }.flatMap { items(passDirectory: $0.directory, pass: $0.pass, verify: verify) }
     }
 
     struct Signed: Decodable {
@@ -52,10 +54,12 @@ enum SupabaseUploader {
 
     /// Uploads the scan; `progress` (0…1, by bytes) is called on the main actor. Returns the scan's storage folder.
     @MainActor
-    static func upload(scanID: String, passes: [(directory: URL, pass: Int)], progress: @escaping @MainActor (Double) -> Void) async throws -> String {
+    static func upload(scanID: String, passes: [(directory: URL, pass: Int)], verify: Bool = false,
+                       progress: @escaping @MainActor (Double) -> Void) async throws -> String {
         guard let functionURL else { throw UploadError("Uploads aren't set up yet (MINT_UPLOAD_URL).") }
-        let plan = plan(passes: passes)
-        guard plan.contains(where: { $0.key == "video.mp4" }) else { throw UploadError("The first pass's video is missing.") }
+        let plan = plan(passes: passes, verify: verify)
+        let firstVideo = verify ? "rescan.mp4" : "video.mp4"
+        guard plan.contains(where: { $0.key == firstVideo }) else { throw UploadError("The first pass's video is missing.") }
 
         var request = URLRequest(url: functionURL)
         request.httpMethod = "POST"
@@ -89,7 +93,7 @@ enum SupabaseUploader {
             }
             done += size
             progress(Double(done) / Double(total))
-            if item.key == "video.mp4" { folder = String(s.path.dropLast("video.mp4".count)) }
+            if item.key == firstVideo { folder = String(s.path.dropLast(firstVideo.count)) }
         }
         return folder
     }

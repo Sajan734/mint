@@ -7,6 +7,8 @@ final class CaptureLoop: NSObject, ARSessionDelegate {
     let queue = DispatchQueue(label: "mint.capture", qos: .userInteractive)
     /// Set once before the session runs; called on the main actor.
     var onSight: (@MainActor (PaperReader.Sight) -> Void)?
+    /// Read QR codes too (while the app waits for a product). Set from the main actor; a stale read is harmless.
+    var lookForCodes = false
 
     // Touched only on `queue`.
     private var recorder: VideoRecorder?
@@ -52,7 +54,7 @@ final class CaptureLoop: NSObject, ARSessionDelegate {
                                         SIMD3(t.columns.2.x, t.columns.2.y, t.columns.2.z)),
                 intrinsics: frame.camera.intrinsics,
                 timestamp: frame.timestamp)
-            reader.process(frame.capturedImage, camera: camera) { sight in
+            reader.process(frame.capturedImage, camera: camera, lookForCodes: lookForCodes) { sight in
                 MainActor.assumeIsolated { self.onSight?(sight) }
                 self.queue.async { self.reader.markIdle() }
             }

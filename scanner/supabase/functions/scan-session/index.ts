@@ -1,6 +1,7 @@
 // Supabase Edge Function: the hand-off between the seller's dashboard (website) and the Mint scanner
 // app on the phone. The dashboard asks for a scan, the phone (waiting on its home screen) picks it
-// up, scans, uploads, and reports progress; the dashboard shows it live. No keys on either side:
+// up, scans, uploads, and reports progress; the dashboard shows it live. Optional: the website can
+// also just show a QR code of the same scan as a mint:// link (scanner/DASHBOARD.md). No keys on either side:
 // this function holds the service role and keeps each session as a small JSON file in Storage.
 //
 // Deploy with JWT verification OFF (the phone and the browser send no key):
@@ -10,6 +11,7 @@
 //
 // POST JSON, one of:
 //   { "action": "request", "title"?: str, "seller"?: str }   dashboard: "New product"  → session (status "waiting")
+//   { "action": "request", "kind": "verify", "listing_scan_id": uuid, "title"?: str }   listing page: a buyer's "Scan"
 //   { "action": "status", "scan_id": uuid }                  dashboard: poll           → session
 //   { "action": "next" }                                     phone: poll               → { "request": session | null }
 //   { "action": "update", "scan_id": uuid, "status": s, "passes"?: n, "progress"?: 0…1 }   phone → session
@@ -23,6 +25,8 @@ export type Status = (typeof STATUSES)[number];
 export interface Session {
   v: 1;
   scan_id: string;
+  kind: "listing" | "verify";
+  listing_scan_id: string | null;   // verify: the listing this rescan is checked against
   status: Status;
   source: "dashboard" | "phone";
   title: string | null;
@@ -52,8 +56,13 @@ export async function handle(body: Record<string, unknown>, store: Store, now = 
   const at = now.toISOString();
   switch (body.action) {
     case "request": {
+      const verify = body.kind === "verify";
+      if (verify && (typeof body.listing_scan_id !== "string" || !UUID.test(body.listing_scan_id))) {
+        return [400, { error: "verify needs listing_scan_id: uuid" }];
+      }
       const s: Session = {
-        v: 1, scan_id: newId(), status: "waiting", source: "dashboard", title: text(body.title), seller: text(body.seller),
+        v: 1, scan_id: newId(), kind: verify ? "verify" : "listing", listing_scan_id: verify ? body.listing_scan_id as string : null,
+        status: "waiting", source: "dashboard", title: text(body.title), seller: text(body.seller),
         passes: 0, progress: 0, created_at: at, updated_at: at,
       };
       await store.write(sessionKey(s.scan_id), s);
@@ -81,7 +90,7 @@ export async function handle(body: Record<string, unknown>, store: Store, now = 
       // A scan started on the phone without the dashboard has no session yet: create it.
       const old = (await store.read(sessionKey(scan_id))) as Session | null;
       const s: Session = old ?? {
-        v: 1, scan_id, status: "waiting", source: "phone", title: null, seller: null,
+        v: 1, scan_id, kind: "listing", listing_scan_id: null, status: "waiting", source: "phone", title: null, seller: null,
         passes: 0, progress: 0, created_at: at, updated_at: at,
       };
       s.status = status as Status;

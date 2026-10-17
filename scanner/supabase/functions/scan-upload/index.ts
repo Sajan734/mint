@@ -10,12 +10,14 @@
 //  →   { "uploads": [{ "file": "video.mp4", "path": "scans/<uuid>/video.mp4", "signed_url": "https://…" }, …] }
 // The app then PUTs each file to its signed_url. One scan can have several passes (recordings of the
 // same item, e.g. flipped over): pass 1 is video.mp4 / poses.jsonl / capture.json / thumb.jpg, pass 2
-// is bottom.mp4 / bottom.poses.jsonl / bottom.capture.json, pass n ≥ 3 is pass{n}.mp4 / ….
+// is bottom.mp4 / bottom.poses.jsonl / bottom.capture.json, pass n ≥ 3 is pass{n}.mp4 / …. A buyer's
+// verify rescan (handover) uses rescan.mp4 / rescan.poses.jsonl / rescan.capture.json (+ thumb.jpg),
+// rescan{n}.* for more passes, so the listing pipeline (triggered by video.mp4) never picks it up.
 import { createClient } from "npm:@supabase/supabase-js@2.45.4";
 
 const BUCKET = "scans";
 const PASS1 = new Set(["video.mp4", "poses.jsonl", "capture.json", "thumb.jpg"]);
-const LATER_PASS = /^(bottom|pass([3-9]|1[0-9]))\.(mp4|poses\.jsonl|capture\.json)$/;
+const LATER_PASS = /^(bottom|pass([3-9]|1[0-9])|rescan([2-9]|1[0-9])?)\.(mp4|poses\.jsonl|capture\.json)$/;
 const allowed = (f: string) => PASS1.has(f) || LATER_PASS.test(f);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
@@ -29,7 +31,7 @@ Deno.serve(async (req) => {
   }
   const { scan_id, files } = body;
   if (!scan_id || !UUID.test(scan_id) || !Array.isArray(files) || files.length === 0 || files.length > 40 || !files.every(allowed)) {
-    return json({ error: "expected { scan_id: uuid, files: [video.mp4 | poses.jsonl | capture.json | thumb.jpg | bottom.mp4 | bottom.poses.jsonl | … | pass3.mp4 | …] }" }, 400);
+    return json({ error: "expected { scan_id: uuid, files: [video.mp4 | poses.jsonl | capture.json | thumb.jpg | bottom.mp4 | bottom.poses.jsonl | … | pass3.mp4 | … | rescan.mp4 | …] }" }, 400);
   }
 
   // SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are provided to every Edge Function by Supabase.
