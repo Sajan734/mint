@@ -5,3 +5,4 @@ __pycache__/
 .pytest_cache/
 scripts/smoke/
 samples/
+demo_cache/

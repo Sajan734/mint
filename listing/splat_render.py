@@ -2,6 +2,8 @@
 
 Standalone on purpose: it imports nothing from the listing pipeline, so the Modal app (modal_render.py) runs it
 as is. Runs on CUDA when available, otherwise on the CPU (much slower). Colours use the SH DC term only.
+Also lifts 2D masks drawn on those renders onto the Gaussians that show through them (lift_masks), and writes a
+copy of a splat with chosen Gaussians tinted (tint_splat).
 """
 
 from __future__ import annotations
@@ -34,6 +36,11 @@ RASTER = {
     "max_alpha": 0.99,
     "stop_transmittance": 1e-4,
     "blur_px2": 0.3,  # low-pass added to every 2D covariance (standard 3DGS anti-aliasing)
+}
+
+LIFT = {
+    "min_hit_px": 1e-3,  # a Gaussian is returned once this much of its blending weight falls inside some mask
+    "surface_alpha": 0.2,  # pixels covered less than this have no surface depth (silhouette fringe, background)
 }
 
 AXES = {
@@ -126,7 +133,8 @@ def parse_ply(data: bytes, device: torch.device) -> Splat:
 # SPZ: Niantic's compressed splat format (gzip container, versions 2 and 3), which the splat job publishes at
 # ~1/10 the size of the .ply. Mirrors the reference decoder (nianticlabs/spz, load-spz.cc); only what this renderer
 # uses is decoded (no higher-order SH). Version 4 (zstd) is not supported.
-SPZ = {"magic": 0x5053474E, "color_scale": 0.15, "sh_dim": {0: 0, 1: 3, 2: 8, 3: 15, 4: 24}}
+SPZ = {"magic": 0x5053474E, "color_scale": 0.15, "sh_dim": {0: 0, 1: 3, 2: 8, 3: 15, 4: 24},
+       "sh_zero_byte": 128}  # SH bytes decode as (byte - 128) / 128
 
 
 def parse_splat(data: bytes, device: torch.device) -> Splat:
@@ -134,13 +142,18 @@ def parse_splat(data: bytes, device: torch.device) -> Splat:
     return parse_spz(data, device) if data[:2] == b"\x1f\x8b" else parse_ply(data, device)
 
 
-def parse_spz(data: bytes, device: torch.device) -> Splat:
+def _spz_payload(data: bytes) -> bytes:
     try:
-        raw = gzip.decompress(data)
+        return gzip.decompress(data)
     except (OSError, EOFError) as e:
         if data[:4] == struct.pack("<I", SPZ["magic"]):
             raise SplatError("SPZ version 4 (zstd) is not supported; export version 3") from e
         raise SplatError("the splat is neither a PLY nor an SPZ file") from e
+
+
+def _spz_layout(raw: bytes) -> tuple[int, int, int, dict[str, tuple[int, int]]]:
+    """Checks a decompressed SPZ and returns (version, count, fractional bits, {stream: (offset, bytes per
+    Gaussian)}) for the streams in the format's fixed order: positions, alphas, colors, scales, rotations, sh."""
     if len(raw) < 16:
         raise SplatError("the SPZ file is truncated")
     magic, version, n, sh_degree, frac_bits = struct.unpack_from("<IIIBB", raw, 0)
@@ -150,14 +163,23 @@ def parse_spz(data: bytes, device: torch.device) -> Splat:
         raise SplatError(f"SPZ version {version} is not supported (2 and 3 are)")
     if sh_degree not in SPZ["sh_dim"]:
         raise SplatError(f"SPZ SH degree {sh_degree} is not supported")
-    # bytes per Gaussian of each stream, in the format's fixed order (the SH stream comes last and is skipped)
-    sizes = {"positions": 9, "alphas": 1, "colors": 3, "scales": 3, "rotations": 4 if version >= 3 else 3}
-    if 16 + n * (sum(sizes.values()) + SPZ["sh_dim"][sh_degree] * 3) > len(raw):
+    sizes = {"positions": 9, "alphas": 1, "colors": 3, "scales": 3, "rotations": 4 if version >= 3 else 3,
+             "sh": SPZ["sh_dim"][sh_degree] * 3}
+    if 16 + n * sum(sizes.values()) > len(raw):
         raise SplatError("the SPZ file is truncated")
     offset, streams = 16, {}
     for name, size in sizes.items():
-        streams[name] = np.frombuffer(raw, np.uint8, n * size, offset).reshape(n, size)
+        streams[name] = (offset, size)
         offset += n * size
+    return version, n, frac_bits, streams
+
+
+def parse_spz(data: bytes, device: torch.device) -> Splat:
+    raw = _spz_payload(data)
+    version, n, frac_bits, layout = _spz_layout(raw)
+    # the SH stream is skipped: colours use the DC term only
+    streams = {name: np.frombuffer(raw, np.uint8, n * size, offset).reshape(n, size)
+               for name, (offset, size) in layout.items() if name != "sh"}
 
     p = streams["positions"].reshape(n * 3, 3).astype(np.int32)
     fixed = p[:, 0] | (p[:, 1] << 8) | (p[:, 2] << 16)
@@ -212,9 +234,13 @@ def robust_framing(splat: Splat) -> Framing:
     return Framing(center=center, radius=float(torch.quantile(distances, FRAMING["radius_quantile"])))
 
 
+def floater_keep(splat: Splat, framing: Framing) -> torch.Tensor:
+    """(N,) bool: the Gaussians that are rendered (near enough to the framing centre)."""
+    return (splat.means - framing.center).norm(dim=1) <= framing.radius * FRAMING["crop_factor"]
+
+
 def crop_floaters(splat: Splat, framing: Framing) -> Splat:
-    keep = (splat.means - framing.center).norm(dim=1) <= framing.radius * FRAMING["crop_factor"]
-    return splat.subset(keep)
+    return splat.subset(floater_keep(splat, framing))
 
 
 def axis(name: str, device: torch.device) -> torch.Tensor:
@@ -293,14 +319,30 @@ def _project(splat: Splat, camera: Camera, size: int) -> dict[str, torch.Tensor]
         "u": (focal * x / z + cx)[order], "v": (focal * y / z + cy)[order],
         "conic_a": (c / det)[order], "conic_b": (-b / det)[order], "conic_c": (a / det)[order],
         "radius": radius[order], "opacity": s.opacities[order], "color": s.colors[order],
+        "depth": z[order], "index": torch.nonzero(in_front).squeeze(1)[order],  # index into `splat`
     }
 
 
-def _composite_tile(g: dict[str, torch.Tensor], px: torch.Tensor, py: torch.Tensor,
-                    background: torch.Tensor) -> torch.Tensor:
-    """Front-to-back alpha compositing of depth-sorted Gaussians over one tile's pixels."""
+@dataclass(frozen=True)
+class TileWeights:
+    """Where each Gaussian's blending weight (alpha x transmittance in front of it) went over one tile."""
+
+    seen: torch.Tensor  # (n,) summed over the tile's pixels: how many pixels' worth of the Gaussian shows
+    hit: torch.Tensor  # (masks, n) the same, with each pixel weighted by each mask
+    depth: torch.Tensor  # (pixels,) blending-weighted camera depth (divide by alpha for the surface depth)
+    alpha: torch.Tensor  # (pixels,) coverage
+
+
+def _composite_tile(g: dict[str, torch.Tensor], px: torch.Tensor, py: torch.Tensor, background: torch.Tensor,
+                    masks: torch.Tensor | None = None) -> tuple[torch.Tensor, TileWeights | None]:
+    """Front-to-back alpha compositing of depth-sorted Gaussians over one tile's pixels. With masks (pixels,
+    masks) of 0..1 pixel weights, also returns where each Gaussian's weight went (TileWeights)."""
     color = torch.zeros(len(px), 3, device=px.device)
     trans = torch.ones(len(px), device=px.device)
+    if masks is not None:
+        depth = torch.zeros(len(px), device=px.device)
+        seen = torch.zeros(len(g["u"]), device=px.device)
+        hit = torch.zeros(masks.shape[1], len(g["u"]), device=px.device)
     for start in range(0, len(g["u"]), RASTER["chunk"]):
         sl = slice(start, start + RASTER["chunk"])
         dx = px[:, None] - g["u"][None, sl]
@@ -312,22 +354,33 @@ def _composite_tile(g: dict[str, torch.Tensor], px: torch.Tensor, py: torch.Tens
         before = torch.cumprod(torch.cat([torch.ones_like(one_minus[:, :1]), one_minus[:, :-1]], 1), 1)
         weights = alpha * before * trans[:, None]
         color += weights @ g["color"][sl]
+        if masks is not None:
+            depth += weights @ g["depth"][sl]
+            seen[sl] = weights.sum(0)
+            hit[:, sl] = masks.T @ weights
         trans = trans * one_minus.prod(1)
         if float(trans.max()) < RASTER["stop_transmittance"]:
             break
-    return color + trans[:, None] * background
+    color = color + trans[:, None] * background
+    if masks is None:
+        return color, None
+    return color, TileWeights(seen=seen, hit=hit, depth=depth, alpha=1.0 - trans)
 
 
-def render(splat: Splat, camera: Camera, size: int, background_rgb: tuple[int, int, int]) -> np.ndarray:
-    """Renders one square view. Returns an (size, size, 3) uint8 RGB image."""
+def _rasterize(g: dict[str, torch.Tensor], size: int, background: torch.Tensor,
+               masks: torch.Tensor | None = None) -> tuple[torch.Tensor, dict[str, torch.Tensor] | None]:
+    """Composites every tile. Returns the (size, size, 3) float image and, with masks (masks, size, size) of 0..1
+    pixel weights, per projected Gaussian `seen` (n,) and `hit` (masks, n), plus `alpha` and `depth` maps."""
     tile = RASTER["tile_px"]
     if size % tile:
         raise SplatError(f"render size {size} must be a multiple of the {tile} px tile")
-    g = _project(splat, camera, size)
     device = g["u"].device
     tiles = size // tile
-    background = torch.tensor(background_rgb, device=device, dtype=torch.float32) / 255
     image = background.expand(size, size, 3).clone()
+    if masks is not None:
+        n = len(g["u"])
+        acc = {"seen": torch.zeros(n, device=device), "hit": torch.zeros(len(masks), n, device=device),
+               "alpha": torch.zeros(size, size, device=device), "depth": torch.zeros(size, size, device=device)}
     # Tile ranges each Gaussian touches; off-screen Gaussians get an empty range (start > end).
     tx0 = ((g["u"] - g["radius"]) // tile).clamp(0, tiles)
     tx1 = ((g["u"] + g["radius"]) // tile).clamp(-1, tiles - 1)
@@ -340,11 +393,30 @@ def render(splat: Splat, camera: Camera, size: int, background_rgb: tuple[int, i
             idx = in_row[(tx0[in_row] <= i) & (tx1[in_row] >= i)]
             if len(idx) == 0:
                 continue
+            rows, cols = slice(j * tile, (j + 1) * tile), slice(i * tile, (i + 1) * tile)
             gy, gx = torch.meshgrid(j * tile + offsets, i * tile + offsets, indexing="ij")
             tile_g = {k: v[idx] for k, v in g.items()}
-            pixels = _composite_tile(tile_g, gx.reshape(-1), gy.reshape(-1), background)
-            image[j * tile:(j + 1) * tile, i * tile:(i + 1) * tile] = pixels.reshape(tile, tile, 3)
+            tile_masks = None if masks is None else masks[:, rows, cols].reshape(len(masks), tile * tile).T
+            pixels, w = _composite_tile(tile_g, gx.reshape(-1), gy.reshape(-1), background, tile_masks)
+            image[rows, cols] = pixels.reshape(tile, tile, 3)
+            if w is not None:
+                acc["seen"].index_add_(0, idx, w.seen)
+                acc["hit"].index_add_(1, idx, w.hit)
+                acc["alpha"][rows, cols] = w.alpha.reshape(tile, tile)
+                acc["depth"][rows, cols] = w.depth.reshape(tile, tile)
+    return image, (acc if masks is not None else None)
+
+
+def _to_uint8(image: torch.Tensor) -> np.ndarray:
     return (image.clamp(0, 1) * 255 + 0.5).to(torch.uint8).cpu().numpy()
+
+
+def render(splat: Splat, camera: Camera, size: int, background_rgb: tuple[int, int, int]) -> np.ndarray:
+    """Renders one square view. Returns an (size, size, 3) uint8 RGB image."""
+    g = _project(splat, camera, size)
+    background = torch.tensor(background_rgb, device=g["u"].device, dtype=torch.float32) / 255
+    image, _ = _rasterize(g, size, background)
+    return _to_uint8(image)
 
 
 # --- whole job --------------------------------------------------------------------------------
@@ -367,3 +439,139 @@ def render_pngs(data: bytes, up_axis: str, angles: list[tuple[float, float]], si
         _png_bytes(render(splat, orbit_camera(framing, up_axis, azimuth, elevation), size, background_rgb))
         for azimuth, elevation in angles
     ]
+
+
+# --- lifting 2D masks onto Gaussians ----------------------------------------------------------
+
+
+def _surface_gap(g: dict[str, torch.Tensor], alpha: torch.Tensor, depth: torch.Tensor, size: int) -> torch.Tensor:
+    """(n,) each projected Gaussian's depth minus the rendered surface depth at its centre pixel; inf where the
+    centre is off-screen or that pixel has too little coverage to have a surface."""
+    px, py = g["u"].floor().long(), g["v"].floor().long()
+    on = (px >= 0) & (px < size) & (py >= 0) & (py < size)
+    gap = torch.full_like(g["depth"], math.inf)
+    coverage = alpha[py[on], px[on]]
+    surface = depth[py[on], px[on]] / coverage.clamp_min(1e-6)
+    gap[on] = torch.where(coverage >= LIFT["surface_alpha"], g["depth"][on] - surface,
+                          torch.full_like(coverage, math.inf))
+    return gap
+
+
+def lift_masks(data: bytes, up_axis: str, angles: list[tuple[float, float]], masks: list[tuple[int, np.ndarray]],
+               size: int, background_rgb: tuple[int, int, int]) -> dict:
+    """Lifts 2D masks drawn on views onto the Gaussians that show through them. Views are framed and cropped exactly
+    as render_pngs renders them (the same cameras at any `size`), so masks drawn on its output line up.
+
+    masks: one (index into `angles`, (size, size) uint8 pixel weight 0..255) per mask.
+    Returns plain numpy for the candidate Gaussians only (some mask weight on them), C of them:
+      ids (C,)           their indices in the file, as parse_splat reads it
+      seen (V, C)        blending weight summed over pixels: how many pixels' worth of each shows in each view
+      hit (M, C)         the same, with every pixel weighted by the mask
+      depth_gap (V, C)   depth behind the rendered surface at the Gaussian's centre, in framing radii (inf when
+                         off-screen or over no surface); Gaussians hidden behind the surface have a large gap
+      item_px (V,)       the item's area in each view, in pixels (summed coverage)
+      mask_item_px (M,)  the item's area inside each mask
+    plus gaussians (count in the file), rendered (after the floater crop) and images (one PNG per view).
+    """
+    device = default_device()
+    splat = parse_splat(data, device)
+    total = len(splat.means)
+    framing = robust_framing(splat)
+    keep = floater_keep(splat, framing)
+    file_ids = torch.nonzero(keep).squeeze(1)
+    splat = splat.subset(keep)
+    n, n_views, n_masks = len(splat.means), len(angles), len(masks)
+    for view, mask in masks:
+        if not 0 <= view < n_views or np.shape(mask) != (size, size):
+            raise SplatError(f"each mask needs a view index below {n_views} and shape ({size}, {size})")
+
+    background = torch.tensor(background_rgb, device=device, dtype=torch.float32) / 255
+    seen = torch.zeros(n_views, n, device=device)
+    hit = torch.zeros(n_masks, n, device=device)
+    gap = torch.full((n_views, n), math.inf, device=device)
+    item_px = torch.zeros(n_views, device=device)
+    mask_item_px = torch.zeros(n_masks, device=device)
+    images = []
+    for v, (azimuth, elevation) in enumerate(angles):
+        rows = [k for k, (view, _) in enumerate(masks) if view == v]
+        view_masks = torch.zeros(len(rows), size, size, device=device)
+        for r, k in enumerate(rows):
+            view_masks[r] = torch.as_tensor(np.asarray(masks[k][1]), dtype=torch.float32, device=device) / 255
+        g = _project(splat, orbit_camera(framing, up_axis, azimuth, elevation), size)
+        image, w = _rasterize(g, size, background, view_masks)
+        images.append(_png_bytes(_to_uint8(image)))
+        idx = g["index"]
+        seen[v, idx] = w["seen"]
+        if rows:
+            hit[torch.tensor(rows, device=device)[:, None], idx[None, :]] = w["hit"]
+            mask_item_px[rows] = (view_masks * w["alpha"]).sum((1, 2))
+        item_px[v] = w["alpha"].sum()
+        gap[v, idx] = _surface_gap(g, w["alpha"], w["depth"], size) / framing.radius
+
+    c = torch.nonzero((hit > LIFT["min_hit_px"]).any(0)).squeeze(1)
+    return {
+        "gaussians": total,
+        "rendered": n,
+        "ids": file_ids[c].cpu().numpy().astype(np.int64),
+        "seen": seen[:, c].cpu().numpy(),
+        "hit": hit[:, c].cpu().numpy(),
+        "depth_gap": gap[:, c].cpu().numpy(),
+        "item_px": item_px.cpu().numpy(),
+        "mask_item_px": mask_item_px.cpu().numpy(),
+        "images": images,
+    }
+
+
+# --- tinting a copy of the file ---------------------------------------------------------------
+
+
+def _checked_ids(ids: np.ndarray, count: int) -> np.ndarray:
+    ids = np.unique(np.asarray(ids, dtype=np.int64))
+    if ids.size and (ids[0] < 0 or ids[-1] >= count):
+        raise SplatError(f"Gaussian indices must lie in 0..{count - 1}")
+    return ids
+
+
+def _blend(colour: np.ndarray, rgb: tuple[float, float, float], strength: float) -> np.ndarray:
+    return (1.0 - strength) * np.clip(colour, 0.0, 1.0) + strength * np.asarray(rgb, dtype=np.float32)
+
+
+def tint_splat(data: bytes, ids: np.ndarray, rgb: tuple[float, float, float], strength: float) -> bytes:
+    """A copy of a .spz or .ply (same format) with the Gaussians `ids` (file order, as parse_splat reads it) blended
+    toward `rgb` (0..1) by `strength` (0..1), and their higher SH bands zeroed so the tint looks the same from every
+    side. All other Gaussians and fields keep their exact bytes (an .spz is re-compressed)."""
+    if data[:2] == b"\x1f\x8b":
+        return _tint_spz(data, ids, rgb, strength)
+    return _tint_ply(data, ids, rgb, strength)
+
+
+def _tint_ply(data: bytes, ids: np.ndarray, rgb: tuple[float, float, float], strength: float) -> bytes:
+    count, names, offset = _read_header(data)
+    ids = _checked_ids(ids, count)
+    dtype = np.dtype([(n, "<f4") for n in names])
+    rows = np.frombuffer(data, dtype=dtype, count=count, offset=offset).copy()
+    dc = np.stack([rows[f"f_dc_{c}"][ids] for c in range(3)], axis=1)
+    target = _blend(0.5 + SH_C0 * dc, rgb, strength)
+    for c in range(3):
+        rows[f"f_dc_{c}"][ids] = (target[:, c] - 0.5) / SH_C0
+    for name in names:
+        if name.startswith("f_rest_"):
+            rows[name][ids] = 0.0
+    end = offset + count * dtype.itemsize
+    return data[:offset] + rows.tobytes() + data[end:]
+
+
+def _tint_spz(data: bytes, ids: np.ndarray, rgb: tuple[float, float, float], strength: float) -> bytes:
+    raw = bytearray(_spz_payload(data))
+    _, n, _, layout = _spz_layout(raw)
+    ids = _checked_ids(ids, n)
+    offset, size = layout["colors"]
+    colors = np.frombuffer(raw, np.uint8, n * size, offset).reshape(n, size)  # writes go into `raw`
+    dc = (colors[ids].astype(np.float32) / 255.0 - 0.5) / SPZ["color_scale"]
+    target = _blend(0.5 + SH_C0 * dc, rgb, strength)
+    encoded = ((target - 0.5) / SH_C0 * SPZ["color_scale"] + 0.5) * 255.0
+    colors[ids] = np.clip(np.round(encoded), 0, 255).astype(np.uint8)
+    offset, size = layout["sh"]
+    if size:
+        np.frombuffer(raw, np.uint8, n * size, offset).reshape(n, size)[ids] = SPZ["sh_zero_byte"]
+    return gzip.compress(bytes(raw), mtime=0)

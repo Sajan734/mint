@@ -1,8 +1,9 @@
-"""Modal app that renders splats on a GPU for the render stage (RENDER_BACKEND=modal).
+"""Modal app that renders splats on a GPU for the render stage, and lifts defect masks for the highlight stage
+(RENDER_BACKEND=modal).
 
 Deploy from listing/: modal deploy modal_render.py
-The stage calls the deployed function by name. The .ply goes up as bytes and the PNGs come back as bytes.
-No warm containers: each call cold-starts a container, which shuts down 2 s after the render.
+The stages call the deployed functions by name. The splat goes up as bytes; PNGs (and the lift arrays) come back.
+No warm containers: each call cold-starts a container, which shuts down 2 s after the work.
 """
 
 from __future__ import annotations
@@ -13,6 +14,7 @@ import modal
 
 APP_NAME = "mint-listing-render"
 FUNCTION_NAME = "render_splat"
+LIFT_FUNCTION_NAME = "lift_splat_masks"
 
 # Same versions as the local venv, so both backends run the same torch build.
 image = (
@@ -35,3 +37,16 @@ def render_splat(
     pngs = splat_render.render_pngs(ply, up_axis, angles, size, background_rgb)
     print(f"rendered {len(pngs)} views in {time.perf_counter() - start:.1f} s")
     return pngs
+
+
+@app.function(gpu="L4", timeout=300, scaledown_window=2)
+def lift_splat_masks(
+    data: bytes, up_axis: str, angles: list[tuple[float, float]], masks: list, size: int,
+    background_rgb: tuple[int, int, int],
+) -> dict:
+    import splat_render
+
+    start = time.perf_counter()
+    lifted = splat_render.lift_masks(data, up_axis, angles, masks, size, background_rgb)
+    print(f"lifted {len(masks)} masks over {len(angles)} views in {time.perf_counter() - start:.1f} s")
+    return lifted

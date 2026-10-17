@@ -2,6 +2,7 @@
 
 Fixture items that have stubs/reference_price.json stay offline. Anything else runs this chain and never fails:
   1. search-grounded Gemini answer (counts only if Google Search returned sources) -> basis "new_retail"
+     (only when GEMINI["search_grounding"] is on: our free-tier project can't use Search grounding at all)
   2. ungrounded Gemini estimate                                                     -> basis "llm_estimate"
   3. per-category default from CATEGORY_DEFAULTS                                    -> basis "llm_estimate"
 Any error or implausible amount falls through to the next source. The source used opens the note and is
@@ -22,6 +23,7 @@ from contracts import Identity, ReferencePrice, RunContext
 from gemini import contract_schema, generate_json
 from stages._fixture import has_stub, load_stub
 from stages.baseline_lookup import baseline_query
+from stages.identify import GEMINI
 
 PRICE_LOOKUP = {
     "min_cad": 5.0,  # anything outside the absolute range is implausible
@@ -56,6 +58,7 @@ CATEGORY_DEFAULTS: tuple[tuple[tuple[str, ...], str, float], ...] = (
     (("lamp",), "lamp", 50.0),
 )
 GENERIC_DEFAULT: tuple[str, float] = ("item", 50.0)
+CATEGORY_DEFAULT_NOTE = "Category default for {label}; no price lookup succeeded."  # deal_rating checks for this
 
 ANSWER_FIELDS = ["amount_cad", "note"]
 
@@ -148,9 +151,13 @@ def answer_to_price(source: Source, raw: dict[str, Any], grounding: list[dict[st
 
 def default_price(category: str) -> ReferencePrice:
     label, amount, _matched = category_default(category)
-    return ReferencePrice(
-        amount_cad=amount, basis="llm_estimate", note=f"Category default for {label}; no price lookup succeeded."
-    )
+    return ReferencePrice(amount_cad=amount, basis="llm_estimate", note=CATEGORY_DEFAULT_NOTE.format(label=label))
+
+
+def is_category_default(reference: ReferencePrice) -> bool:
+    """True if the price is the last-resort category default rather than a looked-up or model-estimated price."""
+    prefix = CATEGORY_DEFAULT_NOTE.split("{", 1)[0]
+    return reference.basis == "llm_estimate" and reference.note.startswith(prefix)
 
 
 # --- I/O --------------------------------------------------------------------------------------
@@ -181,7 +188,7 @@ async def look_up(identity: Identity, seller_name: str | None) -> tuple[Referenc
     query = baseline_query(identity, seller_name)
     seller_typed = bool(seller_name and seller_name.strip())
     log: dict[str, Any] = {"query": query, "seller_typed": seller_typed, "attempts": []}
-    for source in (GROUNDED, UNGROUNDED):
+    for source in (GROUNDED, UNGROUNDED) if GEMINI["search_grounding"] else (UNGROUNDED,):
         price, attempt = await ask(source, identity, query, seller_typed)
         log["attempts"].append(attempt)
         if price is not None:

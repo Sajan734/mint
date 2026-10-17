@@ -1,6 +1,7 @@
 """One structured-output Gemini call with a timeout and one retry, shared by the text-only stages.
 
-Uses identify's GEMINI settings and key loading. The caller passes a JSON schema built from contracts.py;
+Uses identify's GEMINI settings (including the one model every stage uses) and key loading. The caller passes a
+JSON schema built from contracts.py;
 the reply is parsed JSON, never free text.
 """
 
@@ -8,12 +9,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import time
 from dataclasses import dataclass, field
 from typing import Any
 
-from stages.identify import GEMINI, _api_key, _strip_defaults
+from stages.identify import GEMINI, _api_key, _strip_defaults, gemini_model
 
 
 @dataclass(frozen=True)
@@ -57,7 +57,7 @@ async def generate_json(
     from google.genai import errors, types
 
     key = _api_key()
-    model = os.environ.get("GEMINI_MODEL") or GEMINI["model"]
+    model = gemini_model()
     config = types.GenerateContentConfig(
         system_instruction=system_prompt,
         temperature=GEMINI["temperature"] if temperature is None else temperature,

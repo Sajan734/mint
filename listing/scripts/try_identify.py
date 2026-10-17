@@ -90,7 +90,7 @@ async def run(args) -> int:
 def main() -> int:
     parser = argparse.ArgumentParser(description="Run the identify stage on a folder of images.")
     parser.add_argument("folder", type=Path)
-    parser.add_argument("--model", default=None, help="Gemini model (default: GEMINI_MODEL or the stage default)")
+    parser.add_argument("--model", default=None, help="Gemini model to try (default: the pipeline's, GEMINI['model'] in stages/identify.py)")
     parser.add_argument("--max-views", type=int, default=12)
     args = parser.parse_args()
     sys.stdout.reconfigure(errors="backslashreplace")  # piped Windows output is cp1252

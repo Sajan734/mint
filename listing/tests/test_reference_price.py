@@ -9,8 +9,15 @@ import stages.reference_price as rp
 from contracts import Identity, ReferencePrice, RunContext
 from gemini import GeminiReply
 from pipeline import ROOT
-from stages.identify import MissingKeyError
+from stages.identify import GEMINI, MissingKeyError
 from stages.reference_price import CATEGORY_DEFAULTS, GENERIC_DEFAULT, PRICE_LOOKUP, category_default, plausible
+
+
+@pytest.fixture(autouse=True)
+def search_grounding_on(monkeypatch):
+    """These tests cover the whole grounded -> ungrounded -> default chain, which runs once billing turns Search
+    grounding on. Off (the free tier), only the ungrounded call is made: see test_gemini_model.py."""
+    monkeypatch.setitem(GEMINI, "search_grounding", True)
 
 SONY = Identity(
     category="on-ear wireless headphones",

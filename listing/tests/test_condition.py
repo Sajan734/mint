@@ -7,12 +7,15 @@ import pytest
 from PIL import Image as PILImage
 
 import stages.condition as cond
-from contracts import Baseline, RunContext, View, Views
+from contracts import Baseline, Identity, RunContext, View, Views
 from jev_questions import (
     CONDITION_CONTEXT,
     CONDITION_CONTEXT_NO_BASELINE,
     CONDITION_QUESTIONS,
     CONDITION_QUESTIONS_NO_BASELINE,
+    condition_context,
+    design_features,
+    design_note,
 )
 from stages.condition import ViewAnswers, build_condition, grade_for, second_highest
 
@@ -206,3 +209,32 @@ def test_with_baseline_sends_it_to_every_view(fake_jev, tmp_path):
     asyncio.run(cond.condition(ctx, VIEWS, baseline))
     assert all(c["baseline"] is not None and c["context"] == CONDITION_CONTEXT for c in fake_jev)
     assert all(c["questions"] is CONDITION_QUESTIONS for c in fake_jev)
+
+
+MOUSE = Identity(category="wireless mouse", brand="ThinkPad", visible_text=["ThinkPad"],
+                 attributes={"colour": "black, red", "connectivity": "wireless", "scroll_wheel_colour": "red"},
+                 search_query="ThinkPad wireless mouse", confidence=0.9)
+
+
+def test_design_features_come_from_identify():
+    assert design_features(MOUSE) == ["printed text or logos reading 'ThinkPad'",
+                                      "these colours: colour black, red; scroll wheel colour red"]
+    assert design_features(None) == []
+    plain = Identity(category="mug", search_query="mug", confidence=0.5)
+    assert design_features(plain) == [] and design_note(plain) == ""
+
+
+def test_identity_tells_jev_the_printing_is_design(fake_jev, tmp_path):
+    ctx = make_ctx(tmp_path)
+    baseline = Baseline(query="q", image_path=None, source="image_search", note="nothing found")
+    asyncio.run(cond.condition(ctx, VIEWS, baseline, MOUSE))
+    context = fake_jev[0]["context"]
+    assert context.startswith(CONDITION_CONTEXT_NO_BASELINE)
+    assert "'ThinkPad'" in context and "not scratches, scuffs or stains" in context
+    assert all(c["context"] == context for c in fake_jev)
+    raw = json.loads((ctx.run_dir / "condition_raw.json").read_text())
+    assert "'ThinkPad'" in raw["design_note"]
+
+
+def test_design_note_goes_with_a_baseline_too():
+    assert condition_context(True, MOUSE) == CONDITION_CONTEXT + design_note(MOUSE)
