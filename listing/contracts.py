@@ -16,6 +16,8 @@ PriceBasis = Literal["new_retail", "used_comps", "llm_estimate"]
 DefectKind = Literal[
     "scratch", "scuff", "dent", "crack", "stain", "discoloration", "wear", "missing_part", "other"
 ]
+DealLabel = Literal["great", "good", "fair", "high", "overpriced"]
+Confidence = Literal["high", "medium", "low"]
 
 
 def _normalise(text: str) -> str:
@@ -116,6 +118,56 @@ class Condition(Contract):
     needs_seller_check: bool
 
 
+class DefectBox(Contract):
+    """One visible mark of a defect in one view, as Gemini boxes it (Gemini's native box format)."""
+
+    kind: DefectKind
+    box_2d: Annotated[list[Annotated[int, Field(ge=0, le=1000)]], Field(min_length=4, max_length=4)]
+    # [ymin, xmin, ymax, xmax], each 0..1000 of the view's height or width
+
+    @model_validator(mode="after")
+    def _ordered(self) -> DefectBox:
+        ymin, xmin, ymax, xmax = self.box_2d
+        if ymin >= ymax or xmin >= xmax:
+            raise ValueError(f"box_2d {self.box_2d} is empty: needs ymin < ymax and xmin < xmax")
+        return self
+
+
+class HighlightMark(Contract):
+    kind: DefectKind
+    view_ids: list[str]  # the views it was located in
+    gaussian_count: int = Field(ge=1)
+
+
+class Highlight(Contract):
+    """A copy of the seller's splat with the noted defects tinted red, or why there is none."""
+
+    produced: bool
+    splat_path: str | None = None  # relative to listing/; set exactly when produced
+    summary: str  # what was marked, or why no highlighted splat was produced
+    marks: list[HighlightMark] = Field(default_factory=list)
+    gaussian_share: float | None = Field(default=None, ge=0.0, le=1.0)  # of the item's Gaussians tinted red
+    debug_sheet: str | None = None  # relative to listing/: each searched view with its boxes | the highlighted render
+
+    @model_validator(mode="after")
+    def _path_iff_produced(self) -> Highlight:
+        if self.produced != (self.splat_path is not None):
+            raise ValueError("splat_path must be set exactly when a highlighted splat was produced")
+        return self
+
+
+class DealRating(Contract):
+    rating: DealLabel
+    explanation: str
+    asking_price_cad: float = Field(gt=0)
+    asking_price_source: Literal["seller", "suggested"]  # suggested: no asking price was given, Mint's price is rated
+    fair_price_cad: int = Field(gt=0)  # what the item is worth in its condition (Listing.price_cad)
+    new_price_cad: float = Field(gt=0)
+    ratio_to_fair: float = Field(gt=0)  # asking / fair
+    confidence: Confidence
+    confidence_notes: list[str] = Field(default_factory=list)  # why confidence is below high
+
+
 class ListingDraft(Contract):
     title: str
     description: str
@@ -137,3 +189,5 @@ class Listing(Contract):
     viewer_url: str | None = None  # 3D viewer, later
     needs_seller_check: bool
     seller_check_reasons: list[str] = Field(default_factory=list)
+    deal_rating: DealRating
+    highlight: Highlight

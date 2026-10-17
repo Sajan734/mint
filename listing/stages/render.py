@@ -4,6 +4,7 @@ Fixture items that have stubs/render.json stay offline. Otherwise splat_render r
 RENDER_BACKEND in .env: "modal" (default; the deployed app in modal_render.py, on a GPU) or "local" (this
 machine, CUDA if available). Either way the PNGs come back here, and views go to runs/<item>/views/, the
 contact sheet to runs/<item>/contact_sheet.png for checking the render by eye.
+lift_masks sends the highlight stage's defect masks to the same backend (splat_render.lift_masks).
 """
 
 from __future__ import annotations
@@ -63,13 +64,14 @@ def render_backend() -> str:
     return backend
 
 
-def render_on_modal(*args) -> list[bytes]:
+def call_modal(function_name: str, *args):
+    """Calls a function of the deployed modal_render app (render_splat, lift_splat_masks)."""
     import modal
 
-    from modal_render import APP_NAME, FUNCTION_NAME
+    from modal_render import APP_NAME
 
     try:
-        return modal.Function.from_name(APP_NAME, FUNCTION_NAME).remote(*args)
+        return modal.Function.from_name(APP_NAME, function_name).remote(*args)
     except modal.exception.AuthError as e:
         raise RenderBackendError("not logged in to Modal: run `modal setup`, or set RENDER_BACKEND=local") from e
     except modal.exception.NotFoundError as e:
@@ -84,7 +86,21 @@ def render_pngs(ply: bytes, up_axis: str, angles: list[tuple[int, int]]) -> list
         import splat_render
 
         return splat_render.render_pngs(*args)
-    return render_on_modal(*args)
+    from modal_render import FUNCTION_NAME
+
+    return call_modal(FUNCTION_NAME, *args)
+
+
+def lift_masks(splat: bytes, up_axis: str, angles: list[tuple[float, float]], masks: list, size: int) -> dict:
+    """splat_render.lift_masks on the RENDER_BACKEND, with the render stage's background."""
+    args = (splat, up_axis, angles, masks, size, RENDER["background_rgb"])
+    if render_backend() == "local":
+        import splat_render
+
+        return splat_render.lift_masks(*args)
+    from modal_render import LIFT_FUNCTION_NAME
+
+    return call_modal(LIFT_FUNCTION_NAME, *args)
 
 
 def render_views(splat_path: Path, item_id: str, up_axis: str, out_dir: Path) -> Views:

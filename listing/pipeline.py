@@ -1,6 +1,6 @@
 """run_pipeline(splat_path, seller_name=None) -> Listing | Rejection.
 
-CLI: python pipeline.py fixtures/item01 [--seller-name "Sony WH-1000XM4"]
+CLI: python pipeline.py fixtures/item01 [--seller-name "Sony WH-1000XM4"] [--asking-price 120]
 """
 
 from __future__ import annotations
@@ -20,6 +20,8 @@ import cache
 from contracts import (
     Baseline,
     Condition,
+    DealRating,
+    Highlight,
     Identity,
     Listing,
     ListingDraft,
@@ -31,7 +33,9 @@ from contracts import (
 )
 from stages.baseline_lookup import baseline_lookup
 from stages.condition import condition
+from stages.deal_rating import asking_price, deal_rating
 from stages.finalize import finalize
+from stages.highlight import highlight, not_produced
 from stages.identify import identify
 from stages.listing_text import listing_text
 from stages.match_gate import match_gate
@@ -55,7 +59,7 @@ def resolve_item(path: Path) -> tuple[Path, Path]:
 
 
 def item_input(item_dir: Path) -> dict[str, Any]:
-    """The item folder's input.json (seller_name, up_axis), or {} when there is none."""
+    """The item folder's input.json (seller_name, up_axis, asking_price_cad), or {} when there is none."""
     path = item_dir / "input.json"
     if not path.is_file():
         return {}
@@ -73,17 +77,42 @@ async def run_stage(
     model: type[M],
     fn: Callable[..., Awaitable[M]],
     *args: Any,
+    cached: bool = True,
 ) -> M:
+    """Runs one stage and writes its JSON. In demo mode, stages that call an API or a GPU read the cache first;
+    pure-code stages (cached=False) always recompute from their inputs, so e.g. a new asking price takes effect."""
     start = time.perf_counter()
-    result = cache.get(ctx.cache_dir, ctx.item_id, name, model) if ctx.demo_mode else None
+    use_cache = ctx.demo_mode and cached
+    result = cache.get(ctx.cache_dir, ctx.item_id, name, model) if use_cache else None
     hit = result is not None
     if result is None:
         result = await fn(ctx, *args)
-        if ctx.demo_mode:
+        if use_cache:
             cache.put(ctx.cache_dir, ctx.item_id, name, result)
     write_json(ctx.run_dir / f"{name}.json", result)
     ms = (time.perf_counter() - start) * 1000
     print(f"[{name}] {ms:.0f} ms{' (cache)' if hit else ''}", file=sys.stderr)
+    return result
+
+
+def listing_path(path: str) -> Path:
+    p = Path(path)
+    return p if p.is_absolute() else ROOT / p
+
+
+async def run_highlight(ctx: RunContext, splat: Path, views: Views, baseline: Baseline, cond: Condition) -> Highlight:
+    """The highlighted splat is a nice-to-have: any error becomes produced=False and the listing goes on.
+    Errors aren't cached, so the next run tries again."""
+    try:
+        result = await run_stage(ctx, "highlight", Highlight, highlight, splat, views, baseline, cond)
+    except Exception as e:  # noqa: BLE001  see docstring
+        print(f"[highlight] failed, the listing goes on: {type(e).__name__}: {e}", file=sys.stderr)
+        result = not_produced(f"the highlight step failed ({type(e).__name__}: {e})")
+        write_json(ctx.run_dir / "highlight.json", result)
+        return result
+    if result.produced and not listing_path(result.splat_path).is_file():  # a cache hit whose file was deleted
+        result = not_produced("the cached highlighted splat file is missing; rerun without DEMO_MODE")
+        write_json(ctx.run_dir / "highlight.json", result)
     return result
 
 
@@ -96,12 +125,14 @@ async def run_pipeline(
     demo_mode: bool | None = None,
     manual_baseline: bool | None = None,
     up_axis: str | None = None,
+    asking_price_cad: float | None = None,
 ) -> Listing | Rejection:
     item_dir, splat = resolve_item(Path(splat_path))
     item_id = item_dir.name
     inputs = item_input(item_dir)
     if seller_name is None:
         seller_name = inputs.get("seller_name")
+    asking = asking_price(asking_price_cad if asking_price_cad is not None else inputs.get("asking_price_cad"))
     ctx = RunContext(
         item_id=item_id,
         item_dir=item_dir,
@@ -123,12 +154,23 @@ async def run_pipeline(
     if match.verdict == "mismatch":
         result = Rejection(item_id=item_id, match_check=match)
     else:
-        draft, reference, cond = await asyncio.gather(
+
+        async def condition_then_highlight() -> tuple[Condition, Highlight]:
+            cond = await run_stage(ctx, "condition", Condition, condition, views, baseline)
+            return cond, await run_highlight(ctx, splat, views, baseline, cond)
+
+        draft, reference, (cond, marked) = await asyncio.gather(
             run_stage(ctx, "listing_text", ListingDraft, listing_text, identity),
             run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity, seller_name),
-            run_stage(ctx, "condition", Condition, condition, views, baseline),
+            condition_then_highlight(),
         )
-        result = await run_stage(ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond)
+        deal = await run_stage(
+            ctx, "deal_rating", DealRating, deal_rating, reference, cond, match, baseline, asking, cached=False
+        )
+        result = await run_stage(
+            ctx, "finalize", Listing, finalize, views, match, baseline, draft, reference, cond, deal, marked,
+            cached=False,
+        )
 
     write_json(ctx.run_dir / "result.json", result)
     return result
@@ -150,10 +192,22 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="splat axis pointing up (default: input.json's up_axis, else +y)",
     )
+    parser.add_argument(
+        "--asking-price",
+        type=float,
+        default=None,
+        help="seller's asking price in CAD for the deal rating (default: input.json's asking_price_cad, "
+        "else Mint's suggested price is rated)",
+    )
     args = parser.parse_args(argv)
+    try:
+        asking_price(args.asking_price)
+    except ValueError as e:
+        parser.error(str(e))
 
     result = asyncio.run(
-        run_pipeline(args.item, args.seller_name, manual_baseline=args.manual_baseline, up_axis=args.up_axis)
+        run_pipeline(args.item, args.seller_name, manual_baseline=args.manual_baseline, up_axis=args.up_axis,
+                     asking_price_cad=args.asking_price)
     )
     print(f"{type(result).__name__}:", file=sys.stderr)
     print(result.model_dump_json(indent=2))

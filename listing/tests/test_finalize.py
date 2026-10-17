@@ -1,6 +1,17 @@
 import pytest
 
-from contracts import Baseline, Condition, Defect, ListingDraft, MatchCheck, ReferencePrice, View, Views
+from contracts import (
+    Baseline,
+    Condition,
+    DealRating,
+    Defect,
+    Highlight,
+    ListingDraft,
+    MatchCheck,
+    ReferencePrice,
+    View,
+    Views,
+)
 from stages.finalize import (
     CONDITION_CHECK_REASON,
     NO_DEFECTS_NOTE,
@@ -78,28 +89,41 @@ def test_notes_when_nothing_notable():
     assert build_notes([Defect(kind="dent", score=0.2, view_ids=["v01"])], make_views()) == [NO_DEFECTS_NOTE]
 
 
+REFERENCE = ReferencePrice(amount_cad=100, basis="used_comps", note="n")
+DEAL = DealRating(rating="fair", explanation="Fair price.", asking_price_cad=65.0, asking_price_source="suggested",
+                  fair_price_cad=65, new_price_cad=100.0, ratio_to_fair=1.0, confidence="high")
+MARKED = Highlight(produced=False, summary="No highlighted splat: test.")
+
+
+def listing_for(match=None, condition=None):
+    return build_listing(make_views(), match or make_match(), BASELINE, DRAFT, REFERENCE, condition or make_condition(),
+                         DEAL, MARKED)
+
+
 def test_match_listing_needs_no_check():
-    listing = build_listing(make_views(), make_match("match"), BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"), make_condition())
+    listing = listing_for(make_match("match"))
     assert listing.needs_seller_check is False
     assert listing.seller_check_reasons == []
 
 
 def test_uncertain_match_flags_seller_check():
     match = make_match("uncertain")
-    listing = build_listing(make_views(), match, BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"), make_condition())
+    listing = listing_for(match)
     assert listing.needs_seller_check is True
     assert listing.seller_check_reasons == [match.reason]
 
 
 def test_condition_flag_carries_through():
-    listing = build_listing(
-        make_views(), make_match(), BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"),
-        make_condition(needs_seller_check=True),
-    )
+    listing = listing_for(condition=make_condition(needs_seller_check=True))
     assert listing.needs_seller_check is True
     assert listing.seller_check_reasons == [CONDITION_CHECK_REASON]
 
 
 def test_previews_use_low_ring_views():
-    listing = build_listing(make_views(), make_match(), BASELINE, DRAFT, ReferencePrice(amount_cad=100, basis="used_comps", note="n"), make_condition())
-    assert listing.preview_images == ["v00.png", "v02.png", "v04.png", "v06.png"]
+    assert listing_for().preview_images == ["v00.png", "v02.png", "v04.png", "v06.png"]
+
+
+def test_deal_rating_and_highlight_carry_through():
+    listing = listing_for()
+    assert listing.deal_rating == DEAL
+    assert listing.highlight == MARKED

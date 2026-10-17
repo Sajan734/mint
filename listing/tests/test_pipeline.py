@@ -3,6 +3,8 @@ import json
 import shutil
 from pathlib import Path
 
+import pytest
+
 import cache
 from contracts import Listing, RunContext, Views
 from pipeline import run_pipeline, run_stage
@@ -23,11 +25,16 @@ def test_item01_gives_listing(tmp_path):
     assert result.condition_grade == expected["condition_grade"]
     assert result.price_cad == expected["price_cad"]
     assert result.needs_seller_check is expected["needs_seller_check"]
+    assert result.deal_rating.rating == expected["deal_rating"]
+    assert result.deal_rating.asking_price_source == "suggested"
+    assert result.highlight.produced is expected["highlight_produced"]
     written = {p.stem for p in (tmp_path / "runs" / "item01").glob("*.json")}
     assert written == {
-        "render", "identify", "baseline_lookup", "match_gate",
-        "listing_text", "reference_price", "condition", "finalize", "result",
+        "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
+        "highlight", "deal_rating", "finalize", "result",
     }
+    saved = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text(encoding="utf-8"))
+    assert saved["deal_rating"]["rating"] == "fair" and saved["highlight"]["produced"] is False
 
 
 def test_item02_gives_rejection(tmp_path):
@@ -35,7 +42,81 @@ def test_item02_gives_rejection(tmp_path):
     assert type(result).__name__ == "Rejection"
     assert result.match_check.verdict == "mismatch"
     assert "Sony WH-1000XM4" in result.match_check.reason  # the seller's name from input.json
-    assert not (tmp_path / "runs" / "item02" / "finalize.json").exists()
+    for stage in ("finalize", "highlight", "deal_rating"):
+        assert not (tmp_path / "runs" / "item02" / f"{stage}.json").exists()
+
+
+def test_highlight_failure_still_gives_listing(tmp_path, monkeypatch):
+    import pipeline
+
+    async def broken(ctx, *args):
+        raise RuntimeError("Modal app isn't deployed")
+
+    monkeypatch.setattr(pipeline, "highlight", broken)
+    result = run(FIXTURES / "item01", tmp_path)
+    assert isinstance(result, Listing)
+    assert result.highlight.produced is False and result.highlight.splat_path is None
+    assert "RuntimeError: Modal app isn't deployed" in result.highlight.summary
+    saved = json.loads((tmp_path / "runs" / "item01" / "highlight.json").read_text(encoding="utf-8"))
+    assert saved["produced"] is False
+
+
+def test_highlight_failure_is_not_cached(tmp_path, monkeypatch):
+    import pipeline
+
+    async def broken(ctx, *args):
+        raise RuntimeError("Gemini is down")
+
+    monkeypatch.setattr(pipeline, "highlight", broken)
+    asyncio.run(run_pipeline(FIXTURES / "item01", runs_root=tmp_path / "runs", cache_root=tmp_path / "cache",
+                             demo_mode=True))
+    assert not (tmp_path / "cache" / "item01" / "highlight.json").exists()
+
+
+def test_cached_highlight_with_missing_file_is_reported(tmp_path):
+    from contracts import Highlight
+
+    gone = Highlight(produced=True, splat_path="runs/item01/splat_highlighted.spz", summary="Marked a scuff.")
+    cache.put(tmp_path / "cache", "item01", "highlight", gone)
+    result = asyncio.run(run_pipeline(FIXTURES / "item01", runs_root=tmp_path / "runs", cache_root=tmp_path / "cache",
+                                      demo_mode=True))
+    assert result.highlight.produced is False
+    assert "missing" in result.highlight.summary
+
+
+def test_asking_price_from_input_json(tmp_path):
+    item_dir = tmp_path / "item_asking"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "input.json").write_text(json.dumps({"seller_name": None, "asking_price_cad": 120}))
+    result = run(item_dir, tmp_path)
+    assert result.price_cad == 150  # Mint's price doesn't change; the rating judges the asking price against it
+    assert result.deal_rating.asking_price_cad == 120 and result.deal_rating.asking_price_source == "seller"
+    assert result.deal_rating.rating == "great"
+
+
+def test_asking_price_argument_wins_over_input_json(tmp_path):
+    item_dir = tmp_path / "item_asking"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "input.json").write_text(json.dumps({"seller_name": None, "asking_price_cad": 120}))
+    result = run(item_dir, tmp_path, asking_price_cad=260)
+    assert result.deal_rating.rating == "overpriced"
+
+
+@pytest.mark.parametrize("bad", [0, -10, "120", True, float("nan")])
+def test_bad_asking_price_fails_early(tmp_path, bad):
+    item_dir = tmp_path / "item_bad"
+    shutil.copytree(FIXTURES / "item01", item_dir)
+    (item_dir / "input.json").write_text(json.dumps({"seller_name": None, "asking_price_cad": bad}))
+    with pytest.raises(ValueError, match="asking_price_cad"):
+        run(item_dir, tmp_path)
+    assert not (tmp_path / "runs" / "item_bad").exists()  # nothing ran
+
+
+def test_demo_mode_rerates_a_new_asking_price(tmp_path):
+    kwargs = dict(runs_root=tmp_path / "runs", cache_root=tmp_path / "cache", demo_mode=True)
+    first = asyncio.run(run_pipeline(FIXTURES / "item01", asking_price_cad=120, **kwargs))
+    second = asyncio.run(run_pipeline(FIXTURES / "item01", asking_price_cad=260, **kwargs))
+    assert (first.deal_rating.rating, second.deal_rating.rating) == ("great", "overpriced")
 
 
 def test_uncertain_gate_continues_with_seller_check(tmp_path):
@@ -157,4 +238,6 @@ def test_demo_mode_reads_cache_first(tmp_path):
 def test_demo_mode_fills_cache_on_miss(tmp_path):
     run_pipeline_kwargs = dict(runs_root=tmp_path / "runs", cache_root=tmp_path / "cache", demo_mode=True)
     asyncio.run(run_pipeline(FIXTURES / "item01", **run_pipeline_kwargs))
-    assert (tmp_path / "cache" / "item01" / "finalize.json").is_file()
+    cached = {p.stem for p in (tmp_path / "cache" / "item01").glob("*.json")}
+    assert {"condition", "highlight", "reference_price"} <= cached
+    assert not cached & {"deal_rating", "finalize"}  # pure code: always recomputed from the cached inputs

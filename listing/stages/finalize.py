@@ -2,6 +2,7 @@
 
 Price = reference price x condition factor x (1 - penalty) per priced defect, rounded to the nearest $5,
 never below the floor. The same factors feed the justification sentence, so it always shows the real numbers.
+The deal rating (stages/deal_rating.py, built on this same price) and the highlight are carried through as they are.
 """
 
 from __future__ import annotations
@@ -11,7 +12,9 @@ from decimal import ROUND_HALF_UP, Decimal
 from contracts import (
     Baseline,
     Condition,
+    DealRating,
     Defect,
+    Highlight,
     Listing,
     ListingDraft,
     MatchCheck,
@@ -153,6 +156,8 @@ def build_listing(
     draft: ListingDraft,
     reference: ReferencePrice,
     condition: Condition,
+    deal_rating: DealRating,
+    highlight: Highlight,
 ) -> Listing:
     price, justification = compute_price(reference, condition)
     reasons = seller_check_reasons(match, baseline, condition)
@@ -169,6 +174,8 @@ def build_listing(
         preview_images=pick_previews(views),
         needs_seller_check=bool(reasons),
         seller_check_reasons=reasons,
+        deal_rating=deal_rating,
+        highlight=highlight,
     )
 
 
@@ -180,5 +187,7 @@ async def finalize(
     draft: ListingDraft,
     reference: ReferencePrice,
     condition: Condition,
+    deal_rating: DealRating,
+    highlight: Highlight,
 ) -> Listing:
-    return build_listing(views, match, baseline, draft, reference, condition)
+    return build_listing(views, match, baseline, draft, reference, condition, deal_rating, highlight)

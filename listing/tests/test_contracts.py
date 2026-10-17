@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from contracts import Baseline, Condition, Identity, ListingDraft, ReferencePrice, Views
+from contracts import Baseline, Condition, Highlight, Identity, ListingDraft, ReferencePrice, Views
 from stages.match_gate import GateRaw
 
 FIXTURES = Path(__file__).resolve().parent.parent / "fixtures"
@@ -16,6 +16,7 @@ STUB_MODELS = {
     "listing_text": ListingDraft,
     "reference_price": ReferencePrice,
     "condition": Condition,
+    "highlight": Highlight,
 }
 
 
@@ -42,6 +43,12 @@ def test_not_found_baseline_and_unscored_match_are_valid():
 
     Baseline(query="q", image_path=None, source="image_search", note="nothing found")
     MatchCheck(same_category=None, same_product=None, verdict="uncertain", reason="r")
+
+
+@pytest.mark.parametrize("produced, path", [(True, None), (False, "runs/x/splat_highlighted.spz")])
+def test_highlight_path_is_set_exactly_when_produced(produced, path):
+    with pytest.raises(ValidationError, match="splat_path"):
+        Highlight(produced=produced, splat_path=path, summary="s")
 
 
 def test_extra_fields_are_rejected():

@@ -56,6 +56,7 @@ CATEGORY_DEFAULTS: tuple[tuple[tuple[str, ...], str, float], ...] = (
     (("lamp",), "lamp", 50.0),
 )
 GENERIC_DEFAULT: tuple[str, float] = ("item", 50.0)
+CATEGORY_DEFAULT_NOTE = "Category default for {label}; no price lookup succeeded."  # deal_rating checks for this
 
 ANSWER_FIELDS = ["amount_cad", "note"]
 
@@ -148,9 +149,13 @@ def answer_to_price(source: Source, raw: dict[str, Any], grounding: list[dict[st
 
 def default_price(category: str) -> ReferencePrice:
     label, amount, _matched = category_default(category)
-    return ReferencePrice(
-        amount_cad=amount, basis="llm_estimate", note=f"Category default for {label}; no price lookup succeeded."
-    )
+    return ReferencePrice(amount_cad=amount, basis="llm_estimate", note=CATEGORY_DEFAULT_NOTE.format(label=label))
+
+
+def is_category_default(reference: ReferencePrice) -> bool:
+    """True if the price is the last-resort category default rather than a looked-up or model-estimated price."""
+    prefix = CATEGORY_DEFAULT_NOTE.split("{", 1)[0]
+    return reference.basis == "llm_estimate" and reference.note.startswith(prefix)
 
 
 # --- I/O --------------------------------------------------------------------------------------
