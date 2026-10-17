@@ -161,6 +161,8 @@ def resolve(req: CompareRequest, settings: Settings, renderer: Renderer) -> Reso
     if issues:
         return Resolved([], None, "icp", tuple(issues))
     result = align_mod.align(a, b)
-    metrics = AlignmentMetrics(**result["metrics"] | {"scale": result["scale"]})
+    # align() also reports diagnostics (points_used) that the strict response model doesn't carry
+    fit = {k: v for k, v in result["metrics"].items() if k in AlignmentMetrics.model_fields}
+    metrics = AlignmentMetrics(**fit | {"scale": result["scale"]})
     pairs = renderer.render(a, b, result["matrix"], result["crop"])
     return Resolved(pairs, metrics, "icp")

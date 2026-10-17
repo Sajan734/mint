@@ -6,7 +6,6 @@ import type { CompareResponse } from "../lib/compare-types";
 import type { ListingDoc } from "../lib/listing-doc";
 import { stepMark, subStepLabel } from "../lib/progress";
 import {
-  NOT_CONNECTED,
   SLOW_HINT,
   WAITING_HINT,
   initialScan,
@@ -119,10 +118,12 @@ describe("reduceScan: endings", () => {
 });
 
 describe("reduceScan: live check and hints", () => {
-  it("a live check stops at 'Comparing with the listing' with the not-connected copy", () => {
-    const s = run(initialScan("verify", true, 0), { type: "session", at: 1, status: "uploaded" });
-    expect(s).toMatchObject({ phase: "processing", subStep: "Comparing with the listing", message: NOT_CONNECTED });
-    expect(NOT_CONNECTED).toBe("The comparison service is not connected yet. Try demo mode (?mock=1).");
+  it("a live check follows the pipeline like a listing: splat steps, then comparing, then the result", () => {
+    let s = run(initialScan("verify", true, 0), { type: "session", at: 1, status: "uploaded" });
+    expect(s).toMatchObject({ phase: "processing", message: null });
+    s = run(s, { type: "stage", at: 2, stage: "7_listing", status: "started" });
+    expect(s).toMatchObject({ phase: "processing", subStep: "Comparing with the listing", message: null });
+    expect(run(s, { type: "compare", at: 3, compare: COMPARE }).phase).toBe("ready");
   });
 
   it("a demo check has no such message", () => {

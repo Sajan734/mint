@@ -40,8 +40,13 @@ export function viewIndex(label: string): number | null {
   return n >= 1 ? n - 1 : null;
 }
 export const viewName = (label: string) => `View ${(viewIndex(label) ?? -1) + 1}`;
-/** T7 writes the pairs as 960 px WebP into the gitignored public/local/compare/{run8}/. */
-export const pairSrc = (run8: string, index: number, side: "a" | "b") => `/local/compare/${run8}/${side}_${pad(index)}.webp`;
+const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jpanyhsifoxxiizkgjno.supabase.co").replace(/\/$/, "");
+/** The recorded demo runs' pairs are 960 px WebP in the gitignored public/local/compare/{run8}/ (T7). A live check's
+ *  pairs are the buyer agent's PNG thumbnails, published by gsplat/app.py run_verify to assets/comparisons/{run8}/. */
+export const pairSrc = (run8: string, index: number, side: "a" | "b") =>
+  run8 in RUNS
+    ? `/local/compare/${run8}/${side}_${pad(index)}.webp`
+    : `${SUPABASE_URL}/storage/v1/object/public/assets/comparisons/${run8}/${side}_${pad(index)}.png`;
 export const run8 = (id: string) => id.slice(0, 8);
 
 /** View index -> the flagged categories seen in that view, in `flagged` order. */
@@ -79,7 +84,6 @@ export function runFooter(r: CompareResponse): string {
   return `Run ${run8(r.run_id)}` + (typeof total === "number" ? ` · ${(total / 1000).toFixed(1)} s` : "");
 }
 
-const SUPABASE_URL = (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://jpanyhsifoxxiizkgjno.supabase.co").replace(/\/$/, "");
 /** The buyer's own 3D scan, if the pipeline published one (assets/splats/{cid}.json). Null when absent or offline. */
 export async function fetchBuyerSplat(cid: string): Promise<string | null> {
   try {

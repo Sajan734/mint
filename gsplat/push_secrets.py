@@ -16,6 +16,7 @@ ENV = Path(__file__).resolve().parent.parent / ".env"  # the repo-wide .env
 SECRETS = {
     "mint-supabase": ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"],
     "mint-listing": ["TYPESAFE_API_KEY", "GEMINI_API_KEY", "SERPER_API_KEY"],
+    "mint-buyer": ["TYPESAFE_API_KEY", "GROQ_API_KEY", "BUYER_AGENT_TOKEN"],  # multiagent/buyer_agent
 }
 OPTIONAL = {"mint-listing": ["GEMINI_MODEL"]}  # copied when set
 

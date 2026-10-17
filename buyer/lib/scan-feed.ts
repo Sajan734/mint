@@ -4,7 +4,7 @@
 //  - the phone's status from the keyless scan-session function (scanner/supabase/functions/scan-session/index.ts),
 //  - Realtime `stage` and `error` events on batch:{id} (only when the public anon key is set),
 //  - the published files: assets/splats/{id}.json, and assets/listings/{id}.json (listing) or
-//    assets/comparisons/{id}.json (verify; nothing publishes it yet).
+//    assets/comparisons/{id}.json (verify; gsplat/app.py Splatter.run_verify publishes it).
 // None of them is required. A later signal ticks every earlier step. Demo mode replays a recorded result instead.
 import type { CompareResponse } from "./compare-types";
 import type { ListingDoc } from "./listing-doc";
@@ -46,7 +46,6 @@ export type ScanEvent =
 
 export const WAITING_HINT = "Still waiting for your phone. Open the Mint app and scan the code.";
 export const SLOW_HINT = "This is taking longer than usual.";
-export const NOT_CONNECTED = "The comparison service is not connected yet. Try demo mode (?mock=1).";
 
 const WAITING_HINT_MS = 10 * 60_000;
 const SLOW_HINT_MS = 5 * 60_000;
@@ -117,11 +116,7 @@ function hintFor(s: FeedState, at: number): string | null {
 /** Pure: the next state. Returns the same object when nothing changed. Endings are final. */
 export function reduceScan(prev: FeedState, e: ScanEvent): FeedState {
   if (isFinal(prev.phase)) return prev;
-  let s = apply(prev, e);
-  // A live check has no comparison service yet: say so instead of spinning forever (PLAN_UX section 3).
-  if (s.kind === "verify" && s.live && s.phase === "processing" && s.message !== NOT_CONNECTED) {
-    s = { ...s, subStep: s.subStep ?? subStepLabel("7_listing", "verify"), message: NOT_CONNECTED };
-  }
+  const s = apply(prev, e);
   const changed = s.phase !== prev.phase || s.passes !== prev.passes || s.uploadPct !== prev.uploadPct || s.subStep !== prev.subStep;
   if (changed) return { ...s, changedAt: e.at, hint: null };
   const hint = hintFor(s, e.at);
