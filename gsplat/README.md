@@ -46,9 +46,10 @@ iPhone app --scan-upload Edge Function--> scans/{id}/video.mp4
 | `listings/{id}/vNN.png`, `listings/index.json` | the listing's preview renders; every listing document inline, newest first |
 | Realtime `batch:{id}` | `stage` events (started/done per step, incl. `7_listing`), `passport_ready`, `listing_ready` |
 
-Needs two Modal secrets (create them, then `modal deploy app.py`): `mint-supabase` (`SUPABASE_URL`,
-`SUPABASE_SERVICE_ROLE_KEY`) and `mint-listing` (`TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY`, the keys
-in `listing/.env`). Without `mint-listing` the splat still publishes and the listing step is skipped. Live scans go
+Needs two Modal secrets: `mint-supabase` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) and `mint-listing`
+(`TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY`, the keys in `listing/.env`). Fill in `.env` (copy of
+`.env.example`, gitignored), run `python push_secrets.py` (checks the Supabase key, writes both secrets, prints only
+names), then `modal deploy app.py`. Without `mint-listing` the splat still publishes and the listing step is skipped. Live scans go
 on the website under the seller and garage sale in `market.LIVE`; the category comes from the identified product.
 
 ```bash
