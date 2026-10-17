@@ -13,6 +13,10 @@ final class ObjectDetector {
         let imageSize: CGSize           // sensor pixels, landscape (1920×1440)
         let preferredPoint: CGPoint     // upright (portrait) normalized image point to pick the instance at
         let cloud: [SIMD3<Float>]       // ARKit feature points (world), accumulated while aiming
+        /// Once locked: the tracked item centre. The instance under it wins, wherever the screen centre is.
+        let sticky: SIMD3<Float>?
+        /// The table height if known: instances with no 3D points above it (a laptop, a mousepad) are flat, so skipped.
+        let tableY: Float?
     }
 
     struct Result {
@@ -27,6 +31,8 @@ final class ObjectDetector {
         let cloudSize: Int
         /// Share of the image the item covers.
         let areaFraction: Double
+        /// This view for multi-view tracking: the camera and the chosen instance's mask.
+        let view: SilhouetteView
     }
 
     private let queue = DispatchQueue(label: "mint.detect", qos: .userInitiated)
@@ -61,7 +67,18 @@ final class ObjectDetector {
         let bpr = CVPixelBufferGetBytesPerRow(mask)
         let px = base.assumingMemoryBound(to: UInt8.self)
 
-        guard let label = pickInstance(px, mw, mh, bpr, preferred: input.preferredPoint) else { return nil }
+        let worldToCamera = input.cameraTransform.inverse
+        let k = input.intrinsics
+        let sw = Float(input.imageSize.width), sh = Float(input.imageSize.height)
+        /// World point → mask pixel (sensor → upright: inverse of u = v′·W, v = (1 − u′)·H).
+        func maskPixel(_ p: SIMD3<Float>) -> (Int, Int)? {
+            let c = worldToCamera * SIMD4(p, 1)
+            guard c.z < -0.02 else { return nil }  // in front of the camera (ARKit looks down −z)
+            let u = k[0][0] * c.x / -c.z + k[2][0], v = k[1][1] * -c.y / -c.z + k[2][1]
+            return (Int((1 - v / sh) * Float(mw)), Int(u / sw * Float(mh)))
+        }
+
+        guard let label = pickInstance(px, mw, mh, bpr, input: input, maskPixel: maskPixel) else { return nil }
 
         // One pass over the mask: bounds, a sparse sample of silhouette pixels, the lowest pixel per column.
         var minX = mw, maxX = -1, minY = mh, maxY = -1, count = 0
@@ -85,18 +102,18 @@ final class ObjectDetector {
 
         // ARKit's points that land inside the mask, at least 2 mask pixels from its edge.
         func on(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < mw && y < mh && px[y * bpr + x] == label }
-        let worldToCamera = input.cameraTransform.inverse
-        let k = input.intrinsics
-        let sw = Float(input.imageSize.width), sh = Float(input.imageSize.height)
         let objectPoints = input.cloud.filter { p in
-            let c = worldToCamera * SIMD4(p, 1)
-            guard c.z < -0.02 else { return false }  // in front of the camera (ARKit looks down −z)
-            let u = k[0][0] * c.x / -c.z + k[2][0]    // sensor pixels
-            let v = k[1][1] * -c.y / -c.z + k[2][1]
-            // sensor → upright normalized (inverse of u = v′·W, v = (1 − u′)·H) → mask pixel
-            let mx = Int((1 - v / sh) * Float(mw)), my = Int(u / sw * Float(mh))
+            guard let (mx, my) = maskPixel(p) else { return false }
             return on(mx, my) && on(mx - 2, my) && on(mx + 2, my) && on(mx, my - 2) && on(mx, my + 2)
         }
+
+        var binary = [UInt8](repeating: 0, count: mw * mh)
+        for y in 0..<mh {
+            let row = px + y * bpr
+            for x in 0..<mw where row[x] == label { binary[y * mw + x] = 1 }
+        }
+        let view = SilhouetteView(cameraTransform: input.cameraTransform, intrinsics: k, sensorWidth: sw, sensorHeight: sh,
+                                  mask: binary, maskWidth: mw, maskHeight: mh)
 
         return Result(
             boundsUpright: CGRect(x: Double(minX) / Double(mw), y: Double(minY) / Double(mh),
@@ -106,28 +123,52 @@ final class ObjectDetector {
             silhouetteRays: silhouette,
             objectPoints: objectPoints,
             cloudSize: input.cloud.count,
-            areaFraction: Double(count) / Double(mw * mh)
+            areaFraction: Double(count) / Double(mw * mh),
+            view: view
         )
     }
 
-    /// The instance under the preferred point, else the biggest one nearest it.
+    /// Which instance is the item:
+    /// 1. Once locked: the instance under the tracked centre (sticky: clutter and the screen centre don't matter).
+    /// 2. Otherwise prefer instances with ARKit points *above* the table (real 3D items), nearest the
+    ///    preferred point. A flat instance (laptop, mousepad, paper) stole detection on the cluttered table.
+    /// 3. Fallback: the instance under the preferred point, else the biggest one nearest it.
     private static func pickInstance(_ px: UnsafeMutablePointer<UInt8>, _ w: Int, _ h: Int, _ bpr: Int,
-                                     preferred: CGPoint) -> UInt8? {
-        let px0 = min(w - 1, max(0, Int(preferred.x * Double(w))))
-        let py0 = min(h - 1, max(0, Int(preferred.y * Double(h))))
-        let under = px[py0 * bpr + px0]
-        if under != 0 { return under }
+                                     input: Input, maskPixel: (SIMD3<Float>) -> (Int, Int)?) -> UInt8? {
+        func label(_ x: Int, _ y: Int) -> UInt8 { x >= 0 && y >= 0 && x < w && y < h ? px[y * bpr + x] : 0 }
+
+        if let sticky = input.sticky, let (sx, sy) = maskPixel(sticky) {
+            var counts: [UInt8: Int] = [:]
+            for dy in -10...10 { for dx in -10...10 where label(sx + dx, sy + dy) != 0 {
+                counts[label(sx + dx, sy + dy), default: 0] += 1
+            } }
+            if let best = counts.max(by: { $0.value < $1.value })?.key { return best }
+        }
+
+        var solid: Set<UInt8> = []
+        if let tableY = input.tableY {
+            var above: [UInt8: Int] = [:]
+            for p in input.cloud where p.y > tableY + 0.008 {
+                if let (x, y) = maskPixel(p), label(x, y) != 0 { above[label(x, y), default: 0] += 1 }
+            }
+            solid = Set(above.filter { $0.value >= 3 }.keys)
+        }
+
+        let px0 = min(w - 1, max(0, Int(input.preferredPoint.x * Double(w))))
+        let py0 = min(h - 1, max(0, Int(input.preferredPoint.y * Double(h))))
+        let under = label(px0, py0)
+        if under != 0 && (solid.isEmpty || solid.contains(under)) { return under }
 
         var score: [UInt8: Double] = [:]
         for y in stride(from: 0, to: h, by: 4) {
             for x in stride(from: 0, to: w, by: 4) {
                 let l = px[y * bpr + x]
-                guard l != 0 else { continue }
-                let dx = Double(x) / Double(w) - preferred.x, dy = Double(y) / Double(h) - preferred.y
+                guard l != 0, solid.isEmpty || solid.contains(l) else { continue }
+                let dx = Double(x) / Double(w) - input.preferredPoint.x, dy = Double(y) / Double(h) - input.preferredPoint.y
                 score[l, default: 0] += 1 / (0.05 + dx * dx + dy * dy)  // area, weighted towards the point
             }
         }
-        return score.max { $0.value < $1.value }?.key
+        return score.max { $0.value < $1.value }?.key ?? (under != 0 ? under : nil)
     }
 
     /// Mask pixel (upright space) → world ray through that pixel's centre.

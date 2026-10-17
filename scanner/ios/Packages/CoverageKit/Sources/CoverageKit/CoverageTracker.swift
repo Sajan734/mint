@@ -52,7 +52,8 @@ public struct CoverageConfig: Sendable {
 
 /// Tracks which dome segments have a good frame. Pure value type: feed it observations, read state.
 public struct CoverageTracker: Sendable {
-    public let anchor: SIMD3<Float>
+    /// Item centre. Updated as the item is tracked (ARKit's world drifts a few cm over a lap).
+    public var anchor: SIMD3<Float>
     public var config: CoverageConfig
     public private(set) var bestSharpness: [SegmentID: Double] = [:]
     private var gate = SharpnessGate()

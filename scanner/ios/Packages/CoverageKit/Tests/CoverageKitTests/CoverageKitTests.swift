@@ -329,3 +329,142 @@ final class ObjectFromPointsTests: XCTestCase {
         XCTAssertNil(ObjectSizing.fromPoints(camera: cam, points: Array(sc.points.prefix(5)), silhouetteRays: sc.silhouette, planeY: 0))
     }
 }
+
+final class VisualHullTests: XCTestCase {
+    // A mouse-sized box: 11 × 3.5 × 6 cm (x, y, z half-extents below), turned 30°, centred off-origin.
+    let boxCentre = SIMD3<Float>(0.03, 0.0175, -0.02)
+    let half = SIMD3<Float>(0.055, 0.0175, 0.03)
+    let yaw: Float = 30 * .pi / 180
+    var boxCentreShift = SIMD3<Float>.zero  // simulated ARKit drift: where the box appears in world space
+    let k = simd_float3x3(columns: ([1450, 0, 0], [0, 1450, 0], [960, 720, 1]))
+
+    /// ARKit-style camera at `eye` looking at `target` (+x right, +y up, looking down −z).
+    func camera(eye: SIMD3<Float>, target: SIMD3<Float>) -> simd_float4x4 {
+        let z = simd_normalize(eye - target)
+        let x = simd_normalize(simd_cross(SIMD3<Float>(0, 1, 0), z))
+        let y = simd_cross(z, x)
+        return simd_float4x4(columns: (SIMD4(x, 0), SIMD4(y, 0), SIMD4(z, 0), SIMD4(eye, 1)))
+    }
+
+    /// Exact silhouette: a mask pixel is on the item if its ray hits the box (slab test).
+    func mask(_ cam: simd_float4x4, size: Int = 160) -> [UInt8] {
+        let r = simd_float3x3(SIMD3(cam.columns.0.x, cam.columns.0.y, cam.columns.0.z),
+                              SIMD3(cam.columns.1.x, cam.columns.1.y, cam.columns.1.z),
+                              SIMD3(cam.columns.2.x, cam.columns.2.y, cam.columns.2.z))
+        let toLocal = simd_float3x3(simd_quatf(angle: -yaw, axis: [0, 1, 0]))
+        let o = toLocal * (cam.translation - (boxCentre + boxCentreShift))
+        var m = [UInt8](repeating: 0, count: size * size)
+        for my in 0..<size {
+            for mx in 0..<size {
+                let u = (Float(my) + 0.5) / Float(size) * 1920, v = (1 - (Float(mx) + 0.5) / Float(size)) * 1440
+                let d = toLocal * (r * SIMD3((u - 960) / 1450, -(v - 720) / 1450, -1))
+                var tmin: Float = -1e9, tmax: Float = 1e9
+                for a in 0..<3 {
+                    if abs(d[a]) < 1e-9 { if abs(o[a]) > half[a] { tmin = 1; tmax = 0 }; continue }
+                    let t1 = (-half[a] - o[a]) / d[a], t2 = (half[a] - o[a]) / d[a]
+                    tmin = max(tmin, min(t1, t2)); tmax = min(tmax, max(t1, t2))
+                }
+                if tmax >= max(tmin, 0) { m[my * size + mx] = 1 }
+            }
+        }
+        return m
+    }
+
+    func testRecoversCentreFromAWrongStart() {
+        // Start 3 cm off with the wrong size, like the single-view guess on the real mouse.
+        let guess = ObjectEstimate(footprintCentre: [0.03 + 0.03, 0, -0.02 - 0.01], width: 0.08, height: 0.03, depth: 0.08)
+        var hull = VisualHull(around: guess, planeY: 0)
+        for i in 0..<8 {
+            let az = Float(i) * .pi / 4
+            let eye = boxCentre + SIMD3(0.3 * sin(az), 0.25, 0.3 * cos(az))
+            let cam = camera(eye: eye, target: boxCentre)
+            hull.carve(SilhouetteView(cameraTransform: cam, intrinsics: k, sensorWidth: 1920, sensorHeight: 1440,
+                                      mask: mask(cam), maskWidth: 160, maskHeight: 160))
+        }
+        let e = hull.estimate()!
+        XCTAssertEqual(e.footprintCentre.x, 0.03, accuracy: 0.005)
+        XCTAssertEqual(e.footprintCentre.z, -0.02, accuracy: 0.005)
+        // Height is an upper bound when every view looks down (space just above a flat top projects
+        // onto the top face in all of them). The ring sits on the table and only needs the footprint.
+        XCTAssertGreaterThanOrEqual(e.height, 0.03)
+        XCTAssertLessThanOrEqual(e.height, 0.06)
+        XCTAssertEqual(max(e.width, e.depth), 0.11, accuracy: 0.015)
+        XCTAssertEqual(min(e.width, e.depth), 0.06, accuracy: 0.015)
+        XCTAssertGreaterThan(hull.spreadDegrees, 170)
+    }
+
+    func testRejectsAWrongMask() {
+        let guess = ObjectEstimate(footprintCentre: [0.06, 0, -0.03], width: 0.08, height: 0.03, depth: 0.08)
+        var hull = VisualHull(around: guess, planeY: 0)
+        func view(_ az: Float, mask m: [UInt8]? = nil) -> SilhouetteView {
+            let cam = camera(eye: boxCentre + SIMD3(0.3 * sin(az), 0.25, 0.3 * cos(az)), target: boxCentre)
+            return SilhouetteView(cameraTransform: cam, intrinsics: k, sensorWidth: 1920, sensorHeight: 1440,
+                                  mask: m ?? mask(cam), maskWidth: 160, maskHeight: 160)
+        }
+        for i in 0..<6 { XCTAssertTrue(hull.carveIfConsistent(view(Float(i) * .pi / 3))) }
+        let good = hull.estimate()!
+        // A mask of something else entirely (a blob in the image corner) must be refused…
+        var wrong = [UInt8](repeating: 0, count: 160 * 160)
+        for y in 0..<30 { for x in 0..<30 { wrong[y * 160 + x] = 1 } }
+        XCTAssertFalse(hull.carveIfConsistent(view(0.5, mask: wrong)))
+        XCTAssertEqual(hull.estimate()!.footprintCentre.x, good.footprintCentre.x, accuracy: 1e-6)
+        // …while a correct new view is accepted.
+        XCTAssertTrue(hull.carveIfConsistent(view(0.5)))
+    }
+
+    /// What happened on the cluttered table: ARKit's world slid ~3–4 cm during the lap. Simulated by
+    /// moving the box 3 cm partway round while the cameras keep their poses. The tracker must follow.
+    func testTrackerFollowsDrift() {
+        let guess = ObjectEstimate(footprintCentre: [0.06, 0, -0.03], width: 0.08, height: 0.03, depth: 0.08)
+        var tracker = ItemTracker(start: guess, planeY: 0)
+        var global = VisualHull(around: guess, planeY: 0)
+        let original = boxCentre
+        for i in 0..<20 {
+            let az = Float(i) * .pi / 8
+            if i == 10 { boxCentreShift = SIMD3(0.03, 0, 0) }  // the drift
+            let target = original + boxCentreShift
+            let cam = camera(eye: target + SIMD3(0.3 * sin(az), 0.25, 0.3 * cos(az)), target: target)
+            let v = SilhouetteView(cameraTransform: cam, intrinsics: k, sensorWidth: 1920, sensorHeight: 1440,
+                                   mask: mask(cam), maskWidth: 160, maskHeight: 160)
+            tracker.add(v)
+            global.carve(v)
+        }
+        boxCentreShift = .zero
+        let e = tracker.estimate
+        XCTAssertEqual(e.footprintCentre.x, 0.06, accuracy: 0.006, "tracker should be at the drifted position")
+        XCTAssertEqual(e.footprintCentre.z, -0.02, accuracy: 0.006)
+        XCTAssertEqual(max(e.width, e.depth), 0.11, accuracy: 0.02, "size should survive the drift")
+        // The all-views hull is what the app did before: it shrinks.
+        if let g = global.estimate() { XCTAssertLessThan(max(g.width, g.depth), 0.095) }
+    }
+
+    func testTrackerRefusesAnotherObjectOnceTracking() {
+        let guess = ObjectEstimate(footprintCentre: [0.03, 0, -0.02], width: 0.1, height: 0.04, depth: 0.08)
+        var tracker = ItemTracker(start: guess, planeY: 0)
+        for i in 0..<8 {
+            let az = Float(i) * .pi / 4
+            let cam = camera(eye: boxCentre + SIMD3(0.3 * sin(az), 0.25, 0.3 * cos(az)), target: boxCentre)
+            tracker.add(SilhouetteView(cameraTransform: cam, intrinsics: k, sensorWidth: 1920, sensorHeight: 1440,
+                                       mask: mask(cam), maskWidth: 160, maskHeight: 160))
+        }
+        XCTAssertGreaterThan(tracker.updates, 0)
+        let before = tracker.estimate
+        var wrong = [UInt8](repeating: 0, count: 160 * 160)
+        for y in 0..<30 { for x in 0..<30 { wrong[y * 160 + x] = 1 } }
+        let cam = camera(eye: boxCentre + SIMD3(0.2, 0.25, 0.2), target: boxCentre)
+        XCTAssertFalse(tracker.add(SilhouetteView(cameraTransform: cam, intrinsics: k, sensorWidth: 1920, sensorHeight: 1440,
+                                                  mask: wrong, maskWidth: 160, maskHeight: 160)))
+        XCTAssertEqual(tracker.estimate, before)
+    }
+
+    func testTwoCloseViewsDontPretendToKnowDepth() {
+        let guess = ObjectEstimate(footprintCentre: [0.03, 0, -0.02], width: 0.1, height: 0.04, depth: 0.1)
+        var hull = VisualHull(around: guess, planeY: 0)
+        for az: Float in [0, 0.1] {
+            let cam = camera(eye: boxCentre + SIMD3(0.3 * sin(az), 0.25, 0.3 * cos(az)), target: boxCentre)
+            hull.carve(SilhouetteView(cameraTransform: cam, intrinsics: k, sensorWidth: 1920, sensorHeight: 1440,
+                                      mask: mask(cam), maskWidth: 160, maskHeight: 160))
+        }
+        XCTAssertLessThan(hull.spreadDegrees, 10)  // the app waits for more spread before trusting it
+    }
+}

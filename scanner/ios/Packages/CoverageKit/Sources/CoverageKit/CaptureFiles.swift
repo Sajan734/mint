@@ -74,9 +74,12 @@ public struct PoseRecord: Codable, Equatable, Sendable {
     public var sharpness: Double
     public var segment: String?
     public var counted: Bool          // this frame filled or improved a dome segment
+    /// Where the item's centre is in this frame's ARKit world (tracked from the masks; follows ARKit drift).
+    public var item_centre: [Double]?
 
     public init(frame: Int, t_ms: Int, pose_world: [[Double]], pose: [[Double]]?, intrinsics: [[Double]],
-                tracking: String, state: String, sharpness: Double, segment: String?, counted: Bool) {
+                tracking: String, state: String, sharpness: Double, segment: String?, counted: Bool,
+                item_centre: [Double]? = nil) {
         self.frame = frame
         self.t_ms = t_ms
         self.pose_world = pose_world
@@ -87,6 +90,7 @@ public struct PoseRecord: Codable, Equatable, Sendable {
         self.sharpness = sharpness
         self.segment = segment
         self.counted = counted
+        self.item_centre = item_centre
     }
 }
 

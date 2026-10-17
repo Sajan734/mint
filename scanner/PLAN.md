@@ -36,6 +36,13 @@ The user can: scan a side → pick the item up or turn it → put it down → sc
 
 **Measure first:** before writing this on the phone, it's prototyped in Python + OpenCV on **real recordings from the app** (scan, turn, scan), with numbers: re-find success rate, reprojection error, and pose agreement with frames where the item is known not to have moved. Then ported to the phone with OpenCV ([yeatse/opencv-spm](https://github.com/yeatse/opencv-spm) 4.13 via SPM) behind an Obj-C++ wrapper.
 
+## 2b. Keeping the ring on the item (measured on real scans)
+
+- **Finding it:** ARKit's own 3D feature points inside the Vision mask; the table = highest plane at the bottom of those points. Flat instances (laptop, mousepad) are skipped; once locked, detection sticks to the instance under the tracked item.
+- **ARKit drifts** a few cm over a lap (`mint-40c3610d`: ~3.5–4 cm). A ring placed once at Start slides off the item even if it was perfect at Start.
+- **Tracking:** a visual hull from the most recent views spanning ≥ 60° (masks + exact poses), plus a per-view nudge that centres the item's projected extent on the mask. Wrong masks are refused once tracking.
+- **Result on the cluttered-table recording** (vs an offline ±45-frame reference): ring position error, median **1.6 cm → 0.8 cm**; late in the lap **3.6–4.9 cm → ~1 cm**.
+
 ## 3. Chunks
 
 | # | Chunk | Done when | Status |
@@ -44,7 +51,8 @@ The user can: scan a side → pick the item up or turn it → put it down → sc
 | 1 | AR session, exposure/focus/WB lock, coaching overlay | Tracking works on device | ✅ |
 | 2 | Dome + coverage engine + guidance + haptics | Walk around and it fills to 90% | ✅ tested on device |
 | 3 | Auto-find + auto-size; recording; AirDrop export; `check_scan.py` | Point → bracket → Start → MP4 + poses + keyframes → AirDrop; `check_scan.py` OK with crosshairs on the item | ✅ first device scan `mint-30f063d2`: poses/K/orientation verified (crosshair on the item in every frame) |
-| 3b | Fixes from that scan: 30 fps, one ring, hold-lock, ring on the table | Video ≥ 28 fps; one lap ≤ 20 s; lock doesn't flicker | ✅ code; **needs a device test** |
+| 3b | Fixes from that scan: 30 fps, one ring, hold-lock, ring on the table | Video ≥ 28 fps; one lap ≤ 20 s; lock doesn't flicker | ✅ `mint-0a705c19`: 30.1 fps, lap in 10.3 s |
+| 3c | Find the item in clutter; keep the ring on it | Locks on a cluttered table; ring stays on the item through the lap | ✅ code + offline proof on `mint-40c3610d`; **needs a device test** |
 | 4 | Prototype re-finding offline on real "scan → turn → scan" recordings | ≥ 95% of turns re-found; reprojection < 2 px; numbers written down | next |
 | 5 | On-device: OpenCV, map building, hand detection, re-finding, dome follows the item | Turn the item mid-scan and the dome snaps to it; coverage stays right | |
 | 6 | Guidance for turning + demo polish (snap animation, found bracket, seal moment, 20 s timer) | A first-time user finishes in ≤ 20 s | |

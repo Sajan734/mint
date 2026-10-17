@@ -44,6 +44,12 @@ final class ScanSession: NSObject, ObservableObject {
     private var dome: DomeEntity?
     private var item: (estimate: ObjectEstimate, planeY: Float)?
     private var locker = LockingEstimator()
+    /// Multi-view tracking of the item (from lock until the scan ends): keeps the ring on the item
+    /// as ARKit's world drifts. Runs on `trackQueue`; `trackerGeneration` discards stale results.
+    private var itemTracker: ItemTracker?
+    private var trackerGeneration = 0
+    private var trackingBusy = false
+    private let trackQueue = DispatchQueue(label: "mint.track", qos: .userInitiated)
     private var aimingSince = Date()
     /// One JSON line per detection while aiming; saved into the scan folder as aim.jsonl.
     private var aimLog: [Data] = []
@@ -113,7 +119,9 @@ final class ScanSession: NSObject, ObservableObject {
         }
     }
 
-    private func begin(_ est: ObjectEstimate, planeY: Float) {
+    private func begin(_ startEstimate: ObjectEstimate, planeY: Float) {
+        if itemTracker == nil { startTracking(startEstimate, planeY: planeY) }
+        let est = itemTracker?.estimate ?? startEstimate
         item = (est, planeY)
         let dome = self.dome ?? makeDome()
         dome.place(base: est.footprintCentre, radius: DomeEntity.radius(for: est), animated: false)
@@ -189,6 +197,7 @@ final class ScanSession: NSObject, ObservableObject {
         found = nil
         scanStart = nil
         locker = LockingEstimator()
+        dropTracker()
         showStartAnyway = false
         if phase != .starting { beginAiming() }
     }
@@ -210,6 +219,10 @@ final class ScanSession: NSObject, ObservableObject {
     // MARK: - Aiming: measure the item
 
     private func applyDetection(_ result: ObjectDetector.Result?) {
+        if phase == .scanning {
+            if let result { track(result.view) }
+            return
+        }
         guard phase == .aiming else { return }
         if !locker.isLocked && Date().timeIntervalSince(aimingSince) > 2.5 { showStartAnyway = true }
         guard let result, result.areaFraction > 0.003, let frame = arView.session.currentFrame else {
@@ -218,6 +231,7 @@ final class ScanSession: NSObject, ObservableObject {
             if !locker.miss() {
                 found = nil
                 dome?.showPoints([])
+                dropTracker()
             }
             return
         }
@@ -255,22 +269,74 @@ final class ScanSession: NSObject, ObservableObject {
             if !locker.miss() {
                 found = Found(boundsInView: rect, estimate: nil, planeY: planeY, locked: false)
                 dome?.showPoints([])
+                dropTracker()
+            } else {
+                track(result.view)  // locked: the mask still helps the tracker even without a fresh fit
             }
             return
         }
         let wasLocked = locker.isLocked
         let steady = locker.feed(estimate)
         entry["locked"] = steady.locked
-        log(entry)
         found = Found(boundsInView: rect, estimate: steady.estimate, planeY: planeY, locked: steady.locked)
         if steady.locked {
             showStartAnyway = false
             if !wasLocked { tick.impactOccurred(intensity: 0.8) }
         }
 
+        if steady.locked {
+            if itemTracker == nil { startTracking(steady.estimate, planeY: planeY) }
+            track(result.view)
+        } else {
+            dropTracker()
+            processor.setTarget(sticky: nil, tableY: planeY)  // prefer solid items over flat ones
+        }
+
+        let shown = itemTracker?.estimate ?? steady.estimate
+        entry["tracked"] = itemTracker.map { ["base": $0.estimate.footprintCentre.map3, "updates": $0.updates] as [String: Any] } ?? NSNull()
+        log(entry)
         let dome = self.dome ?? makeDome()
-        dome.place(base: steady.estimate.footprintCentre, radius: DomeEntity.radius(for: steady.estimate), animated: true)
+        dome.place(base: shown.footprintCentre, radius: DomeEntity.radius(for: shown), animated: true)
         dome.showPoints(Array(above.prefix(150)))  // ARKit's measured points on the item
+    }
+
+    // MARK: - Tracking the item (multi-view)
+
+    private func startTracking(_ e: ObjectEstimate, planeY: Float) {
+        trackerGeneration += 1
+        itemTracker = ItemTracker(start: e, planeY: planeY)
+        processor.setTarget(sticky: e.centre, tableY: planeY)
+    }
+
+    private func dropTracker() {
+        guard itemTracker != nil else { return }
+        trackerGeneration += 1
+        itemTracker = nil
+    }
+
+    /// Feeds one view to the tracker off the main thread; drops views while one is in flight.
+    private func track(_ view: SilhouetteView) {
+        guard var t = itemTracker, !trackingBusy else { return }
+        trackingBusy = true
+        let generation = trackerGeneration
+        trackQueue.async {
+            let moved = t.add(view)
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.trackingBusy = false
+                    guard generation == self.trackerGeneration else { return }  // reset meanwhile
+                    self.itemTracker = t
+                    if moved { self.follow(t.estimate) }
+                }
+            }
+        }
+    }
+
+    /// Glide the ring and the coverage centre to where the item is now.
+    private func follow(_ e: ObjectEstimate) {
+        dome?.place(base: e.footprintCentre, radius: DomeEntity.radius(for: e), animated: true)
+        processor.updateAnchor(e.centre)
+        if let current = item { item = (e, current.planeY) }
     }
 
     /// The table: the highest horizontal plane at the bottom of the item's points (see

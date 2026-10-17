@@ -60,6 +60,7 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("scan", type=Path)
     ap.add_argument("--overlays", type=Path, help="write crosshair overlays here")
+    ap.add_argument("--centre-from", type=Path, help="JSON with a 'centre' to draw instead of the manifest anchor (e.g. refined.json)")
     args = ap.parse_args()
     scan = load_scan(args.scan)
     problems: list[str] = []
@@ -116,6 +117,9 @@ def main() -> int:
 
     # 4. Projection of the item centre
     centre = np.asarray(manifest["anchor"], dtype=np.float64)
+    if args.centre_from:
+        centre = np.asarray(json.loads(args.centre_from.read_text())["centre"], dtype=np.float64)
+        print(f"drawing centre from {args.centre_from.name}: {np.round(centre, 4).tolist()}")
 
     def check(label, pose, k, width, height):
         u, v, z = project(centre, pose, k)

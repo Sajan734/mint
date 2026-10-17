@@ -31,9 +31,12 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
     private var sensorSize = CGSize(width: 1920, height: 1440)
     /// ARKit's triangulated feature points (world), by identifier, with when each was last seen.
     private var cloud: [UInt64: (point: SIMD3<Float>, seen: TimeInterval)] = [:]
+    private var sticky: SIMD3<Float>?       // tracked item centre (detection sticks to it)
+    private var tableY: Float?
 
     private static let scanInterval = 1.0 / 30     // video + coverage at 30 fps
-    private static let detectInterval = 0.25       // item detection at ~4 Hz
+    private static let detectInterval = 0.25       // item detection at ~4 Hz while aiming
+    private static let trackInterval = 0.2         // and ~5 Hz while scanning (keeps the ring on the item)
     private static let cloudMemory = 4.0           // seconds a feature point is kept after last seen
 
     func startAiming() {
@@ -41,12 +44,30 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
             self.mode = .aiming
             self.tracker = nil
             self.cloud.removeAll()
+            self.sticky = nil
+            self.tableY = nil
         }
     }
 
     /// Upright (portrait) normalized image point the user tapped: pick the item under it.
     func setPreferredPoint(_ p: CGPoint) {
         queue.async { self.preferredPoint = p }
+    }
+
+    /// The tracked item (detection sticks to it) and the table height (flat instances are skipped).
+    func setTarget(sticky: SIMD3<Float>?, tableY: Float?) {
+        queue.async {
+            self.sticky = sticky
+            self.tableY = tableY
+        }
+    }
+
+    /// The tracked item centre moved: coverage angles are measured from it.
+    func updateAnchor(_ centre: SIMD3<Float>) {
+        queue.async {
+            self.sticky = centre
+            self.tracker?.anchor = centre
+        }
     }
 
     func startScanning(item: ObjectEstimate, recorder: Recorder?) {
@@ -107,16 +128,22 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
             for (i, id) in pc.identifiers.enumerated() { cloud[id] = (pc.points[i], frame.timestamp) }
         }
         guard frame.timestamp - lastDetect >= Self.detectInterval else { return }
+        cloud = cloud.filter { frame.timestamp - $0.value.seen < Self.cloudMemory }
+        runDetection(frame, cloud: cloud.values.map(\.point))
+    }
+
+    private func runDetection(_ frame: ARFrame, cloud: [SIMD3<Float>]) {
         guard case .normal = frame.camera.trackingState else { return }
         lastDetect = frame.timestamp
-        cloud = cloud.filter { frame.timestamp - $0.value.seen < Self.cloudMemory }
         detector.detect(.init(
             pixelBuffer: frame.capturedImage,
             cameraTransform: frame.camera.transform,
             intrinsics: frame.camera.intrinsics,
             imageSize: frame.camera.imageResolution,
             preferredPoint: preferredPoint,
-            cloud: cloud.values.map(\.point)
+            cloud: cloud,
+            sticky: sticky,
+            tableY: tableY
         )) { result in
             MainActor.assumeIsolated { self.onDetection?(result) }
             self.queue.async { self.detector.markIdle() }
@@ -124,6 +151,7 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
     }
 
     private func scan(_ frame: ARFrame) {
+        if frame.timestamp - lastDetect >= Self.trackInterval { runDetection(frame, cloud: []) }
         guard var tracker, frame.timestamp - lastProcessed >= Self.scanInterval - 0.004 else { return }
         lastProcessed = frame.timestamp
 
@@ -145,7 +173,8 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
         ))
         self.tracker = tracker
 
-        // The item hasn't moved yet (no hand-turn tracking), so camera-to-item = camera-to-world.
+        // The item doesn't move (no hand-turn tracking), so camera-to-item = camera-to-world; the
+        // tracked item_centre records where ARKit's drifting world currently puts it.
         recorder?.append(pixelBuffer: frame.capturedImage, timestamp: frame.timestamp, sensorSize: sensorSize, meta: .init(
             cameraTransform: frame.camera.transform,
             itemPose: frame.camera.transform,
@@ -154,7 +183,8 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
             state: "scanning",
             sharpness: sharpness,
             segment: decision.segment,
-            isBestForSegment: decision.isBestForSegment
+            isBestForSegment: decision.isBestForSegment,
+            itemCentre: tracker.anchor
         ))
 
         let update = Update(

@@ -34,6 +34,7 @@ final class Recorder {
         let sharpness: Double
         let segment: SegmentID?
         let isBestForSegment: Bool
+        let itemCentre: SIMD3<Float>?
     }
 
     let scanID = UUID().uuidString.lowercased()
@@ -131,7 +132,8 @@ final class Recorder {
             pose: meta.itemPose.map(Geometry.rowMajor),
             intrinsics: Geometry.rowMajor(Geometry.scaleIntrinsics(meta.intrinsics, sx: sx, sy: sy)),
             tracking: meta.tracking, state: meta.state, sharpness: meta.sharpness,
-            segment: meta.segment?.name, counted: meta.isBestForSegment
+            segment: meta.segment?.name, counted: meta.isBestForSegment,
+            item_centre: meta.itemCentre.map(CaptureJSON.vec)
         )
         if var line = try? CaptureJSON.encode(record) {
             line.append(0x0A)
