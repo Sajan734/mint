@@ -42,7 +42,34 @@ def test_grade_bands(score, grade):
     assert grade_for(score) == grade
 
 
-def test_clean_views_give_light_wear_without_check():
+LIKE_NEW = {0: 0.9, 1: 0.08, 2: 0.02, 3: 0.0}
+WORN = {0: 0.0, 1: 0.15, 2: 0.7, 3: 0.15}
+
+
+def test_clean_item_is_like_new_with_no_defects():
+    condition, reasons = build_condition(twelve(wear=0.1, probs=LIKE_NEW, conf=0.9))
+    assert condition.grade == "like_new"
+    assert condition.grade_score == 0.9 and condition.grade_confidence == 0.9
+    assert condition.defects == [] and condition.usable_view_count == 12
+    assert condition.needs_seller_check is False and reasons == []
+
+
+def test_worn_item_gets_worn_grade_and_its_defects():
+    answers = [view(i, wear=2.1, probs=WORN, conf=0.75) for i in range(12)]
+    for i in (1, 2, 3, 9):  # scuffs visible from the right side and above
+        answers[i] = view(i, wear=2.1, probs=WORN, conf=0.75, scratches_scuffs=0.92)
+    for i in (5, 6):  # a stain on the left ear cup
+        answers[i] = view(i, wear=2.1, probs=WORN, conf=0.75, stains_discolouration=0.85)
+    condition, reasons = build_condition(answers)
+    assert condition.grade == "moderate_wear"
+    assert {d.kind: d.view_ids for d in condition.defects} == {
+        "scratch": ["v01", "v02", "v03", "v09"],
+        "stain": ["v05", "v06"],
+    }
+    assert condition.needs_seller_check is False and reasons == []
+
+
+def test_light_wear_views_without_check():
     condition, reasons = build_condition(twelve())
     assert condition.grade == "light_wear"
     assert condition.grade_score == 0.8 and condition.grade_confidence == 0.8
@@ -50,11 +77,12 @@ def test_clean_views_give_light_wear_without_check():
     assert condition.needs_seller_check is False and reasons == []
 
 
-def test_one_noisy_view_cannot_add_a_defect():
+def test_defect_in_only_one_view_is_not_reported():
     answers = twelve()
     answers[3] = view(3, cracks_tears=0.97)
-    condition, _ = build_condition(answers)
+    condition, reasons = build_condition(answers)
     assert condition.defects == []
+    assert condition.needs_seller_check is False and reasons == []  # not even an "unsure" flag
 
 
 def test_defect_seen_in_two_views_is_reported_with_its_views():
@@ -89,6 +117,15 @@ def test_unusable_views_are_ignored_and_too_few_flags():
     condition, reasons = build_condition(answers)
     assert condition.usable_view_count == 4 and condition.defects == []
     assert condition.needs_seller_check is True and any("usable" in r for r in reasons)
+
+
+@pytest.mark.parametrize("usable_count, flagged", [(5, True), (6, False)])
+def test_too_few_usable_views_boundary(usable_count, flagged):
+    answers = [view(i) for i in range(usable_count)] + [view(i, item_usable=0.3) for i in range(usable_count, 12)]
+    condition, reasons = build_condition(answers)
+    assert condition.usable_view_count == usable_count
+    assert condition.needs_seller_check is flagged
+    assert any("usable" in r for r in reasons) is flagged
 
 
 def test_no_usable_view_still_grades_from_all_answered_views():

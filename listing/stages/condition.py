@@ -16,6 +16,7 @@ import os
 import statistics
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 from dotenv import load_dotenv
 from typesafe_sdk import AsyncTypeSafeClient, Image, RetryPolicy, TypeSafeError
@@ -38,22 +39,17 @@ LISTING_ROOT = Path(__file__).resolve().parent.parent
 
 JEV = {"timeout_s": 30.0, "max_retries": 1}
 
-USABLE = {
-    "view_min": 0.60,  # item_usable P(yes) for a view to count
-    "min_views": 6,  # fewer usable views than this -> seller check
+THRESHOLDS = {
+    "usable_min": 0.60,  # item_usable P(yes) for a view to count
+    "min_usable_views": 6,  # fewer usable views than this -> seller check
+    # Upper bounds of the aggregated wear score (0 = like new .. 3 = heavy wear) for each grade.
+    "grade_bands": [(0.5, "like_new"), (1.5, "light_wear"), (2.5, "moderate_wear"), (math.inf, "heavy_wear")],
+    "grade_confidence_min": 0.50,  # mean Score confidence below this -> seller check
+    "defect_report_min": 0.35,  # aggregated P(yes) to list a defect (finalize decides what buyers see)
+    "defect_view_min": 0.60,  # per-view P(yes) for a view to be listed as showing the defect
+    "defect_unsure_low": 0.40,  # aggregated values in [unsure_low, unsure_high) -> seller check
+    "defect_unsure_high": 0.70,
 }
-
-# Upper bounds of the aggregated wear score (0 = like new .. 3 = heavy wear) for each grade.
-GRADE_BANDS = [(0.5, "like_new"), (1.5, "light_wear"), (2.5, "moderate_wear"), (math.inf, "heavy_wear")]
-
-DEFECTS = {
-    "report_min": 0.35,  # aggregated P(yes) to list a defect (finalize decides what buyers see)
-    "view_min": 0.60,  # per-view P(yes) for a view to be listed as showing the defect
-    "unsure_low": 0.40,  # aggregated values in [unsure_low, unsure_high) -> seller check
-    "unsure_high": 0.70,
-}
-
-GRADE_CHECK = {"confidence_min": 0.50}  # mean Score confidence below this -> seller check
 
 DEFECT_KINDS = {
     "scratches_scuffs": "scratch",
@@ -78,36 +74,54 @@ def second_highest(values: list[float]) -> float:
     return ordered[1] if len(ordered) > 1 else ordered[0]
 
 
-def grade_for(wear_score: float) -> str:
-    return next(grade for upper, grade in GRADE_BANDS if wear_score < upper)
+def grade_for(wear_score: float, thresholds: dict[str, Any] = THRESHOLDS) -> str:
+    return next(grade for upper, grade in thresholds["grade_bands"] if wear_score < upper)
 
 
-def build_condition(answers: list[ViewAnswers]) -> tuple[Condition, list[str]]:
-    """Pure: per-view Jev answers -> Condition, plus the reasons a seller check is needed."""
+def usable_pool(
+    answers: list[ViewAnswers], thresholds: dict[str, Any] = THRESHOLDS
+) -> tuple[list[ViewAnswers], list[ViewAnswers]]:
+    """Returns (usable views, views to judge from). With no usable view, every answered view is judged."""
     answered = [a for a in answers if a.error is None]
     if not answered:
         raise RuntimeError("Jev answered none of the views; condition can't be judged")
-    usable = [a for a in answered if a.nouls["item_usable"] >= USABLE["view_min"]]
-    pool = usable or answered  # judge from every answered view rather than nothing; flagged below
+    usable = [a for a in answered if a.nouls["item_usable"] >= thresholds["usable_min"]]
+    return usable, usable or answered
+
+
+def aggregates(pool: list[ViewAnswers]) -> dict[str, float]:
+    """2nd-highest per question across the pool: the wear score and every defect question."""
+    agg = {"wear": second_highest([a.wear_score for a in pool])}
+    agg |= {q: second_highest([a.nouls[q] for a in pool]) for q in DEFECT_KINDS}
+    return agg
+
+
+def build_condition(
+    answers: list[ViewAnswers], thresholds: dict[str, Any] = THRESHOLDS
+) -> tuple[Condition, list[str]]:
+    """Pure: per-view Jev answers -> Condition, plus the reasons a seller check is needed."""
+    t = thresholds
+    usable, pool = usable_pool(answers, t)
     reasons = []
-    if len(usable) < USABLE["min_views"]:
+    if len(usable) < t["min_usable_views"]:
         reasons.append(f"only {len(usable)} of {len(answers)} views were usable")
 
-    wear = second_highest([a.wear_score for a in pool])
-    grade = grade_for(wear)
+    agg = aggregates(pool)
+    wear = agg["wear"]
+    grade = grade_for(wear, t)
     level = WEAR_LEVELS.index(grade)
     grade_score = statistics.fmean(a.wear_probs.get(level, 0.0) for a in pool)
     grade_confidence = statistics.fmean(a.wear_confidence for a in pool)
-    if grade_confidence < GRADE_CHECK["confidence_min"]:
+    if grade_confidence < t["grade_confidence_min"]:
         reasons.append(f"wear grade confidence is low ({grade_confidence:.2f})")
 
     defects = []
     for question, kind in DEFECT_KINDS.items():
-        score = second_highest([a.nouls[question] for a in pool])
-        if DEFECTS["unsure_low"] <= score < DEFECTS["unsure_high"]:
+        score = agg[question]
+        if t["defect_unsure_low"] <= score < t["defect_unsure_high"]:
             reasons.append(f"unsure about {question} ({score:.2f})")
-        if score >= DEFECTS["report_min"]:
-            view_ids = [a.view_id for a in pool if a.nouls[question] >= DEFECTS["view_min"]]
+        if score >= t["defect_report_min"]:
+            view_ids = [a.view_id for a in pool if a.nouls[question] >= t["defect_view_min"]]
             defects.append(Defect(kind=kind, score=round(score, 3), view_ids=view_ids))
 
     condition = Condition(
@@ -154,24 +168,35 @@ async def ask_view(
     )
 
 
-async def condition(ctx: RunContext, views: Views, baseline: Baseline) -> Condition:
-    if has_stub(ctx, "condition"):
-        return load_stub(ctx, "condition", Condition)
+async def ask_views(views: Views, baseline_path: str | None) -> list[ViewAnswers]:
+    """One Jev request per view, all concurrent. The baseline goes into every request when there is one."""
     _jev_key()
-    use_baseline = baseline.image_path is not None
-    baseline_image = Image(fit_for_jev(resolve(baseline.image_path).read_bytes()).data) if use_baseline else None
+    baseline_image = Image(fit_for_jev(resolve(baseline_path).read_bytes()).data) if baseline_path else None
     context, questions = (
-        (CONDITION_CONTEXT, CONDITION_QUESTIONS) if use_baseline else (CONDITION_CONTEXT_NO_BASELINE, CONDITION_QUESTIONS_NO_BASELINE)
+        (CONDITION_CONTEXT, CONDITION_QUESTIONS)
+        if baseline_image is not None
+        else (CONDITION_CONTEXT_NO_BASELINE, CONDITION_QUESTIONS_NO_BASELINE)
     )
     async with AsyncTypeSafeClient(
         model=MODEL, timeout=JEV["timeout_s"], retry=RetryPolicy(max_retries=JEV["max_retries"])
     ) as jev:
         answers = await asyncio.gather(*(ask_view(jev, v, context, questions, baseline_image) for v in views.views))
-    result, reasons = build_condition(list(answers))
+    return list(answers)
+
+
+async def condition(ctx: RunContext, views: Views, baseline: Baseline) -> Condition:
+    if has_stub(ctx, "condition"):
+        return load_stub(ctx, "condition", Condition)
+    answers = await ask_views(views, baseline.image_path)
+    result, reasons = build_condition(answers)
     ctx.run_dir.mkdir(parents=True, exist_ok=True)
     (ctx.run_dir / "condition_raw.json").write_text(
         json.dumps(
-            {"baseline_used": use_baseline, "seller_check_reasons": reasons, "views": [asdict(a) for a in answers]},
+            {
+                "baseline_used": baseline.image_path is not None,
+                "seller_check_reasons": reasons,
+                "views": [asdict(a) for a in answers],
+            },
             indent=2,
         ),
         encoding="utf-8",
