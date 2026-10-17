@@ -1,5 +1,6 @@
 """Write 24 evenly spaced PASLCD frames per set to public/local/<set>/fNN.webp (480px centre crop)."""
 from pathlib import Path
+
 from PIL import Image
 
 SRC = Path(r"C:\Users\abhin\Downloads\mint\multiagent\data\paslcd")
