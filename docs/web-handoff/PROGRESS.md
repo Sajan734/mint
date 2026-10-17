@@ -61,3 +61,21 @@ clean except the old warning in `buyer/components/FilterBar.tsx`.
 - Dev compiles a route on its first visit, so the demo config gives `expect` 30 s. The first run right after editing
   files can still fail while the dev servers rebuild; rerun. Result: 10 of 10 runs pass (desktop and phone) after that.
 - Tests: buyer 187 (1 skipped), seller 91, e2e demo 2.
+
+## E. Live phone flow
+
+- `scan-session` and `scan-upload` answer (`{"action":"next"}` -> `{"request":null}`; `scan-upload` validates its
+  body). The site never calls `request` (that would make its own scan id and pop the scanner open on the team's
+  phone); it shows the QR of its own UUID and polls `status`, which is 404 "no such scan" until the app's first
+  `update`. `watchScan` treats that 404 as "the phone has not reported yet".
+- Real data, live mode (demo off), no phone: `/sell/scan/a6816dfc-...` sees the published splat manifest and
+  listing, saves a draft and opens the editor with the real title, price, flags and the real Supabase `.spz`. No
+  demo or sample labels. Seen at 1280 and 390.
+- Buyer, live: the real listing page works; **Scan** shows the verify QR `mint://verify?id=<uuid>&listing=a6816dfc-...`.
+  Live verify then waits at "Comparing with the listing" (nothing publishes `assets/comparisons/` yet: Abhinav's lane).
+- `buyer/e2e-demo/live-phone.spec.ts`: live mode with the phone simulated in the browser (route interception of
+  `scan-session` and of the two public files, which it fills with the real `gsplat/out/scan_a6816dfc` run). It checks
+  waiting (QR = `mint://scan?id=<this id>`) -> Phone connected (1 pass) -> Uploading 42% (2 passes) -> Building your
+  listing -> ready -> editor filled from the listing. Writes nothing to Supabase. Passes at 1280 and 390.
+- Still needed: one real scan from the iPhone app against `http://localhost:3000/sell` with demo data off.
+- Tests: buyer 187 (1 skipped), seller 91, e2e demo 4 (2 specs x desktop/phone).
