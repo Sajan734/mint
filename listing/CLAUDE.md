@@ -9,7 +9,7 @@ Output: a `Listing`, or a `Rejection` if the scan doesn't match the looked-up pr
 
 Stages, in order:
 
-1. `render`: splat -> 12 PNG views (8 around at 10 degrees, 4 at 40 degrees), 1024x1024, mid-grey background. Rendered in plain PyTorch by `splat_render.py`, which imports nothing from the pipeline. `RENDER_BACKEND` in `.env` picks where: `modal` (default; the deployed `modal_render.py` app on an L4, .ply up as bytes, PNGs back as bytes, no warm containers) or `local` (this machine, CUDA if available). Up axis per item via `input.json` `up_axis` or `--up-axis` (default `+y`). Writes `runs/<item>/contact_sheet.png` for checking by eye; `scripts/try_render.py` renders without any Gemini or Jev calls.
+1. `render`: splat -> 12 PNG views (8 around at 10 degrees, 4 at 40 degrees), 1024x1024, mid-grey background. Rendered in plain PyTorch by `splat_render.py`, which imports nothing from the pipeline. `RENDER_BACKEND` in `.env` picks where: `modal` (default; the deployed `modal_render.py` app on an L4, the .spz or .ply up as bytes, PNGs back as bytes, no warm containers) or `local` (this machine, CUDA if available). Up axis per item via `input.json` `up_axis` or `--up-axis` (default `+y`). Writes `runs/<item>/contact_sheet.png` for checking by eye; `scripts/try_render.py` renders without any Gemini or Jev calls.
 2. `identify`: views -> `Identity` (Gemini)
 3. `baseline_lookup`: seller's name or `Identity.search_query` -> `Baseline` (one clean product photo)
 4. `match_gate`: views + baseline -> `MatchCheck` (Jev). On mismatch, return a `Rejection` and stop.
@@ -28,7 +28,7 @@ listing/
   pipeline.py        # run_pipeline(splat_path, seller_name=None) -> Listing | Rejection
   stages/            # one file per stage, named as above
   cache.py           # cached stage outputs keyed by item id + stage
-  splat_render.py    # 3DGS .ply loading, floater-robust framing, PyTorch rasterizer
+  splat_render.py    # 3DGS .ply / .spz loading, floater-robust framing, PyTorch rasterizer
   modal_render.py    # Modal app wrapping splat_render on a GPU (RENDER_BACKEND=modal)
   images.py          # fit images to Jev's limits
   samples/           # local sample splats (gitignored, never commit)

@@ -1,4 +1,4 @@
-"""Render a trained 3D Gaussian splat (standard 3DGS .ply) from any orbit camera, in plain PyTorch.
+"""Render a trained 3D Gaussian splat (standard 3DGS .ply, or the splat job's .spz) from any orbit camera, in plain PyTorch.
 
 Standalone on purpose: it imports nothing from the listing pipeline, so the Modal app (modal_render.py) runs it
 as is. Runs on CUDA when available, otherwise on the CPU (much slower). Colours use the SH DC term only.
@@ -6,8 +6,10 @@ as is. Runs on CUDA when available, otherwise on the CPU (much slower). Colours 
 
 from __future__ import annotations
 
+import gzip
 import io
 import math
+import struct
 from dataclasses import dataclass
 
 import numpy as np
@@ -119,6 +121,83 @@ def parse_ply(data: bytes, device: torch.device) -> Splat:
         opacities=torch.sigmoid(cols("opacity")[:, 0]),
         colors=(0.5 + SH_C0 * cols("f_dc_0", "f_dc_1", "f_dc_2")).clamp(0.0, 1.0),
     )
+
+
+# SPZ: Niantic's compressed splat format (gzip container, versions 2 and 3), which the splat job publishes at
+# ~1/10 the size of the .ply. Mirrors the reference decoder (nianticlabs/spz, load-spz.cc); only what this renderer
+# uses is decoded (no higher-order SH). Version 4 (zstd) is not supported.
+SPZ = {"magic": 0x5053474E, "color_scale": 0.15, "sh_dim": {0: 0, 1: 3, 2: 8, 3: 15, 4: 24}}
+
+
+def parse_splat(data: bytes, device: torch.device) -> Splat:
+    """A .spz (gzip) or a binary .ply, told apart by their first bytes."""
+    return parse_spz(data, device) if data[:2] == b"\x1f\x8b" else parse_ply(data, device)
+
+
+def parse_spz(data: bytes, device: torch.device) -> Splat:
+    try:
+        raw = gzip.decompress(data)
+    except (OSError, EOFError) as e:
+        if data[:4] == struct.pack("<I", SPZ["magic"]):
+            raise SplatError("SPZ version 4 (zstd) is not supported; export version 3") from e
+        raise SplatError("the splat is neither a PLY nor an SPZ file") from e
+    if len(raw) < 16:
+        raise SplatError("the SPZ file is truncated")
+    magic, version, n, sh_degree, frac_bits = struct.unpack_from("<IIIBB", raw, 0)
+    if magic != SPZ["magic"]:
+        raise SplatError("not an SPZ file (bad magic)")
+    if version not in (2, 3):
+        raise SplatError(f"SPZ version {version} is not supported (2 and 3 are)")
+    if sh_degree not in SPZ["sh_dim"]:
+        raise SplatError(f"SPZ SH degree {sh_degree} is not supported")
+    # bytes per Gaussian of each stream, in the format's fixed order (the SH stream comes last and is skipped)
+    sizes = {"positions": 9, "alphas": 1, "colors": 3, "scales": 3, "rotations": 4 if version >= 3 else 3}
+    if 16 + n * (sum(sizes.values()) + SPZ["sh_dim"][sh_degree] * 3) > len(raw):
+        raise SplatError("the SPZ file is truncated")
+    offset, streams = 16, {}
+    for name, size in sizes.items():
+        streams[name] = np.frombuffer(raw, np.uint8, n * size, offset).reshape(n, size)
+        offset += n * size
+
+    p = streams["positions"].reshape(n * 3, 3).astype(np.int32)
+    fixed = p[:, 0] | (p[:, 1] << 8) | (p[:, 2] << 16)
+    fixed = np.where(fixed & 0x800000, fixed - (1 << 24), fixed)  # sign-extend 24-bit fixed point
+    means = (fixed.astype(np.float32) / np.float32(1 << frac_bits)).reshape(n, 3)
+    dc = (streams["colors"].astype(np.float32) / 255.0 - 0.5) / SPZ["color_scale"]
+    quats = torch.from_numpy(_spz_quats(streams["rotations"], version)).to(device)
+
+    def tensor(a: np.ndarray) -> torch.Tensor:
+        return torch.from_numpy(np.ascontiguousarray(a, dtype=np.float32)).to(device)
+
+    return Splat(
+        means=tensor(means),
+        scales=torch.exp(tensor(streams["scales"].astype(np.float32) / 16.0 - 10.0)),
+        quats=quats / quats.norm(dim=1, keepdim=True).clamp_min(1e-12),
+        opacities=tensor(streams["alphas"][:, 0].astype(np.float32) / 255.0),
+        colors=(0.5 + SH_C0 * tensor(dc)).clamp(0.0, 1.0),
+    )
+
+
+def _spz_quats(r: np.ndarray, version: int) -> np.ndarray:
+    """Rotation bytes -> (N, 4) w x y z. v3 packs 'smallest three': 2 bits for the index of the largest x/y/z/w
+    component, then 3 x (9-bit magnitude scaled by 1/sqrt(2), 1 sign bit) from the highest other index down.
+    v2 stores x, y, z as bytes and w >= 0."""
+    if version < 3:
+        xyz = r.astype(np.float32) / 127.5 - 1.0
+        w = np.sqrt(np.maximum(0.0, 1.0 - (xyz**2).sum(1)))
+        return np.concatenate([w[:, None], xyz], 1).astype(np.float32)
+    comp = (r[:, 0].astype(np.uint32) | (r[:, 1].astype(np.uint32) << 8) | (r[:, 2].astype(np.uint32) << 16)
+            | (r[:, 3].astype(np.uint32) << 24))
+    largest = (comp >> 30).astype(np.int64)
+    mask = np.uint32((1 << 9) - 1)
+    xyzw = np.zeros((len(r), 4), np.float32)
+    for i in range(3, -1, -1):
+        here = largest != i
+        value = np.float32(np.sqrt(0.5)) * (comp & mask).astype(np.float32) / np.float32(mask)
+        xyzw[here, i] = np.where(((comp >> 9) & 1).astype(bool), -value, value)[here]
+        comp = np.where(here, comp >> 10, comp)
+    xyzw[np.arange(len(r)), largest] = np.sqrt(np.maximum(0.0, 1.0 - (xyzw**2).sum(1)))
+    return np.concatenate([xyzw[:, 3:], xyzw[:, :3]], 1)
 
 
 # --- framing and cameras ----------------------------------------------------------------------
@@ -277,10 +356,11 @@ def _png_bytes(pixels: np.ndarray) -> bytes:
     return buf.getvalue()
 
 
-def render_pngs(ply: bytes, up_axis: str, angles: list[tuple[float, float]], size: int,
+def render_pngs(data: bytes, up_axis: str, angles: list[tuple[float, float]], size: int,
                 background_rgb: tuple[int, int, int]) -> list[bytes]:
-    """Renders one PNG per (azimuth_deg, elevation_deg), framed on the splat's solid part with floaters cropped."""
-    splat = parse_ply(ply, default_device())
+    """Renders one PNG per (azimuth_deg, elevation_deg) of a .spz or .ply, framed on the splat's solid part with
+    floaters cropped."""
+    splat = parse_splat(data, default_device())
     framing = robust_framing(splat)
     splat = crop_floaters(splat, framing)
     return [

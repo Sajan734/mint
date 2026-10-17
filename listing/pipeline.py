@@ -41,7 +41,7 @@ from stages.render import render
 ROOT = Path(__file__).resolve().parent
 RUNS_ROOT = ROOT / "runs"
 CACHE_ROOT = ROOT / "demo_cache"
-SPLAT_NAME = "splat.ply"
+SPLAT_NAMES = ("splat.spz", "splat.ply")  # an item folder's splat: the published .spz, else a .ply
 
 M = TypeVar("M", bound=BaseModel)
 
@@ -51,7 +51,7 @@ def resolve_item(path: Path) -> tuple[Path, Path]:
     path = Path(path)
     if path.suffix:
         return path.parent, path
-    return path, path / SPLAT_NAME
+    return path, next((path / n for n in SPLAT_NAMES if (path / n).is_file()), path / SPLAT_NAMES[-1])
 
 
 def item_input(item_dir: Path) -> dict[str, Any]:

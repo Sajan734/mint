@@ -1,18 +1,28 @@
 import cv2
 import numpy as np
 
+MAX_SCORED_FPS = 30  # high-frame-rate video (60/120 fps) only scores every k-th frame
+
 
 def pick_frames(path: str, n: int) -> tuple[list[np.ndarray], list[int]]:
     """One decode pass; keep the sharpest frame in each of n equal time buckets.
 
     Returns RGB uint8 frames at the video's native resolution (no re-encode, so no
-    extra compression artifacts) and their source frame indices.
+    extra compression artifacts) and their source frame indices. Above MAX_SCORED_FPS only every
+    k-th frame is retrieved and scored; the rest are just grabbed (decoded, no colour conversion).
     """
     cap = cv2.VideoCapture(path)
     total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    fps = cap.get(cv2.CAP_PROP_FPS) or 30.0
+    stride = max(1, round(fps / MAX_SCORED_FPS))
     best: list[tuple[float, np.ndarray | None, int]] = [(-1.0, None, -1)] * n
     i = 0
     while True:
+        if i % stride:
+            if not cap.grab():
+                break
+            i += 1
+            continue
         ok, f = cap.read()
         if not ok:
             break

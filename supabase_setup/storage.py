@@ -16,6 +16,9 @@ SCANS, ASSETS = "scans", "assets"  # private videos / public outputs (Supabase r
 
 class Supabase:
     def __init__(self):
+        if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
+            raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set: attach the Modal secret "
+                               "`mint-supabase` (see supabase_setup/README.md)")
         self.url = os.environ["SUPABASE_URL"].rstrip("/")
         key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
         self._auth = {"apikey": key, "Authorization": f"Bearer {key}"}
@@ -33,16 +36,24 @@ class Supabase:
     def download(self, bucket: str, path: str) -> bytes:
         return self._req("GET", f"/storage/v1/object/authenticated/{bucket}/{path}")
 
-    def list(self, bucket: str, folder: str) -> list[str]:
-        """File names directly inside `folder`."""
-        body = json.dumps({"prefix": folder.rstrip("/"), "limit": 1000}).encode()
+    def list_objects(self, bucket: str, folder: str, limit: int = 1000) -> list[dict]:
+        """Files directly inside `folder`, newest first: dicts with name, created_at, updated_at, metadata."""
+        body = json.dumps({"prefix": folder.rstrip("/"), "limit": limit,
+                           "sortBy": {"column": "created_at", "order": "desc"}}).encode()
         items = json.loads(self._req("POST", f"/storage/v1/object/list/{bucket}", body,
                                      {"Content-Type": "application/json"}))
-        return [i["name"] for i in items if i.get("id")]  # folders have no id
+        return [i for i in items if i.get("id")]  # folders have no id
 
-    def upload(self, bucket: str, path: str, data: bytes, content_type: str) -> str:
+    def list(self, bucket: str, folder: str) -> list[str]:
+        """File names directly inside `folder`."""
+        return [i["name"] for i in self.list_objects(bucket, folder)]
+
+    def upload(self, bucket: str, path: str, data: bytes, content_type: str,
+               cache_control: str = "max-age=3600") -> str:
+        """Upsert one object; returns its public URL (meaningful for public buckets). Use cache_control="no-cache"
+        for objects that are overwritten in place (indexes), so the CDN doesn't serve a stale copy."""
         self._req("POST", f"/storage/v1/object/{bucket}/{path}", data,
-                  {"Content-Type": content_type, "x-upsert": "true", "Cache-Control": "max-age=3600"})
+                  {"Content-Type": content_type, "x-upsert": "true", "Cache-Control": cache_control})
         return self.public_url(bucket, path)
 
     def public_url(self, bucket: str, path: str) -> str:
