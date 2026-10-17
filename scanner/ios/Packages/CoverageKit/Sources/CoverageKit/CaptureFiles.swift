@@ -133,6 +133,9 @@ public struct CaptureInfo: Codable, Equatable, Sendable {
     public var mode: String?
     /// Turntable: the sheet's size (long, short), metres.
     public var paper_m: [Double]?
+    /// Which recording of the item this is (1 = the main lap; 2 = usually the item flipped over; …).
+    /// All passes of one item share `scan_id`.
+    public var pass: Int?
 
     public init(scan_id: String, device: String, os: String, created_at: String, duration_ms: Int,
                 video: String, video_width: Int, video_height: Int, video_frames: Int,

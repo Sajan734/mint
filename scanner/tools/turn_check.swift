@@ -162,7 +162,7 @@ while let sample = out.copyNextSampleBuffer(), let pb = CMSampleBufferGetImageBu
     lines.append(line)
 }
 try lines.joined(separator: "\n").write(to: dir.appendingPathComponent("turn.jsonl"), atomically: true, encoding: .utf8)
-print("coverage \(coverage.percent)%: low/first height \(coverage.arcs(band: 0, count: 12).map { String(format: "%.2f", $0) }), other height \(coverage.arcs(band: 1, count: 12).map { String(format: "%.2f", $0) })")
+print("coverage \(coverage.percent)%: ring \(coverage.arcs(band: 0, count: 12).map { String(format: "%.2f", $0) })")
 print("read \(read)/\(total) frames, used \(used); total turn \(String(format: "%.1f", turn.turned * 180 / .pi))°; \(String(format: "%.1f", ms / Double(total))) ms/frame (grid + segment + angle) on this Mac")
 
 // Against paper_check's top-down tracker, if it was run.

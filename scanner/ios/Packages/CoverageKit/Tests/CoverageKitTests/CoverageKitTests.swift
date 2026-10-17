@@ -711,8 +711,24 @@ final class TurnCoverageTests: XCTestCase {
         }
     }
 
-    func testOneLapAtOneHeightIsHalf() {
+    func testOneLapIsFull() {
         var c = TurnCoverage()
+        turn(&c, from: 0, by: 370, seconds: 10, elevationDeg: 50)
+        XCTAssertEqual(c.percent, 100)
+        // Touching up from another height afterwards doesn't take anything away.
+        turn(&c, from: 370, by: 40, seconds: 3, elevationDeg: 25)
+        XCTAssertEqual(c.percent, 100)
+    }
+
+    func testThreeQuartersOfALapIsNotFull() {
+        var c = TurnCoverage()
+        turn(&c, from: 0, by: 270, seconds: 8, elevationDeg: 50)
+        XCTAssertGreaterThan(c.percent, 75)
+        XCTAssertLessThan(c.percent, 100)
+    }
+
+    func testTwoBandsOneLapAtOneHeightIsHalf() {
+        var c = TurnCoverage(bands: 2)
         c.observe(turned: 0, elevation: 0.9, dt: 0)
         turn(&c, from: 0, by: 370, seconds: 10, elevationDeg: 0.9 * 180 / .pi)
         XCTAssertEqual(c.percent, 50)
@@ -720,9 +736,9 @@ final class TurnCoverageTests: XCTestCase {
         XCTAssertTrue(c.arcs(band: 1, count: 12).allSatisfy { $0 == 0 })
     }
 
-    func testTwoLapsAtTwoHeightsIsFull() {
+    func testTwoBandsTwoLapsAtTwoHeightsIsFull() {
         for dir: Float in [1, -1] {
-            var c = TurnCoverage()
+            var c = TurnCoverage(bands: 2)
             turn(&c, from: 0, by: dir * 370, seconds: 10, elevationDeg: 55)
             turn(&c, from: dir * 370, by: dir * 370, seconds: 10, elevationDeg: 30)   // lower, as the demo does
             XCTAssertEqual(c.percent, 100)
@@ -732,9 +748,9 @@ final class TurnCoverageTests: XCTestCase {
     func testStandingStillOnlyCoversTheFront() {
         var c = TurnCoverage()
         for _ in 0..<150 { c.observe(turned: 0, elevation: 0.9, dt: 1 / 7.5) }
-        XCTAssertEqual(c.level(side: 0), 1, accuracy: 0.001 + 0.5)   // both heights averaged: half
+        XCTAssertEqual(c.level(side: 0), 1, accuracy: 0.001)
         XCTAssertEqual(c.level(side: .pi), 0)                          // the back was never seen
-        XCTAssertLessThan(c.percent, 25)
+        XCTAssertLessThan(c.percent, 20)
     }
 
     func testPercentNeverDropsAndOnlyCountsMeasuredTime() {
@@ -748,7 +764,7 @@ final class TurnCoverageTests: XCTestCase {
         // A long gap (paper lost) counts at most 0.25 s.
         var gap = TurnCoverage()
         gap.observe(turned: 0, elevation: 0.9, dt: 30)
-        XCTAssertEqual(gap.level(side: 0), 0.125, accuracy: 0.01)
+        XCTAssertEqual(gap.level(side: 0), 0.5, accuracy: 0.01)
     }
 
     func testSidesSeenAcrossTheSilhouette() {
