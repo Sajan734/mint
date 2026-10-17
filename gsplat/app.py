@@ -136,7 +136,8 @@ class Splatter:
         try:
             keys, videos, io = fetch_inputs(sb, scan_id)
             res = run(self, videos if len(videos) > 1 else videos[0],
-                      {**(cfg or {}), "ply": False, "debug": False, "views": True}, on_event=ev.stage_hook(scan_id))
+                      {**(cfg or {}), "ply": False, "debug": False, "views": True, "rotate_cw": io["rotate_cw"]},
+                      on_event=ev.stage_hook(scan_id))
             manifest = publish(sb, scan_id, batch_id, keys, res, io)
             ev.send("passport_ready", manifest)
             if HAS_LISTING and (cfg or {}).get("listing", True):

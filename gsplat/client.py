@@ -4,12 +4,11 @@
     python client.py run orbit.mp4 [--name x]   # mp4 -> out/<name>/splat.spz on the warm container
     python client.py run orbit.mp4 orbit_reverse.mp4 --name merged   # top + flipped-over bottom
     python client.py cold [--gpu H100]          # back to scale-to-zero after the demo
-    python client.py scan orbit.mp4
-        # the live pipeline end to end, exactly like the iPhone: the scan-upload Edge Function signs
-        # scans/{id}/video.mp4 (no key on the client) -> PUT -> the Supabase webhook starts run_scan on an H100
-        # -> splat + views -> listing/ (Jev) -> assets/listings/{id}.json, which the website shows. Times each hop.
-    python client.py scan orbit.mp4 orbit_reverse.mp4 [--gpu H100]
-        # top + bottom (the app doesn't capture a bottom yet): signed uploads, then run_scan is started directly
+    python client.py scan orbit.mp4 [orbit_reverse.mp4]
+        # the live pipeline end to end, exactly like the iPhone (scanner/HANDOFF.md): the scan-upload Edge Function
+        # signs the uploads (no key on the client), bottom.mp4 goes first, video.mp4 last; its arrival fires the
+        # Supabase webhook -> run_scan on an H100 -> splat + views -> listing/ (Jev) -> assets/listings/{id}.json,
+        # which the website shows. Times each hop and saves everything to out/scan_<id>/.
 
 Use the same --gpu for warm, run and cold: each GPU type is its own pool of containers.
 Warm H100: one video ~24-28 s, top + bottom ~35 s (training resolution is set automatically; see README).
@@ -64,30 +63,26 @@ def get_json(url: str) -> dict | None:
         return None
 
 
-def phone_upload(scan_id: str, video: Path) -> None:
-    """What the iOS app does: ask the scan-upload Edge Function for a signed URL, PUT the video."""
-    body = json.dumps({"scan_id": scan_id, "files": ["video.mp4"]}).encode()
+def phone_upload(scan_id: str, files: dict[str, Path]) -> None:
+    """What the iOS app does: ask the scan-upload Edge Function for signed URLs, then PUT each file in order."""
+    body = json.dumps({"scan_id": scan_id, "files": list(files)}).encode()
     req = urllib.request.Request(UPLOAD_FN, data=body, method="POST", headers={"Content-Type": "application/json"})
     with urllib.request.urlopen(req, timeout=30) as r:
-        signed = json.loads(r.read())["uploads"][0]["signed_url"]
-    put(signed, video)
+        signed = {u["file"]: u["signed_url"] for u in json.loads(r.read())["uploads"]}
+    for name, path in files.items():  # in order: video.mp4 last, its arrival starts the pipeline
+        put(signed[name], path)
 
 
-def scan(splatter, videos: list[Path], scale: float, timeout_s: float = 600) -> dict:
+def scan(videos: list[Path], timeout_s: float = 900) -> dict:
     scan_id = str(uuid.uuid4())
     t: dict[str, float] = {"upload_mb": sum(p.stat().st_size for p in videos) / 1e6}
     start = time.perf_counter()
-    if len(videos) == 1:  # the phone's path: the Supabase webhook starts the pipeline when the upload lands
-        phone_upload(scan_id, videos[0])
-        t["uploaded_s"] = time.perf_counter() - start
-    else:
-        names = [f"{role}{p.suffix.lower()}" for role, p in zip(("top", "bottom"), videos)]
-        urls = modal.Function.from_name("mint-supabase", "sign_uploads").remote(scan_id, names)  # supabase_setup/
-        with ThreadPoolExecutor(len(videos)) as ex:  # both videos in parallel, as the app would
-            list(ex.map(lambda nv: put(urls[nv[0]], nv[1]), zip(names, videos)))
-        t["uploaded_s"] = time.perf_counter() - start
-        splatter.run_scan.spawn(scan_id, None, {"train": {"train_scale": scale or None}})
-    print(f"scan {scan_id}: uploaded in {t['uploaded_s']:.1f} s, waiting for the pipeline ...", flush=True)
+    files = {"bottom.mp4": videos[1]} if len(videos) > 1 else {}
+    files["video.mp4"] = videos[0]
+    phone_upload(scan_id, files)
+    t["uploaded_s"] = time.perf_counter() - start
+    print(f"scan {scan_id}: uploaded {', '.join(files)} in {t['uploaded_s']:.1f} s; the webhook takes it from here",
+          flush=True)
 
     manifest = listing = None  # watch the public bucket, as the website does
     while time.perf_counter() - start < timeout_s and listing is None:
@@ -116,23 +111,11 @@ def main():
     r.add_argument("--debug", action="store_true", help="also produce eval sheets + turntable")
     r.add_argument("--ply", action="store_true", help="also return the uncompressed .ply")
     s = sub.add_parser("scan")
-    s.add_argument("video")
-    s.add_argument("video2", nargs="?")
-    s.add_argument("--gpu", default="")
-    s.add_argument("--scale", type=float, default=0.0)
+    s.add_argument("video", help="the main lap (uploaded as video.mp4)")
+    s.add_argument("video2", nargs="?", help="the item flipped over (uploaded first, as bottom.mp4)")
     args = ap.parse_args()
-
-    cls = modal.Cls.from_name(APP, CLS)
-    splatter = (cls.with_options(gpu=args.gpu) if args.gpu else cls)()
-    if args.cmd == "warm":
-        print(splatter.update_autoscaler(min_containers=1))
-        print("Keeping 1 container warm. Give it ~30 s to boot and load models. Run `cold` when done.")
-    elif args.cmd == "cold":
-        print(splatter.update_autoscaler(min_containers=0))
-        print("Scale-to-zero restored (the container idles out after scaledown_window).")
-    elif args.cmd == "scan":
-        videos = [Path(args.video)] + ([Path(args.video2)] if args.video2 else [])
-        m = scan(splatter, videos, args.scale)
+    if args.cmd == "scan":  # no Modal call: the upload alone starts the pipeline, as from the phone
+        m = scan([Path(args.video)] + ([Path(args.video2)] if args.video2 else []))
         out = Path("out") / f"scan_{m['scan_id'][:8]}"
         out.mkdir(parents=True, exist_ok=True)
         (out / "scan.json").write_text(json.dumps(m, indent=2))
@@ -143,6 +126,16 @@ def main():
             print("listing:", m["listing"]["status"], m["listing"].get("error") or "",
                   json.dumps(m["listing"].get("timings_ms", {})))
         print(f"\nsaved to {out}/scan.json")
+        return
+
+    cls = modal.Cls.from_name(APP, CLS)
+    splatter = (cls.with_options(gpu=args.gpu) if args.gpu else cls)()
+    if args.cmd == "warm":
+        print(splatter.update_autoscaler(min_containers=1))
+        print("Keeping 1 container warm. Give it ~30 s to boot and load models. Run `cold` when done.")
+    elif args.cmd == "cold":
+        print(splatter.update_autoscaler(min_containers=0))
+        print("Scale-to-zero restored (the container idles out after scaledown_window).")
     else:
         src = Path(args.video)
         t0 = time.perf_counter()
