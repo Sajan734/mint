@@ -1,0 +1,10 @@
+.sheet[open] { animation: rise var(--dur-sheet) var(--ease); }
+.sheet::backdrop { background: oklch(0.1 0.01 170 / 0.5); }
+@keyframes rise { from { transform: translateY(24px); opacity: 0; } to { transform: none; opacity: 1; } }
+.ring { stroke-dasharray: 126; stroke-dashoffset: 126; animation: draw 500ms var(--ease) forwards; }
+.tick { stroke-dasharray: 24; stroke-dashoffset: 24; animation: draw 300ms var(--ease) 350ms forwards; }
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .sheet[open] { animation: none; }
+  .ring, .tick { animation: none; stroke-dashoffset: 0; }
+}
