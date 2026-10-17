@@ -152,12 +152,66 @@ public enum ObjectSizing {
         return ObjectEstimate(footprintCentre: centre, width: width, height: height, depth: width)
     }
 
-    /// Picks the table under the item from candidate horizontal plane heights: the highest plane
-    /// clearly below the measured points. Planes ARKit found *on top of* the item are ignored.
+    /// Picks the table under the item from candidate horizontal plane heights: the highest plane at
+    /// or below the *bottom* of the item's points (10th percentile + 1 cm). Works for low items
+    /// (a mouse, a wallet) whose points sit within a centimetre or two of the table, and ignores
+    /// planes ARKit found on top of the item.
     public static func tablePlane(candidates: [Float], surfaceHits: [SIMD3<Float>]) -> Float? {
         guard !surfaceHits.isEmpty else { return candidates.max() }
-        let mid = median(surfaceHits.map(\.y))
-        return candidates.filter { $0 < mid - 0.01 && $0 > mid - 1.0 }.max()
+        let bottom = percentile(surfaceHits.map(\.y), 0.1)
+        return candidates.filter { $0 <= bottom + 0.01 && $0 > bottom - 1.0 }.max()
+    }
+
+    /// Fits the item to ARKit's own triangulated feature points that fall inside its mask
+    /// (accumulated over a second or two of aiming), plus its silhouette for the parts the points
+    /// miss. Points on the table (mask bleed) and far-away strays (background seen through gaps)
+    /// are dropped first.
+    public static func fromPoints(
+        camera: SIMD3<Float>, points: [SIMD3<Float>], silhouetteRays: [Ray], planeY: Float
+    ) -> ObjectEstimate? {
+        let above = points.filter { $0.y > planeY + 0.004 }
+        guard above.count >= 8, silhouetteRays.count >= 10 else { return nil }
+        let dists = above.map { simd_distance($0, camera) }
+        let dMed = median(dists)
+        let band = max(0.1, 0.35 * dMed)
+        let pts = above.filter { abs(simd_distance($0, camera) - dMed) < band }
+        guard pts.count >= 8 else { return nil }
+
+        let up = SIMD3<Float>(0, 1, 0)
+        let m = SIMD3(median(pts.map(\.x)), median(pts.map(\.y)), median(pts.map(\.z)))
+        var view = m - camera
+        view.y = 0
+        guard simd_length(view) > 1e-3 else { return nil }
+        view = simd_normalize(view)
+        let lateral = simd_normalize(simd_cross(view, up))
+
+        func silhouette(through p: SIMD3<Float>) -> (lo: Float, hi: Float, top: Float)? {
+            let hits = silhouetteRays.compactMap { $0.hit(planeThrough: p, normal: view) }
+            guard hits.count >= 10 else { return nil }
+            let lat = hits.map { simd_dot($0 - p, lateral) }
+            return (percentile(lat, 0.03), percentile(lat, 0.97), percentile(hits.map(\.y), 0.98))
+        }
+
+        // Width and lateral centre from the silhouette at the points' distance (points are sparse
+        // at the edges); depth from how far back the points reach (at least 80% of the width,
+        // since the back is hidden).
+        guard let s1 = silhouette(through: m) else { return nil }
+        let width = max(s1.hi - s1.lo, 0.02)
+        let along = pts.map { simd_dot($0 - m, view) }
+        let front = percentile(along, 0.05), back = percentile(along, 0.95)
+        let depth = max(back - front, 0.8 * width)
+        var centre = m + lateral * ((s1.lo + s1.hi) / 2) + view * (front + depth / 2)
+        centre.y = planeY
+
+        // Height: points' top, or the silhouette top measured on the plane it actually comes from
+        // (back top edge when looking down at the item, front top edge when looking up at it).
+        var top = percentile(pts.map(\.y), 0.97)
+        let probeTop = max(top, s1.top)
+        if let s2 = silhouette(through: centre + view * (camera.y > probeTop ? depth / 2 : -depth / 2)) {
+            top = max(top, s2.top)
+        }
+        let height = max(top - planeY, 0.02)
+        return ObjectEstimate(footprintCentre: centre, width: width, height: height, depth: depth)
     }
 
     static func median(_ v: [Float]) -> Float { percentile(v, 0.5) }

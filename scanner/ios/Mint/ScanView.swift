@@ -116,6 +116,12 @@ struct ScanView: View {
             .tint(.brandMint)
             .foregroundStyle(Color.brandStageBg)
             .disabled(!session.canStart)
+            if session.showStartAnyway {
+                Button("Start anyway", action: session.startAnyway)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.top, 2)
+            }
         case .scanning, .saving:
             HStack(alignment: .bottom) {
                 Spacer().frame(width: 64)

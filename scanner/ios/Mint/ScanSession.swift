@@ -32,6 +32,8 @@ final class ScanSession: NSObject, ObservableObject {
     @Published private(set) var issue: CaptureIssue?
     @Published private(set) var cameraLocked = false
     @Published private(set) var scanStart: Date?
+    /// Aiming has gone on a while without a lock: offer to start with the best guess.
+    @Published private(set) var showStartAnyway = false
 
     var coveragePct: Int { filled.count * 100 / Dome.segmentCount }
     var canStart: Bool { phase == .aiming && found?.locked == true }
@@ -42,6 +44,9 @@ final class ScanSession: NSObject, ObservableObject {
     private var dome: DomeEntity?
     private var item: (estimate: ObjectEstimate, planeY: Float)?
     private var locker = LockingEstimator()
+    private var aimingSince = Date()
+    /// One JSON line per detection while aiming; saved into the scan folder as aim.jsonl.
+    private var aimLog: [Data] = []
     private var issueDebounce = IssueDebounce()
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let success = UINotificationFeedbackGenerator()
@@ -56,8 +61,7 @@ final class ScanSession: NSObject, ObservableObject {
         processor.onDetection = { [weak self] in self?.applyDetection($0) }
         processor.onTrackingChange = { [weak self] state in
             guard let self, self.phase == .starting, case .normal = state else { return }
-            self.phase = .aiming
-            self.processor.startAiming()
+            self.beginAiming()
         }
     }
 
@@ -94,6 +98,22 @@ final class ScanSession: NSObject, ObservableObject {
 
     func start() {
         guard canStart, let est = found?.estimate, let planeY = found?.planeY else { return }
+        begin(est, planeY: planeY)
+    }
+
+    /// Start without a lock: the best current estimate, else a 15 cm item under the screen centre.
+    func startAnyway() {
+        guard phase == .aiming else { return }
+        if let est = found?.estimate, let planeY = found?.planeY {
+            begin(est, planeY: planeY)
+        } else if let hit = arView.raycast(from: CGPoint(x: arView.bounds.midX, y: arView.bounds.midY),
+                                           allowing: .existingPlaneInfinite, alignment: .horizontal).first {
+            let base = hit.worldTransform.translation
+            begin(ObjectEstimate(footprintCentre: base, width: 0.15, height: 0.15, depth: 0.15), planeY: base.y)
+        }
+    }
+
+    private func begin(_ est: ObjectEstimate, planeY: Float) {
         item = (est, planeY)
         let dome = self.dome ?? makeDome()
         dome.place(base: est.footprintCentre, radius: DomeEntity.radius(for: est), animated: false)
@@ -107,7 +127,12 @@ final class ScanSession: NSObject, ObservableObject {
             phase = .failed("Couldn't start recording: \(error.localizedDescription)")
             return
         }
+        if let recorder {
+            try? aimLog.map { $0 + Data([0x0A]) }.reduce(Data(), +)
+                .write(to: recorder.directory.appendingPathComponent("aim.jsonl"))
+        }
         processor.startScanning(item: est, recorder: recorder)
+        showStartAnyway = false
         filled = []
         issueDebounce = IssueDebounce()
         found = nil
@@ -164,10 +189,15 @@ final class ScanSession: NSObject, ObservableObject {
         found = nil
         scanStart = nil
         locker = LockingEstimator()
-        if phase != .starting {
-            phase = .aiming
-            processor.startAiming()
-        }
+        showStartAnyway = false
+        if phase != .starting { beginAiming() }
+    }
+
+    private func beginAiming() {
+        phase = .aiming
+        aimingSince = Date()
+        aimLog.removeAll()
+        processor.startAiming()
     }
 
     private func makeDome() -> DomeEntity {
@@ -181,7 +211,9 @@ final class ScanSession: NSObject, ObservableObject {
 
     private func applyDetection(_ result: ObjectDetector.Result?) {
         guard phase == .aiming else { return }
+        if !locker.isLocked && Date().timeIntervalSince(aimingSince) > 2.5 { showStartAnyway = true }
         guard let result, result.areaFraction > 0.003, let frame = arView.session.currentFrame else {
+            log(["event": "no_item"])
             // A missed read doesn't drop a lock straight away (Vision misses the odd frame).
             if !locker.miss() {
                 found = nil
@@ -191,25 +223,35 @@ final class ScanSession: NSObject, ObservableObject {
         }
         let rect = viewRect(result.boundsUpright, frame: frame)
 
-        // Measured points: where rays through the item's interior hit ARKit's surface estimate.
-        let hits = result.interiorRays.compactMap { r -> SIMD3<Float>? in
-            let q = ARRaycastQuery(origin: r.origin, direction: r.direction, allowing: .estimatedPlane, alignment: .any)
-            return arView.session.raycast(q).first?.worldTransform.translation
-        }
-        let planeY = tablePlaneY(hits: hits, result: result, frame: frame)
-
+        // ARKit's own 3D points on the item → table under them → fit.
+        let pts = result.objectPoints
+        let (planeY, candidates) = tablePlaneY(points: pts, result: result, frame: frame)
         var estimate: ObjectEstimate?
+        var source = "none"
         if let planeY {
-            estimate = ObjectSizing.measure(camera: result.camera, surfaceHits: hits,
-                                            silhouetteRays: result.silhouetteRays, planeY: planeY)
-            if estimate == nil, hits.count < 4 {
-                // Too plain for ARKit to measure: fall back to the single-view estimate.
+            estimate = ObjectSizing.fromPoints(camera: result.camera, points: pts, silhouetteRays: result.silhouetteRays, planeY: planeY)
+            source = "points"
+            if estimate == nil {
+                // Too few points (plain or shiny item): single-view silhouette estimate.
                 estimate = ObjectSizing.estimate(camera: result.camera, contactRays: result.contactRays,
                                                  silhouetteRays: result.silhouetteRays, planeY: planeY)
+                source = "silhouette"
             }
+        }
+        let above = planeY.map { y in pts.filter { $0.y > y + 0.004 } } ?? []
+        var entry: [String: Any] = [
+            "event": "detect", "bounds": [b(result.boundsUpright.minX), b(result.boundsUpright.minY),
+                                          b(result.boundsUpright.width), b(result.boundsUpright.height)],
+            "area": b(result.areaFraction), "cloud": result.cloudSize, "in_mask": pts.count, "above_table": above.count,
+            "plane_candidates": candidates.map { b(Double($0)) }, "plane_y": planeY.map { b(Double($0)) as Any } ?? NSNull(),
+            "camera": result.camera.map3, "source": estimate == nil ? "none" : source,
+        ]
+        if let e = estimate {
+            entry["estimate"] = ["base": e.footprintCentre.map3, "w": b(Double(e.width)), "h": b(Double(e.height)), "d": b(Double(e.depth))]
         }
 
         guard let estimate, let planeY else {
+            log(entry)
             if !locker.miss() {
                 found = Found(boundsInView: rect, estimate: nil, planeY: planeY, locked: false)
                 dome?.showPoints([])
@@ -218,39 +260,52 @@ final class ScanSession: NSObject, ObservableObject {
         }
         let wasLocked = locker.isLocked
         let steady = locker.feed(estimate)
+        entry["locked"] = steady.locked
+        log(entry)
         found = Found(boundsInView: rect, estimate: steady.estimate, planeY: planeY, locked: steady.locked)
-        if steady.locked && !wasLocked {
-            tick.impactOccurred(intensity: 0.8)
-            dome?.showPoints([])
-        } else if !steady.locked {
-            dome?.showPoints(hits.filter { $0.y > planeY + 0.006 })
+        if steady.locked {
+            showStartAnyway = false
+            if !wasLocked { tick.impactOccurred(intensity: 0.8) }
         }
 
         let dome = self.dome ?? makeDome()
         dome.place(base: steady.estimate.footprintCentre, radius: DomeEntity.radius(for: steady.estimate), animated: true)
+        dome.showPoints(Array(above.prefix(150)))  // ARKit's measured points on the item
     }
 
-    /// The table: the highest horizontal plane clearly below the measured points. Candidates are
-    /// ARKit's plane anchors plus whatever lies straight below the item; planes ARKit found on top
-    /// of the item are excluded (they made earlier sizes jump).
-    private func tablePlaneY(hits: [SIMD3<Float>], result: ObjectDetector.Result, frame: ARFrame) -> Float? {
+    /// The table: the highest horizontal plane at the bottom of the item's points (see
+    /// `ObjectSizing.tablePlane`). Candidates are ARKit's plane anchors plus whatever is straight
+    /// below the points. With no points, the plane whose detected extent is under the item's front edge.
+    private func tablePlaneY(points: [SIMD3<Float>], result: ObjectDetector.Result, frame: ARFrame) -> (Float?, [Float]) {
         var candidates = frame.anchors.compactMap { a -> Float? in
             guard let p = a as? ARPlaneAnchor, p.alignment == .horizontal else { return nil }
             return p.transform.translation.y
         }
-        if !hits.isEmpty {
-            let ys = hits.map(\.y).sorted()
-            let probe = SIMD3(hits.map(\.x).sorted()[hits.count / 2], ys[ys.count / 2], hits.map(\.z).sorted()[hits.count / 2])
-            let q = ARRaycastQuery(origin: probe, direction: [0, -1, 0], allowing: .existingPlaneInfinite, alignment: .horizontal)
+        if points.count >= 5 {
+            let mid = SIMD3(points.map(\.x).sorted()[points.count / 2], points.map(\.y).max()!, points.map(\.z).sorted()[points.count / 2])
+            let q = ARRaycastQuery(origin: mid, direction: [0, -1, 0], allowing: .existingPlaneInfinite, alignment: .horizontal)
             candidates += arView.session.raycast(q).map { $0.worldTransform.translation.y }
-            return ObjectSizing.tablePlane(candidates: candidates, surfaceHits: hits)
+            return (ObjectSizing.tablePlane(candidates: candidates, surfaceHits: points), candidates)
         }
-        // No measured points: the plane whose *detected extent* is under the item's front edge.
-        guard !result.contactRays.isEmpty else { return nil }
-        let mid = result.contactRays[result.contactRays.count / 2]
-        let q = ARRaycastQuery(origin: mid.origin, direction: mid.direction, allowing: .existingPlaneGeometry, alignment: .horizontal)
-        return arView.session.raycast(q).first?.worldTransform.translation.y
+        guard !result.contactRays.isEmpty else { return (nil, candidates) }
+        let c = result.contactRays[result.contactRays.count / 2]
+        let q = ARRaycastQuery(origin: c.origin, direction: c.direction, allowing: .existingPlaneGeometry, alignment: .horizontal)
+        return (arView.session.raycast(q).first?.worldTransform.translation.y, candidates)
     }
+
+    private func log(_ entry: [String: Any]) {
+        var e = entry
+        e["t"] = b(Date().timeIntervalSince(aimingSince))
+        // isValidJSONObject first: JSONSerialization raises an uncatchable exception on bad input.
+        guard JSONSerialization.isValidJSONObject(e),
+              let data = try? JSONSerialization.data(withJSONObject: e, options: [.sortedKeys]) else { return }
+        aimLog.append(data)
+        if aimLog.count > 400 { aimLog.removeFirst(aimLog.count - 400) }
+    }
+
+    /// Rounded for the log.
+    private func b(_ x: Double) -> Double { (x * 10000).rounded() / 10000 }
+    private func b(_ x: CGFloat) -> Double { b(Double(x)) }
 
     private func viewRect(_ b: CGRect, frame: ARFrame) -> CGRect {
         let size = arView.bounds.size
@@ -285,6 +340,10 @@ final class ScanSession: NSObject, ObservableObject {
             finish()
         }
     }
+}
+
+private extension SIMD3 where Scalar == Float {
+    var map3: [Double] { [x, y, z].map { (Double($0) * 10000).rounded() / 10000 } }
 }
 
 /// What the done screen shows.

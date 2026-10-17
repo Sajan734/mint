@@ -12,6 +12,7 @@ final class ObjectDetector {
         let intrinsics: simd_float3x3
         let imageSize: CGSize           // sensor pixels, landscape (1920×1440)
         let preferredPoint: CGPoint     // upright (portrait) normalized image point to pick the instance at
+        let cloud: [SIMD3<Float>]       // ARKit feature points (world), accumulated while aiming
     }
 
     struct Result {
@@ -20,9 +21,10 @@ final class ObjectDetector {
         let camera: SIMD3<Float>
         let contactRays: [Ray]
         let silhouetteRays: [Ray]
-        /// Rays through pixels well inside the mask (away from edges): raycast these against ARKit's
-        /// surface estimate to get measured points on the item.
-        let interiorRays: [Ray]
+        /// ARKit feature points that project inside the item's mask (not on its edge), in front of
+        /// the camera: ARKit's own 3D measurements of the item (plus some table bleed).
+        let objectPoints: [SIMD3<Float>]
+        let cloudSize: Int
         /// Share of the image the item covers.
         let areaFraction: Double
     }
@@ -81,20 +83,20 @@ final class ObjectDetector {
         let contact = lowestInColumn.enumerated().compactMap { x, y in y >= 0 && x % 2 == 0 ? toRay(x, y) : nil }
         let silhouette = samples.map { toRay($0.0, $0.1) }
 
-        // Interior: grid points whose neighbours `r` pixels away (8 directions) are all on the item.
-        let r = max(4, min(maxX - minX, maxY - minY) / 10)
+        // ARKit's points that land inside the mask, at least 2 mask pixels from its edge.
         func on(_ x: Int, _ y: Int) -> Bool { x >= 0 && y >= 0 && x < mw && y < mh && px[y * bpr + x] == label }
-        let step = max(2, min(maxX - minX, maxY - minY) / 9)
-        var interior: [(Int, Int)] = []
-        for y in stride(from: minY, through: maxY, by: step) {
-            for x in stride(from: minX, through: maxX, by: step)
-            where on(x, y) && on(x - r, y) && on(x + r, y) && on(x, y - r) && on(x, y + r)
-                && on(x - r, y - r) && on(x + r, y - r) && on(x - r, y + r) && on(x + r, y + r) {
-                interior.append((x, y))
-            }
+        let worldToCamera = input.cameraTransform.inverse
+        let k = input.intrinsics
+        let sw = Float(input.imageSize.width), sh = Float(input.imageSize.height)
+        let objectPoints = input.cloud.filter { p in
+            let c = worldToCamera * SIMD4(p, 1)
+            guard c.z < -0.02 else { return false }  // in front of the camera (ARKit looks down −z)
+            let u = k[0][0] * c.x / -c.z + k[2][0]    // sensor pixels
+            let v = k[1][1] * -c.y / -c.z + k[2][1]
+            // sensor → upright normalized (inverse of u = v′·W, v = (1 − u′)·H) → mask pixel
+            let mx = Int((1 - v / sh) * Float(mw)), my = Int(u / sw * Float(mh))
+            return on(mx, my) && on(mx - 2, my) && on(mx + 2, my) && on(mx, my - 2) && on(mx, my + 2)
         }
-        let keep = max(1, interior.count / 48 + (interior.count % 48 == 0 ? 0 : 1))
-        let interiorRays = stride(from: 0, to: interior.count, by: keep).map { toRay(interior[$0].0, interior[$0].1) }
 
         return Result(
             boundsUpright: CGRect(x: Double(minX) / Double(mw), y: Double(minY) / Double(mh),
@@ -102,7 +104,8 @@ final class ObjectDetector {
             camera: input.cameraTransform.translation,
             contactRays: contact,
             silhouetteRays: silhouette,
-            interiorRays: interiorRays,
+            objectPoints: objectPoints,
+            cloudSize: input.cloud.count,
             areaFraction: Double(count) / Double(mw * mh)
         )
     }

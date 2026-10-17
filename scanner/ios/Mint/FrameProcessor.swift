@@ -29,14 +29,18 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
     private var lastProcessed: TimeInterval = 0
     private var lastDetect: TimeInterval = 0
     private var sensorSize = CGSize(width: 1920, height: 1440)
+    /// ARKit's triangulated feature points (world), by identifier, with when each was last seen.
+    private var cloud: [UInt64: (point: SIMD3<Float>, seen: TimeInterval)] = [:]
 
     private static let scanInterval = 1.0 / 30     // video + coverage at 30 fps
     private static let detectInterval = 0.25       // item detection at ~4 Hz
+    private static let cloudMemory = 4.0           // seconds a feature point is kept after last seen
 
     func startAiming() {
         queue.async {
             self.mode = .aiming
             self.tracker = nil
+            self.cloud.removeAll()
         }
     }
 
@@ -47,9 +51,11 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
 
     func startScanning(item: ObjectEstimate, recorder: Recorder?) {
         var config = CoverageConfig()
-        let halfExtent = 0.5 * max(item.width, item.height, item.depth)
-        config.minDistanceM = max(0.1, halfExtent + 0.05)
-        config.maxDistanceM = max(1.5, item.domeRadius * 6)
+        // Keep the item big in the frame (sharper splat): a ~6 cm-radius mouse wants 15–42 cm,
+        // a ~16 cm-radius bottle 35 cm–1.1 m. The first one-lap scan had the mouse at ~3% of the image.
+        let r = 0.5 * (item.width * item.width + item.height * item.height + item.depth * item.depth).squareRoot()
+        config.minDistanceM = max(0.15, r * 2.2)
+        config.maxDistanceM = max(0.3, r * 7)
         queue.async {
             self.tracker = CoverageTracker(anchor: item.centre, config: config)
             self.recorder = recorder
@@ -96,15 +102,21 @@ final class FrameProcessor: NSObject, ARSessionDelegate {
     }
 
     private func detect(_ frame: ARFrame) {
+        // Every frame: remember ARKit's 3D feature points (cheap; they're what measures the item).
+        if let pc = frame.rawFeaturePoints {
+            for (i, id) in pc.identifiers.enumerated() { cloud[id] = (pc.points[i], frame.timestamp) }
+        }
         guard frame.timestamp - lastDetect >= Self.detectInterval else { return }
         guard case .normal = frame.camera.trackingState else { return }
         lastDetect = frame.timestamp
+        cloud = cloud.filter { frame.timestamp - $0.value.seen < Self.cloudMemory }
         detector.detect(.init(
             pixelBuffer: frame.capturedImage,
             cameraTransform: frame.camera.transform,
             intrinsics: frame.camera.intrinsics,
             imageSize: frame.camera.imageResolution,
-            preferredPoint: preferredPoint
+            preferredPoint: preferredPoint,
+            cloud: cloud.values.map(\.point)
         )) { result in
             MainActor.assumeIsolated { self.onDetection?(result) }
             self.queue.async { self.detector.markIdle() }

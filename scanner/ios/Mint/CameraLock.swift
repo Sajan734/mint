@@ -1,13 +1,14 @@
 import ARKit
 import AVFoundation
 
-/// Locks exposure, focus and white balance at scan start so every frame of the splat sees the same
-/// colours (M1). Uses the AVCaptureDevice ARKit exposes for its primary camera (iOS 16+).
+/// Locks exposure and white balance at scan start so every frame of the splat sees the same colours
+/// (M1). Focus stays automatic: the guidance now brings the phone closer to the item mid-scan, and a
+/// focus locked at the starting distance would blur those frames (ARKit reports K per frame anyway).
+/// Uses the AVCaptureDevice ARKit exposes for its primary camera (iOS 16+).
 enum CameraLock {
     @discardableResult
     static func lock() -> Bool {
         configure { d in
-            if d.isFocusModeSupported(.locked) { d.focusMode = .locked }
             if d.isExposureModeSupported(.locked) { d.exposureMode = .locked }
             if d.isWhiteBalanceModeSupported(.locked) { d.whiteBalanceMode = .locked }
         }

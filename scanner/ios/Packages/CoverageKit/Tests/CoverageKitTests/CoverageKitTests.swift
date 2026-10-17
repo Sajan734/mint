@@ -253,10 +253,19 @@ final class ObjectMeasureTests: XCTestCase {
     }
 
     func testTablePlaneIgnoresPlaneOnTopOfTheItem() {
-        let hits: [SIMD3<Float>] = [[0, 0.05, 0], [0, 0.15, 0], [0, 0.29, 0], [0, 0.2, 0.1]]
+        let hits: [SIMD3<Float>] = [[0, 0.05, 0], [0, 0.15, 0], [0, 0.29, 0], [0, 0.2, 0.1], [0, 0.1, 0]]
         // ARKit found the table (0), the box lid (0.3), and the floor (−0.75).
         XCTAssertEqual(ObjectSizing.tablePlane(candidates: [0.3, 0, -0.75], surfaceHits: hits), 0)
         XCTAssertNil(ObjectSizing.tablePlane(candidates: [0.3], surfaceHits: hits))
+    }
+
+    /// The bug from the cluttered-table test: a low item (a mouse, ~3.5 cm) whose points sit
+    /// within a couple of centimetres of the table. The table must still win over the floor.
+    func testTablePlaneForLowItem() {
+        // Most points bled onto the table around the item; a few are on the item itself.
+        let table: [SIMD3<Float>] = (0..<12).map { i in [Float(i) * 0.01, 0.001 + Float(i % 3) * 0.001, 0] }
+        let item: [SIMD3<Float>] = (0..<8).map { i in [Float(i) * 0.01, 0.01 + Float(i) * 0.003, 0.02] }
+        XCTAssertEqual(ObjectSizing.tablePlane(candidates: [0, -0.75], surfaceHits: table + item), 0)
     }
 }
 
@@ -285,5 +294,38 @@ final class FastSharpnessTests: XCTestCase {
         }!
         XCTAssertEqual(r.sharpness, 0, accuracy: 1e-6)
         XCTAssertEqual(r.meanLuma, 100, accuracy: 0.5)
+    }
+}
+
+final class ObjectFromPointsTests: XCTestCase {
+    /// ARKit-style feature points on a 20 × 30 × 20 cm box (front and top faces), plus mask bleed
+    /// on the table and a few background strays; silhouette rays as before.
+    private func scene(camera cam: SIMD3<Float>) -> (points: [SIMD3<Float>], silhouette: [Ray]) {
+        let s = (0...10).map { Float($0) / 10 }
+        let front = s.flatMap { u in s.map { v in SIMD3<Float>(-0.1 + 0.2 * u, 0.3 * v, 0.1) } }
+        let top = s.flatMap { u in s.map { v in SIMD3<Float>(-0.1 + 0.2 * u, 0.3, 0.1 - 0.2 * v) } }
+        let silhouette = (front + top).map { Ray(origin: cam, direction: $0 - cam) }
+        var pts = stride(from: 0, to: front.count, by: 4).map { front[$0] } + stride(from: 0, to: top.count, by: 4).map { top[$0] }
+        pts += [[-0.05, 0.001, 0.12], [0.06, 0.002, 0.13], [0.0, 0.0, 0.11]]   // table, just in front
+        pts += [[0.4, 0.5, -2.0], [-0.3, 0.6, -2.2]]                            // wall far behind
+        return (pts, silhouette)
+    }
+
+    func testFitsBoxFromSideAndAbove() {
+        for cam in [SIMD3<Float>(0.05, 0.35, 0.8), SIMD3<Float>(-0.1, 0.7, 0.45)] {
+            let sc = scene(camera: cam)
+            let e = ObjectSizing.fromPoints(camera: cam, points: sc.points, silhouetteRays: sc.silhouette, planeY: 0)!
+            XCTAssertEqual(e.width, 0.2, accuracy: 0.03, "camera \(cam)")
+            XCTAssertEqual(e.height, 0.3, accuracy: 0.02, "camera \(cam)")
+            XCTAssertEqual(e.footprintCentre.x, 0, accuracy: 0.03, "camera \(cam)")
+            XCTAssertEqual(e.footprintCentre.z, 0, accuracy: 0.04, "camera \(cam)")
+            XCTAssertGreaterThanOrEqual(e.depth, 0.15, "camera \(cam)")
+        }
+    }
+
+    func testNeedsEnoughPoints() {
+        let cam = SIMD3<Float>(0.05, 0.35, 0.8)
+        let sc = scene(camera: cam)
+        XCTAssertNil(ObjectSizing.fromPoints(camera: cam, points: Array(sc.points.prefix(5)), silhouetteRays: sc.silhouette, planeY: 0))
     }
 }
