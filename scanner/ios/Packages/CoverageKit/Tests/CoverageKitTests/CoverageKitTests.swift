@@ -3,7 +3,7 @@ import simd
 @testable import CoverageKit
 
 /// Camera pose at a dome position around the origin (rotation only matters for angular speed).
-private func pose(azDeg: Float, elDeg: Float, dist: Float = 0.5, yawDeg: Float = 0) -> simd_float4x4 {
+private func cameraPose(azDeg: Float, elDeg: Float, dist: Float = 0.5, yawDeg: Float = 0) -> simd_float4x4 {
     let az = azDeg * .pi / 180, el = elDeg * .pi / 180
     var m = simd_float4x4(simd_quatf(angle: yawDeg * .pi / 180, axis: [0, 1, 0]))
     m.columns.3 = SIMD4(dist * cos(el) * sin(az), dist * sin(el), dist * cos(el) * cos(az), 1)
@@ -65,8 +65,8 @@ final class GeometryTests: XCTestCase {
     }
 
     func testAngularSpeed() {
-        let a = pose(azDeg: 0, elDeg: 20, yawDeg: 0)
-        let b = pose(azDeg: 0, elDeg: 20, yawDeg: 90)
+        let a = cameraPose(azDeg: 0, elDeg: 20, yawDeg: 0)
+        let b = cameraPose(azDeg: 0, elDeg: 20, yawDeg: 90)
         XCTAssertEqual(Geometry.rotationAngle(a, b), .pi / 2, accuracy: 1e-3)
         XCTAssertEqual(Geometry.angularSpeed(from: a, to: b, dt: 0.5), .pi, accuracy: 1e-2)
         XCTAssertEqual(Geometry.angularSpeed(from: a, to: b, dt: 0), 0)
@@ -108,24 +108,24 @@ final class SharpnessTests: XCTestCase {
 final class TrackerTests: XCTestCase {
     func testFillsAndRejects() {
         var t = CoverageTracker(anchor: .zero)
-        let d1 = t.observe(obs(pose(azDeg: 100, elDeg: 20), t: 0))
+        let d1 = t.observe(obs(cameraPose(azDeg: 100, elDeg: 20), t: 0))
         XCTAssertNil(d1.issue)
         XCTAssertTrue(d1.filledNewSegment)
         XCTAssertEqual(d1.segment, SegmentID(az: 3, el: 0))
 
         // Same segment again, not sharper: no new fill, not a better keyframe.
-        let d2 = t.observe(obs(pose(azDeg: 105, elDeg: 20), t: 0.1))
+        let d2 = t.observe(obs(cameraPose(azDeg: 105, elDeg: 20), t: 0.1))
         XCTAssertFalse(d2.filledNewSegment)
         XCTAssertFalse(d2.isBestForSegment)
 
         // 90° of rotation in 0.1 s is too fast.
-        XCTAssertEqual(t.observe(obs(pose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 0.2)).issue, .tooFast)
-        XCTAssertEqual(t.observe(obs(pose(azDeg: 140, elDeg: 20, dist: 3, yawDeg: 90), t: 1.0)).issue, .tooFar)
-        XCTAssertEqual(t.observe(obs(pose(azDeg: 140, elDeg: 20, dist: 0.05, yawDeg: 90), t: 1.5)).issue, .tooClose)
-        XCTAssertEqual(t.observe(obs(pose(azDeg: 140, elDeg: 80, yawDeg: 90), t: 2.0)).issue, .tooHigh)
-        XCTAssertEqual(t.observe(obs(pose(azDeg: 140, elDeg: 1, yawDeg: 90), t: 2.5)).issue, .tooLow)
-        XCTAssertEqual(t.observe(obs(pose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.0, luma: 10)).issue, .tooDark)
-        XCTAssertEqual(t.observe(obs(pose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.5, tracking: false)).issue, .trackingLimited)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 0.2)).issue, .tooFast)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, dist: 3, yawDeg: 90), t: 1.0)).issue, .tooFar)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, dist: 0.05, yawDeg: 90), t: 1.5)).issue, .tooClose)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 80, yawDeg: 90), t: 2.0)).issue, .tooHigh)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 1, yawDeg: 90), t: 2.5)).issue, .tooLow)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.0, luma: 10)).issue, .tooDark)
+        XCTAssertEqual(t.observe(obs(cameraPose(azDeg: 140, elDeg: 20, yawDeg: 90), t: 3.5, tracking: false)).issue, .trackingLimited)
         XCTAssertEqual(t.coveragePct, 4)  // 1 of 24
     }
 
@@ -135,11 +135,11 @@ final class TrackerTests: XCTestCase {
         for seg in Dome.allSegments.prefix(21) {
             time += 1
             let az = Float(seg.az * Dome.azimuthStepDeg) + 15
-            _ = t.observe(obs(pose(azDeg: az, elDeg: Float(Dome.bands[seg.el].centreDeg)), t: time))
+            _ = t.observe(obs(cameraPose(azDeg: az, elDeg: Float(Dome.bands[seg.el].centreDeg)), t: time))
         }
         XCTAssertEqual(t.filled.count, 21)
         XCTAssertFalse(t.isComplete)
-        _ = t.observe(obs(pose(azDeg: 15 + 30 * 9, elDeg: 50), t: time + 1))
+        _ = t.observe(obs(cameraPose(azDeg: 15 + 30 * 9, elDeg: 50), t: time + 1))
         XCTAssertTrue(t.isComplete)
         XCTAssertEqual(t.coveragePct, 91)
     }
@@ -147,7 +147,7 @@ final class TrackerTests: XCTestCase {
 
 final class GuidanceTests: XCTestCase {
     private func at(_ az: Float, _ el: Float) -> DomePosition {
-        Dome.position(camera: pose(azDeg: az, elDeg: el).translation, anchor: .zero)
+        Dome.position(camera: cameraPose(azDeg: az, elDeg: el).translation, anchor: .zero)
     }
 
     func testHints() {
