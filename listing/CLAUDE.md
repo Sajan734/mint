@@ -35,7 +35,6 @@ listing/
   fixtures/          # one folder per test item: views, baseline, expected JSON
   runs/              # raw outputs of every run (gitignored)
   scripts/           # smoke tests and one-off tools
-  eval.py            # runs every fixture, one line per item
 ```
 
 ## Commands (Windows PowerShell)
@@ -47,7 +46,6 @@ modal deploy modal_render.py          # after any change to splat_render.py or m
 python pipeline.py fixtures/item01    # must print a valid Listing
 python pipeline.py fixtures/item02    # must print a Rejection
 python -m pytest
-python eval.py
 ```
 
 Run the two pipeline checks and the tests after every change. They must still pass before you say a task is done.
