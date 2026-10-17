@@ -11,6 +11,7 @@ Prob = Annotated[float, Field(ge=0.0, le=1.0)]
 
 Grade = Literal["like_new", "light_wear", "moderate_wear", "heavy_wear"]
 Verdict = Literal["match", "mismatch", "uncertain"]
+UpAxis = Literal["+x", "-x", "+y", "-y", "+z", "-z"]
 PriceBasis = Literal["new_retail", "used_comps", "llm_estimate"]
 DefectKind = Literal[
     "scratch", "scuff", "dent", "crack", "stain", "discoloration", "wear", "missing_part", "other"
@@ -40,6 +41,7 @@ class RunContext(Contract):
     cache_dir: Path
     demo_mode: bool = False
     manual_baseline: bool = False  # use fixtures/<item>/baseline.* and never search
+    up_axis: UpAxis = "+y"  # splat world axis pointing up; per item via input.json or --up-axis
 
 
 class View(Contract):

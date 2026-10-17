@@ -54,11 +54,12 @@ def resolve_item(path: Path) -> tuple[Path, Path]:
     return path, path / SPLAT_NAME
 
 
-def fixture_seller_name(item_dir: Path) -> str | None:
+def item_input(item_dir: Path) -> dict[str, Any]:
+    """The item folder's input.json (seller_name, up_axis), or {} when there is none."""
     path = item_dir / "input.json"
     if not path.is_file():
-        return None
-    return json.loads(path.read_text(encoding="utf-8")).get("seller_name")
+        return {}
+    return json.loads(path.read_text(encoding="utf-8"))
 
 
 def write_json(path: Path, obj: BaseModel) -> None:
@@ -94,11 +95,13 @@ async def run_pipeline(
     cache_root: Path | None = None,
     demo_mode: bool | None = None,
     manual_baseline: bool | None = None,
+    up_axis: str | None = None,
 ) -> Listing | Rejection:
     item_dir, splat = resolve_item(Path(splat_path))
     item_id = item_dir.name
+    inputs = item_input(item_dir)
     if seller_name is None:
-        seller_name = fixture_seller_name(item_dir)
+        seller_name = inputs.get("seller_name")
     ctx = RunContext(
         item_id=item_id,
         item_dir=item_dir,
@@ -108,6 +111,7 @@ async def run_pipeline(
         manual_baseline=(
             os.environ.get("MANUAL_BASELINE") == "1" if manual_baseline is None else manual_baseline
         ),
+        up_axis=up_axis or inputs.get("up_axis", "+y"),
     )
 
     views = await run_stage(ctx, "render", Views, render, splat)
@@ -140,9 +144,17 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="use the item folder's baseline.jpg/png and never search (also MANUAL_BASELINE=1)",
     )
+    parser.add_argument(
+        "--up-axis",
+        choices=["+x", "-x", "+y", "-y", "+z", "-z"],
+        default=None,
+        help="splat axis pointing up (default: input.json's up_axis, else +y)",
+    )
     args = parser.parse_args(argv)
 
-    result = asyncio.run(run_pipeline(args.item, args.seller_name, manual_baseline=args.manual_baseline))
+    result = asyncio.run(
+        run_pipeline(args.item, args.seller_name, manual_baseline=args.manual_baseline, up_axis=args.up_axis)
+    )
     print(f"{type(result).__name__}:", file=sys.stderr)
     print(result.model_dump_json(indent=2))
     return 0
