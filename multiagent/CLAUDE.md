@@ -13,3 +13,7 @@ Do not commit or push without the explicit word of the user.
 ## Agent rule
 
 Follow `../AGENTS.md` for how to orchestrate sub-agents: plan, delegate, verify yourself, and log.
+
+## Authorship rule
+
+Never add Claude as a co-author, contributor, or committer. Do not add `Co-Authored-By` or any attribution line to commits or PRs. Commits go out under the user's own git identity only.
