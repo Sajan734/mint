@@ -472,7 +472,8 @@ def on_upload(body: dict) -> dict:
             return {"ok": True, "duplicate": scan_id}
         return {"ok": True, "verify": scan_id, "call_id": splatter().run_verify.spawn(scan_id).object_id}
     if file != "video.mp4":
-        if file in PREWARM_ON and jobs.put(f"prewarm:{scan_id}", time.time(), skip_if_exists=True):
+        if (file in PREWARM_ON and HAS_SUPABASE and file in Supabase().list(SCANS, scan_id)  # an H100 idles 5 min
+                and jobs.put(f"prewarm:{scan_id}", time.time(), skip_if_exists=True)):
             splatter().prewarm.spawn()
             return {"ok": True, "prewarm": scan_id}
         return {"ok": True, "ignored": f"{bucket}/{name}"}
