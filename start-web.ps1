@@ -31,7 +31,9 @@ foreach ($app in $apps) {
 
 foreach ($app in $apps) {
   Write-Host "Installing packages for $($app.Name)"
-  corepack pnpm -C (Join-Path $root $app.Name) install --frozen-lockfile
+  # Run from the app's folder: corepack picks the pnpm version from the package.json where it runs (pnpm@9.15.9)
+  Push-Location (Join-Path $root $app.Name)
+  try { corepack pnpm install --frozen-lockfile } finally { Pop-Location }
   if ($LASTEXITCODE -ne 0) { throw "pnpm install failed in $($app.Name)." }
 }
 
