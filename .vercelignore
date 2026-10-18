@@ -1,0 +1,19 @@
+# Vercel builds only the two Next.js apps (vercel.json services: buyer/, seller/). The Python stack runs on Modal.
+.env
+**/.env*
+**/node_modules
+**/.next
+**/.venv
+**/__pycache__
+**/test-results
+**/*.stackdump
+buyer/public/local
+gsplat
+listing
+multiagent
+scanner
+supabase_setup
+supabase_clear
+assets
+contracts
+docs

@@ -22,8 +22,9 @@ loadRootEnv();
 const SELLER_ORIGIN = (process.env.SELLER_ORIGIN || "http://localhost:3001").replace(/\/$/, "");
 
 const nextConfig: NextConfig = {
+  // On Vercel the root vercel.json routes /sell to the seller service before this app sees it.
   async rewrites() {
-    return [{ source: "/sell/:path*", destination: `${SELLER_ORIGIN}/sell/:path*` }];
+    return process.env.VERCEL ? [] : [{ source: "/sell/:path*", destination: `${SELLER_ORIGIN}/sell/:path*` }];
   },
   turbopack: {
     rules: {
