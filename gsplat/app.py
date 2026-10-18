@@ -251,6 +251,7 @@ class Splatter:
                 _replace_container(str(e)[:120])
             # anything else would fail the same way again: report it and return (no retry)
             ev.send("error", {"stage": "splat", "message": str(e)[:300], "scan_id": scan_id})
+            jobs.pop(scan_id, None)  # let a new upload of this scan run it again
             return {"scan_id": scan_id, "error": f"{type(e).__name__}: {e}"[:500]}
         finally:
             ev.close()
@@ -327,6 +328,7 @@ class Splatter:
         except Exception as e:
             if _gpu_dead(e):
                 _replace_container(str(e)[:120])
+            jobs.pop(f"verify:{cid}", None)  # let the buyer rescan and try again
             return put_result(failed("INTERNAL", f"{type(e).__name__}: {e}"))
         finally:
             ev.close()
