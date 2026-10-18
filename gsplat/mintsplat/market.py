@@ -251,4 +251,30 @@ def list_scan(sb, scan_id: str, manifest: dict, cfg: dict | None = None) -> dict
         doc["run_url"] = sb.public_url(ASSETS, f"listings/{scan_id}/run/")
     except Exception as e:  # noqa: BLE001 - debugging aid only
         doc["run_files"], doc["run_error"] = [], str(e)[:200]
-    return put_doc(sb, scan_id, doc)
+    return put_doc(sb, scan_id, carry_over(previous_doc(sb, scan_id), doc))
+
+
+def previous_doc(sb, scan_id: str) -> dict | None:
+    """The listing document already published for this scan (a relist or rescan), or None."""
+    try:
+        return json.loads(sb.download(ASSETS, f"listings/{scan_id}.json", fresh=True))
+    except (RuntimeError, ValueError):
+        return None
+
+
+def carry_over(prev: dict | None, doc: dict) -> dict:
+    """Running the listing step again must not undo the seller's work. A failed run (a Gemini or Jev outage) keeps
+    the listing that was there, noting the error. A new listing of a published item stays published with the
+    seller's title, description and price; the new pipeline price becomes suggested_price_cad."""
+    if not prev or prev.get("status") != "listed":
+        return doc
+    if doc["status"] == "failed":
+        return {**prev, "relist_error": doc.get("error"), "updated_at": now_iso()}
+    if doc["status"] != "listed" or not prev.get("published"):
+        return doc
+    old, new = prev["market_listing"]["listing"], doc["market_listing"]["listing"]
+    doc["suggested_price_cad"] = new["price_cad"]
+    new.update(title=old["title"], description=old["description"], price_cad=old["price_cad"])
+    doc["market_listing"]["listed_at"] = prev["market_listing"].get("listed_at", doc["market_listing"]["listed_at"])
+    doc.update(published=True, published_at=prev.get("published_at"), updated_at=now_iso())
+    return doc
