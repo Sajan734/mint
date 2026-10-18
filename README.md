@@ -38,6 +38,29 @@ A 20-second **AR-guided phone scan** becomes a photoreal **3D Gaussian splat**. 
 
 Sequence diagrams and internals: [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Deploying the website (Vercel)
+
+One Vercel project serves both Next.js apps from the repo root: [vercel.json](vercel.json) defines two services,
+`buyer/` at `/` and `seller/` at `/sell` (the seller keeps `basePath: "/sell"`; Vercel passes the path through).
+The Python stack stays on Modal, workspace **abhinavdave2020** (`modal deploy gsplat/app.py`).
+
+1. Import the repo in Vercel with **Root Directory = the repo root** (not `buyer/`). Leave the framework,
+   build and install settings empty: each service builds itself with its own pnpm lockfile.
+2. Environment variables (Production + Preview). All are public values; no secret goes to Vercel:
+
+   | Variable | Value |
+   |---|---|
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://jpanyhsifoxxiizkgjno.supabase.co` |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | the anon key (Supabase dashboard → Settings → API) |
+   | `NEXT_PUBLIC_MINT_API_URL` | `https://abhinavdave2020--mint-gsplat-api.us-east.modal.run` |
+   | `NEXT_PUBLIC_MINT_SCAN_LINK` | `mint://scan` |
+   | `MINT_LIVE_LISTINGS` | optional; `0` hides live scans |
+
+3. Deploy, then open `/` and `/sell`. `NEXT_PUBLIC_*` values are inlined at build time: redeploy after changing one.
+
+After moving Modal to another workspace: `python gsplat/client.py urls` prints the new `api` URL (set it as
+`NEXT_PUBLIC_MINT_API_URL` in Vercel and redeploy) and the webhook SQL to run once in Supabase.
+
 ## Docs
 
 | Doc | What's in it |
