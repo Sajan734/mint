@@ -16,20 +16,20 @@ MODEL = "jev-latest"
 IMAGE_HEADERS = {"TypeSafe-Danger-Zone-Images": "true"}
 
 GATE_CONTEXT = (
-    "`baseline` is a reference photo of a product. `item` is a render of a 3D scan of a used item that a "
-    "seller says is that product. They are NOT taken from the same angle, and lighting, background and scale "
-    "differ. The item may be worn, scratched, stained or dirty. None of that counts as a difference. Judge only "
+    "`baseline` is a reference photo of a product. `item` is a seller's photo of a used item (or a render of a "
+    "3D scan of it) that the seller says is that product. They are NOT taken from the same angle, and lighting, "
+    "background and scale differ. The item may be worn, scratched, stained or dirty. None of that counts as a difference. Judge only "
     "whether it is the same product: overall shape, proportions, distinctive parts, logos, colour scheme and "
     "design details. A different colourway of the same model counts as the same product."
 )
 
 CONDITION_CONTEXT = (
-    "`item` is a render of a 3D scan (Gaussian splat) of a used item being listed for resale. `baseline` shows "
-    "the product new, from a different angle; use it to know what the intact product looks like. Judge the "
-    "physical condition of the item. Ignore scan artifacts: soft, blurry or fuzzy edges; faint speckle, thin "
-    "wisps and small scattered floaters; tiny pinholes; slightly smeared texture; lighting, exposure and "
-    "reflections. A region the scan never covered looks ragged or hollow; treat that as an artifact unless a "
-    "solid part is clearly broken. These ARE condition issues even when they look blurry: scratches or scuffs, "
+    "`item` is a seller's photo (or a render of a 3D scan) of a used item being listed for resale. `baseline` "
+    "shows the product new, from a different angle; use it to know what the intact product looks like. Judge the "
+    "physical condition of the item. Ignore photo and scan artifacts: blur, noise, compression blocks, soft or "
+    "fuzzy edges, faint speckle or floaters, smeared texture, glare, lighting, exposure, shadows and reflections. "
+    "In a scan render, a region never covered looks ragged or hollow; treat that as an artifact unless a solid "
+    "part is clearly broken. These ARE condition issues even when they look blurry: scratches or scuffs, "
     "stains or discolouration that isn't part of the design, cracks or tears, a broken or missing piece."
 )
 
@@ -41,7 +41,7 @@ GATE_QUESTIONS = {
         criteria=NoulCriteria(
             true=(
                 "The object is in frame and its overall shape and main features can be made out, "
-                "even if edges are soft or there are a few scan specks."
+                "even if the photo is a little soft, dark or noisy."
             ),
             false=(
                 "The image is mostly empty, blur or noise, or shows only a tiny or cut-off fragment, "
@@ -88,12 +88,12 @@ CONDITION_QUESTIONS = {
         ),
         criteria=NoulCriteria(
             true=(
-                "Most of the visible object is rendered solidly enough that a scratch, stain, crack or missing "
-                "piece would be noticeable, even with soft edges or a few scan specks."
+                "Most of the visible object is shown clearly enough that a scratch, stain, crack or missing "
+                "piece would be noticeable, even if the photo is a little soft or noisy."
             ),
             false=(
-                "The object is mostly blur, noise, or ragged or hollow scan, or is too small or cut off, so its "
-                "condition can't be judged from this image."
+                "The object is mostly blur, noise, glare or darkness (or ragged scan), or too small or cut off, "
+                "so its condition can't be judged from this image."
             ),
         ),
     ),
@@ -105,8 +105,8 @@ CONDITION_QUESTIONS = {
                 "even a small or slightly blurry one."
             ),
             false=(
-                "No scratches or scuffs. Soft edges, speckle, floaters, smeared texture and lighting changes "
-                "are scan or lighting artifacts, not scratches."
+                "No scratches or scuffs. Blur, noise, glare, reflections, smeared texture and lighting changes "
+                "are photo, scan or lighting artifacts, not scratches."
             ),
         ),
     ),
@@ -134,8 +134,8 @@ CONDITION_QUESTIONS = {
                 "leather, fabric or foam."
             ),
             false=(
-                "No cracks or tears. Ragged or hollow areas where the scan didn't cover the surface are "
-                "artifacts, not tears."
+                "No cracks or tears. Seams and edges of the design, shadows, and ragged areas a scan didn't "
+                "cover are not tears."
             ),
         ),
     ),
@@ -147,11 +147,11 @@ CONDITION_QUESTIONS = {
         criteria=NoulCriteria(
             true=(
                 "A part the intact product has, such as a button, cap, cushion, cover, strap or tip, is absent, "
-                "snapped off or clearly broken, and the area around it is solidly scanned."
+                "snapped off or clearly broken, and the area around it is clearly visible."
             ),
             false=(
                 "Every part that can be seen from this angle is present and intact. Parts hidden by the angle "
-                "and areas the scan never covered do not count as missing."
+                "and areas a photo doesn't show clearly do not count as missing."
             ),
         ),
     ),
@@ -206,7 +206,7 @@ def design_note(identity: Identity | None) -> str:
         return ""
     return (
         f" The product's own design includes {' and '.join(features)}. These are part of the design, not damage: "
-        "lettering and logos are not scratches, scuffs or stains, even where the scan makes them look streaky, "
+        "lettering and logos are not scratches, scuffs or stains, even where the photo makes them look streaky, "
         "worn or blurry, and a part in one of these colours is not discolouration."
     )
 
@@ -237,11 +237,11 @@ CONDITION_QUESTIONS_NO_BASELINE = {
         criteria=NoulCriteria(
             true=(
                 "A part an intact product of this kind would have, such as a button, cap, cushion, cover, strap "
-                "or tip, is absent, snapped off or clearly broken, and the area around it is solidly scanned."
+                "or tip, is absent, snapped off or clearly broken, and the area around it is clearly visible."
             ),
             false=(
                 "Every part that can be seen from this angle is present and intact. Parts hidden by the angle "
-                "and areas the scan never covered do not count as missing."
+                "and areas a photo doesn't show clearly do not count as missing."
             ),
         ),
     ),

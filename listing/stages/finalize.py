@@ -2,7 +2,7 @@
 
 Price = reference price x condition factor x (1 - penalty) per priced defect, rounded to the nearest $5,
 never below the floor. The same factors feed the justification sentence, so it always shows the real numbers.
-The deal rating (stages/deal_rating.py, built on this same price) and the highlight are carried through as they are.
+The deal rating (stages/deal_rating.py, built on this same price) is carried through as it is.
 """
 
 from __future__ import annotations
@@ -14,7 +14,6 @@ from contracts import (
     Condition,
     DealRating,
     Defect,
-    Highlight,
     Listing,
     ListingDraft,
     MatchCheck,
@@ -62,10 +61,10 @@ REFERENCE_OPENINGS = {
     "llm_estimate": "Our rough estimate of the new price is about ${amount:,.2f}",
 }
 
-PREVIEW_VIEW_IDS = ["v00", "v02", "v04", "v06"]  # front, right, back, left on the low ring
+PREVIEW_COUNT = 4  # the first photos, in the order the seller took them
 
-NO_DEFECTS_NOTE = "No defects stood out in any view."
-NO_BASELINE_REASON = "We found no reference photo of this product, so condition was judged from the scan alone."
+NO_DEFECTS_NOTE = "No defects stood out in any photo."
+NO_BASELINE_REASON = "We found no reference photo of this product, so condition was judged from the photos alone."
 CONDITION_CHECK_REASON = "Condition needs a quick check before publishing."
 
 Factor = tuple[str, Decimal]  # (what it's for, multiplier)
@@ -90,10 +89,10 @@ def defect_note(defect: Defect, views: Views) -> str:
     noun = DEFECT_NOUNS[defect.kind]
     labels = [v.label for v in views_by_id(views, defect.view_ids)]
     if not labels:
-        return f"The condition check found {noun}, but no single view shows it clearly."
+        return f"The condition check found {noun}, but no single photo shows it clearly."
     if len(labels) == 1:
-        return f"The {labels[0]} view shows {noun}."
-    return f"{len(labels)} views show {noun}: {'; '.join(labels)}."
+        return f"{labels[0][:1].upper()}{labels[0][1:]} shows {noun}."
+    return f"{labels[0][:1].upper()}{join_words(labels)[1:]} show {noun}."
 
 
 def build_notes(defects: list[Defect], views: Views, has_baseline: bool = True) -> list[str]:
@@ -140,7 +139,7 @@ def compute_price(reference: ReferencePrice, condition: Condition, has_baseline:
 
 
 def pick_previews(views: Views) -> list[str]:
-    return [v.image_path for v in views_by_id(views, PREVIEW_VIEW_IDS)]
+    return [v.image_path for v in views.views[:PREVIEW_COUNT]]
 
 
 def seller_check_reasons(match: MatchCheck, baseline: Baseline, condition: Condition) -> list[str]:
@@ -162,7 +161,6 @@ def build_listing(
     reference: ReferencePrice,
     condition: Condition,
     deal_rating: DealRating,
-    highlight: Highlight,
 ) -> Listing:
     has_baseline = baseline.image_path is not None
     price, justification = compute_price(reference, condition, has_baseline)
@@ -182,7 +180,6 @@ def build_listing(
         needs_seller_check=bool(reasons),
         seller_check_reasons=reasons,
         deal_rating=deal_rating,
-        highlight=highlight,
     )
 
 
@@ -195,6 +192,5 @@ async def finalize(
     reference: ReferencePrice,
     condition: Condition,
     deal_rating: DealRating,
-    highlight: Highlight,
 ) -> Listing:
-    return build_listing(views, match, baseline, draft, reference, condition, deal_rating, highlight)
+    return build_listing(views, match, baseline, draft, reference, condition, deal_rating)

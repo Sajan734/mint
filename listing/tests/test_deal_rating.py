@@ -175,3 +175,9 @@ def test_a_price_from_real_listings_is_normal_confidence():
                                                  price_cad=36.73)])
     deal = rate_deal(listed, make_condition("light_wear"), MATCH, BASELINE, None)
     assert deal.confidence == "high" and deal.confidence_notes == []
+
+
+def test_a_line_price_lowers_confidence_a_little():
+    line = ReferencePrice(amount_cad=200, basis="new_retail", note="Median of listings of the line.", exact_model=False)
+    u, weak = uncertainty(line, make_condition(), MATCH, BASELINE)
+    assert weak == ["line_price"] and u == pytest.approx(DEAL["uncertainty"]["line_price"])

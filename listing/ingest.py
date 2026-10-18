@@ -4,18 +4,15 @@
     python ingest.py --latest [--run]                      # the newest finished scan
     python ingest.py --watch [--interval 5] [--run]         # keep ingesting new scans as they finish
 
-The splat job (gsplat/, role A) publishes every finished scan to the public `assets` bucket:
-  splats/{scan_id}.spz          compressed splat (SPZ v3)
-  splats/{scan_id}.json         manifest (inputs, timings, Gaussian count, reference view URLs)
-  views/{scan_id}/...           8 reference renders + views.json (cameras)
-  splats/index.json             recent scans, newest first (what --latest / --watch read)
-All of that is public, so ingestion needs no key: only SUPABASE_URL (defaults to the team project).
+The splat job (gsplat/, role A) publishes every finished scan to the public `assets` bucket, including 8 views of the
+item (views/{scan_id}/NN_az..._grey.png) listed in its manifest (splats/{scan_id}.json), and splats/index.json
+(recent scans, newest first; what --latest / --watch read). All of that is public, so ingestion needs no key: only
+SUPABASE_URL (defaults to the team project).
 
 Each scan becomes samples/<scan_id>/ (gitignored):
-  splat.spz            as published (~2.5 MB; splat_render.py reads it directly, no 35 MB .ply anywhere)
-  input.json           {"seller_name": ..., "up_axis": "+y"} (scans are in a +Y-up frame)
+  photos/NN_....png    the 8 views, the listing pipeline's input photos
+  input.json           {"seller_name": ..., "photo_urls": [the same views' public URLs], "scan_id": ...}
   manifest.json        the scan's manifest
-  reference_views/     the 8 reference renders + views.json
 so `python pipeline.py samples/<scan_id>` runs the listing pipeline on it unchanged.
 """
 
@@ -40,21 +37,6 @@ INGEST = {"timeout_s": 60.0, "retries": 1, "watch_interval_s": 5.0}
 
 class IngestError(RuntimeError):
     pass
-
-
-# --- SPZ check ----------------------------------------------------------------------------------------
-
-
-def check_spz(data: bytes) -> int:
-    """Gaussian count of a readable splat, using the renderer's own SPZ reader; IngestError otherwise."""
-    import torch
-
-    from splat_render import SplatError, parse_spz
-
-    try:
-        return len(parse_spz(data, torch.device("cpu")).means)
-    except SplatError as e:
-        raise IngestError(f"bad splat: {e}") from None
 
 
 # --- Supabase (public bucket, no key) -------------------------------------------------------------------
@@ -106,32 +88,32 @@ def recent_scans(base: str | None = None) -> list[dict]:
 # --- ingestion ------------------------------------------------------------------------------------------
 
 
+def view_urls(manifest: dict) -> list[str]:
+    """The scan's grey views (item on mid-grey), in order. IngestError if the manifest lists none."""
+    items = (manifest.get("views") or {}).get("items") or []
+    urls = [v.get("grey_url") or v.get("transparent_url") for v in items]
+    urls = [u for u in urls if isinstance(u, str) and u.startswith("https://")]
+    if not urls:
+        raise IngestError("the scan's manifest lists no views")
+    return urls
+
+
 def ingest(scan_id: str, seller_name: str | None = None, root: Path = SAMPLES, base: str | None = None,
            get=fetch) -> Path:
-    """Download one scan into root/<scan_id>/ and return that folder. `get` is injectable for tests."""
+    """Download one scan's views into root/<scan_id>/photos/ and return that folder. `get` is injectable for tests."""
     base = base or supabase_url()
     manifest = json.loads(get(public_url(f"splats/{scan_id}.json", base)))
-    spz = get(manifest.get("splat_url") or public_url(f"splats/{scan_id}.spz", base))
-    check_spz(spz)  # fail here, not later in the render stage
+    urls = view_urls(manifest)
 
     item = root / scan_id
     tmp = root / f".{scan_id}.partial"  # write fully, then rename: --watch never sees half an item
-    (tmp / "reference_views").mkdir(parents=True, exist_ok=True)
-    (tmp / "splat.spz").write_bytes(spz)
+    (tmp / "photos").mkdir(parents=True, exist_ok=True)
+    for url in urls:
+        (tmp / "photos" / url.rsplit("/", 1)[-1]).write_bytes(get(url))
     (tmp / "manifest.json").write_text(json.dumps(manifest, indent=2), encoding="utf-8")
-    inputs = {"seller_name": seller_name, "up_axis": "+y", "scan_id": scan_id,
+    inputs = {"seller_name": seller_name, "photo_urls": urls, "scan_id": scan_id,
               "source": public_url(f"splats/{scan_id}.json", base)}
     (tmp / "input.json").write_text(json.dumps(inputs, indent=2), encoding="utf-8")
-
-    views_url = manifest.get("views_json_url")
-    if views_url:
-        views = json.loads(get(views_url))
-        (tmp / "reference_views" / "views.json").write_text(json.dumps(views, indent=1), encoding="utf-8")
-        folder = views_url.rsplit("/", 1)[0]
-        for view in views.get("views", []):
-            for name in view.get("files", {}).values():
-                (tmp / "reference_views" / name).write_bytes(get(f"{folder}/{name}"))
-
     if item.exists():
         shutil.rmtree(item)
     tmp.rename(item)
@@ -152,7 +134,7 @@ def watch(interval: float, seller_name: str | None, run: bool) -> None:
     while True:
         try:
             for scan in reversed(recent_scans()):  # oldest first
-                if not (SAMPLES / scan["scan_id"] / "splat.spz").is_file():
+                if not (SAMPLES / scan["scan_id"] / "photos").is_dir():
                     item = ingest(scan["scan_id"], seller_name)
                     print(f"ingested {item.relative_to(ROOT)}", file=sys.stderr)
                     if run:

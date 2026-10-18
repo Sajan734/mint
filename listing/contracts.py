@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -11,24 +12,50 @@ Prob = Annotated[float, Field(ge=0.0, le=1.0)]
 
 Grade = Literal["like_new", "light_wear", "moderate_wear", "heavy_wear"]
 Verdict = Literal["match", "mismatch", "uncertain"]
-UpAxis = Literal["+x", "-x", "+y", "-y", "+z", "-z"]
+Specificity = Literal["model", "brand", "type"]  # how specific the identification could honestly be
 PriceBasis = Literal["new_retail", "used_comps", "llm_estimate"]
 DefectKind = Literal[
     "scratch", "scuff", "dent", "crack", "stain", "discoloration", "wear", "missing_part", "other"
 ]
 DealLabel = Literal["great", "good", "fair", "high", "overpriced"]
 Confidence = Literal["high", "medium", "low"]
-HighlightStatus = Literal["pending", "produced", "skipped", "failed"]
 
 
 def _normalise(text: str) -> str:
     return "".join(ch for ch in text.casefold() if ch.isalnum())
 
 
+def _words(text: str) -> tuple[str, set[int], set[int]]:
+    """The text without case, spaces or punctuation, and where its words start and end in that string."""
+    flat, starts, ends = "", set(), set()
+    for word in re.findall(r"[^\W_]+", text.casefold()):
+        starts.add(len(flat))
+        flat += word
+        ends.add(len(flat))
+    return flat, starts, ends
+
+
 def backed_by_text(value: str, visible_text: list[str]) -> bool:
-    """True if `value` appears in some visible text, ignoring case, spaces and punctuation."""
+    """True if `value` appears in some visible text as whole words, ignoring case, spaces and punctuation:
+    "WH1000XM4" is in "WH-1000XM4", but "MX Master 3" is not in "MX Master 3S" (that's another model)."""
     needle = _normalise(value)
-    return bool(needle) and any(needle in _normalise(text) for text in visible_text)
+    if not needle:
+        return False
+    for text in visible_text:
+        flat, starts, ends = _words(text)
+        i = flat.find(needle)
+        while i != -1:
+            if i in starts and i + len(needle) in ends:
+                return True
+            i = flat.find(needle, i + 1)
+    return False
+
+
+def product_name(brand: str | None, model: str | None, category: str) -> str:
+    """How a listing names the product: brand and model ("Logitech MX Master 3S"), else brand and type."""
+    if model:
+        return model if brand and backed_by_text(brand, [model]) else f"{brand} {model}" if brand else model
+    return f"{brand} {category}" if brand else category
 
 
 class Contract(BaseModel):
@@ -45,15 +72,15 @@ class RunContext(Contract):
     demo_mode: bool = False
     demo_offline: bool = False  # demo mode that never calls an API: a cache miss in an API stage is an error
     manual_baseline: bool = False  # use fixtures/<item>/baseline.* and never search
-    up_axis: UpAxis = "+y"  # splat world axis pointing up; per item via input.json or --up-axis
 
 
 class View(Contract):
-    view_id: str
-    label: str
-    azimuth_deg: float
-    elevation_deg: float
+    """One photo of the item, resized for the models that read it."""
+
+    view_id: str  # p01, p02, ...
+    label: str  # "photo 1", ...
     image_path: str  # relative to listing/
+    source_url: str | None = None  # a public URL of the same photo, when the input gave one (used for Lens)
 
 
 class Views(Contract):
@@ -62,21 +89,47 @@ class Views(Contract):
 
 
 class Identity(Contract):
-    category: str
+    """What the item is, as specific as the evidence allows. identify decides brand and model in code from what was
+    read off the item, the seller's name and Lens matches (`evidence` says which backed each)."""
+
+    category: str  # the specific product type, e.g. "wireless mouse"
     brand: str | None = None
     model: str | None = None
     visible_text: list[str] = Field(default_factory=list)
     attributes: dict[str, str] = Field(default_factory=dict)
+    product_name: str  # the most specific supported name: "Logitech MX Master 3S" / "Logitech wireless mouse"
+    specificity: Specificity
+    evidence: list[str] = Field(default_factory=list)  # what backed the brand and model, for people checking
     search_query: str
     confidence: Prob
 
+    @model_validator(mode="before")
+    @classmethod
+    def _derive_name_and_specificity(cls, data: Any) -> Any:
+        """specificity and product_name follow from brand, model and category when a caller leaves them out."""
+        if isinstance(data, dict):
+            data = dict(data)
+            brand, model = data.get("brand"), data.get("model")
+            data.setdefault("specificity", "model" if model else "brand" if brand else "type")
+            data.setdefault("product_name", product_name(brand, model, data.get("category") or ""))
+        return data
+
     @model_validator(mode="after")
-    def _brand_and_model_backed_by_visible_text(self) -> Identity:
-        for name in ("brand", "model"):
-            value = getattr(self, name)
-            if value is not None and not backed_by_text(value, self.visible_text):
-                raise ValueError(f"{name} {value!r} is not backed by visible_text")
+    def _specificity_matches_fields(self) -> Identity:
+        expected = "model" if self.model else "brand" if self.brand else "type"
+        if self.model and not self.brand:
+            raise ValueError("a model needs a brand")
+        if self.specificity != expected:
+            raise ValueError(f"specificity {self.specificity!r} doesn't fit brand {self.brand!r}, model {self.model!r}")
         return self
+
+
+class IdentityCandidate(Contract):
+    """Gemini's best reading of what the product is, from all the evidence; code decides what is claimed."""
+
+    brand: str | None = None
+    model: str | None = None  # the model name or number, without the brand
+    product_type: str  # specific, e.g. "wireless mouse", "over-ear headphones"
 
 
 class Baseline(Contract):
@@ -121,6 +174,7 @@ class ReferencePrice(Contract):
     basis: PriceBasis
     note: str
     sources: list[PriceSource] = Field(default_factory=list)  # the listings behind a looked-up price
+    exact_model: bool = True  # False: listings of the brand's line of this product, since the exact model isn't known
 
 
 class Defect(Contract):
@@ -136,55 +190,6 @@ class Condition(Contract):
     defects: list[Defect] = Field(default_factory=list)
     usable_view_count: int = Field(ge=0)
     needs_seller_check: bool
-
-
-class ViewBox(Contract):
-    """A box in one view, in Gemini's native box format."""
-
-    box_2d: Annotated[list[Annotated[int, Field(ge=0, le=1000)]], Field(min_length=4, max_length=4)]
-    # [ymin, xmin, ymax, xmax], each 0..1000 of the view's height or width
-
-    @model_validator(mode="after")
-    def _ordered(self) -> ViewBox:
-        ymin, xmin, ymax, xmax = self.box_2d
-        if ymin >= ymax or xmin >= xmax:
-            raise ValueError(f"box_2d {self.box_2d} is empty: needs ymin < ymax and xmin < xmax")
-        return self
-
-
-class DefectBox(ViewBox):
-    """One visible mark of a defect in one view."""
-
-    kind: DefectKind
-
-
-class DesignBox(ViewBox):
-    """Printed text, a logo or a brand mark that is part of the product's design, in one view."""
-
-    label: str  # what it reads or shows, e.g. "ThinkPad"
-
-
-class HighlightMark(Contract):
-    kind: DefectKind
-    view_ids: list[str]  # the views it was located in
-    gaussian_count: int = Field(ge=1)
-
-
-class Highlight(Contract):
-    """A copy of the seller's splat with the noted defects tinted red, or why there is none (yet)."""
-
-    status: HighlightStatus  # pending: still running; result.json is rewritten when it finishes
-    splat_path: str | None = None  # relative to listing/; set exactly when produced
-    summary: str  # what was marked, or why no highlighted splat was produced
-    marks: list[HighlightMark] = Field(default_factory=list)
-    gaussian_share: float | None = Field(default=None, ge=0.0, le=1.0)  # of the item's Gaussians tinted red
-    debug_sheet: str | None = None  # relative to listing/: each searched view with its boxes | the highlighted render
-
-    @model_validator(mode="after")
-    def _path_iff_produced(self) -> Highlight:
-        if (self.status == "produced") != (self.splat_path is not None):
-            raise ValueError("splat_path must be set exactly when a highlighted splat was produced")
-        return self
 
 
 class DealRating(Contract):
@@ -218,8 +223,6 @@ class Listing(Contract):
     price_justification: list[str]
     price_sources: list[PriceSource] = Field(default_factory=list)  # listings the new price came from, if looked up
     preview_images: list[str]
-    viewer_url: str | None = None  # 3D viewer, later
     needs_seller_check: bool
     seller_check_reasons: list[str] = Field(default_factory=list)
     deal_rating: DealRating
-    highlight: Highlight

@@ -1,10 +1,13 @@
 """listing_text: Identity -> ListingDraft (Gemini, factual, no price or condition).
 
 Fixture items that have stubs/listing_text.json stay offline. Anything else calls Gemini.
+When identify backed an exact model, one Serper web search for it first collects sources about that model (titles
+and snippets from its pages); the text may then state the model's features, but only ones the sources state. Without
+an exact model there are no sources and no specs: nothing says which product's specs they would be.
 Gemini writes the title, description and tags; attributes are built in code from the Identity, so every one
-is backed. Code checks the text (title length, price or condition words, specs, model numbers the Identity
-doesn't back). On a problem Gemini gets one retry with the problems listed; if it still fails, or Gemini is
-unreachable, a plain draft is built from the Identity in code. A missing GEMINI_API_KEY still raises.
+is backed. Code checks the text (title length, price or condition words, and specs or model numbers that neither the
+Identity nor the sources back). On a problem Gemini gets one retry with the problems listed; if it still fails, or
+Gemini is unreachable, a plain draft is built from the Identity in code. A missing GEMINI_API_KEY still raises.
 """
 
 from __future__ import annotations
@@ -14,6 +17,7 @@ import json
 import re
 from typing import Any
 
+import timing
 from contracts import Identity, ListingDraft, RunContext, backed_by_text
 from gemini import contract_schema, generate_json
 from stages._fixture import has_stub, load_stub
@@ -27,6 +31,11 @@ TEXT = {
     # then the template is used, as on any other Gemini failure.
     "timeout_s": 15.0,
     "budget_s": 25.0,
+    # Sources about an exact model: one Serper web search, its top results' titles and snippets.
+    "sources_endpoint": "https://google.serper.dev/search",
+    "sources_country": "ca",
+    "max_sources": 6,
+    "sources_timeout_s": 8.0,
     "min_mask_chars": 2,  # Identity values shorter than this (e.g. "L", "+") are not masked out
 }
 
@@ -54,17 +63,20 @@ SPEC_PATTERN = re.compile(
 CODE_PATTERN = re.compile(r"\b(?=[\w-]*\d)(?=[\w-]*[a-z])[a-z0-9]+(?:-[a-z0-9]+)*\b", re.IGNORECASE)
 
 SYSTEM_PROMPT = """\
-You write the text of a second-hand marketplace listing from a product identification (JSON).
+You write the text of a second-hand marketplace listing from a product identification (JSON) and, when given, \
+sources about that exact product.
 
 Rules:
 - Factual, plain tone. No hype, no exclamation marks, no marketing phrases.
-- title: shorter than 80 characters. Brand and model first when known, then the product type, then colour if known.
-- description: 1 to 3 short sentences saying what the item is, using only facts in the identification.
-- tags: 3 to 8 short lowercase search tags (product type, brand, colour, form factor).
+- title: shorter than 80 characters, written the way a real listing names the product: brand and model first when \
+known, then the product type, then one or two key features from the sources if given, then colour if known.
+- description: 2 to 4 short sentences saying what the item is and, when sources are given, its main features as \
+the sources state them. Use only facts from the identification and the sources.
+- tags: 3 to 8 short lowercase search tags (product type, brand, model, colour, form factor).
 - Name a brand only if the identification's brand is not null, and a model only if its model is not null. \
 Never name any other brand, model, model number, generation or year, even if you recognise the product.
-- No specifications or features that are not in the identification: no battery life, sizes, weights, \
-wattage, connectivity versions, noise cancelling or similar claims.
+- Specifications and features (battery life, sizes, weights, connectivity, sensors and the like) only when the \
+sources state them for this product; with no sources, none at all.
 - Never mention price, value, deals, or condition (new, used, wear, scratches, damage). Another part of the \
 listing covers those.\
 """
@@ -74,14 +86,17 @@ def response_schema() -> dict[str, Any]:
     return contract_schema(ListingDraft, DRAFT_FIELDS)
 
 
-def identity_prompt(identity: Identity) -> str:
+def identity_prompt(identity: Identity, sources: list[str] = ()) -> str:
     facts = identity.model_dump(include={"category", "brand", "model", "attributes"})
-    return f"Product identification:\n{json.dumps(facts, ensure_ascii=False, indent=2)}\n\nWrite the listing text."
+    text = f"Product identification:\n{json.dumps(facts, ensure_ascii=False, indent=2)}\n"
+    if sources:
+        text += "\nSources about this exact product:\n" + "\n".join(f"- {s}" for s in sources) + "\n"
+    return text + "\nWrite the listing text."
 
 
-def retry_prompt(identity: Identity, previous: dict[str, Any], problems: list[str]) -> str:
+def retry_prompt(identity: Identity, previous: dict[str, Any], problems: list[str], sources: list[str] = ()) -> str:
     return (
-        f"{identity_prompt(identity)}\n\nYour previous answer was:\n{json.dumps(previous, ensure_ascii=False)}\n"
+        f"{identity_prompt(identity, sources)}\n\nYour previous answer was:\n{json.dumps(previous, ensure_ascii=False)}\n"
         f"It broke these rules:\n" + "\n".join(f"- {p}" for p in problems) + "\nWrite it again, fixing every one."
     )
 
@@ -120,7 +135,8 @@ def _words_found(text: str, words: tuple[str, ...]) -> list[str]:
     return [w for w in words if re.search(rf"(?<![a-z0-9]){re.escape(w)}(?![a-z0-9])", text, re.IGNORECASE)]
 
 
-def violations(draft: ListingDraft, identity: Identity) -> list[str]:
+def violations(draft: ListingDraft, identity: Identity, sources: list[str] = ()) -> list[str]:
+    """Rule problems in the draft. Specs, spec phrases and model numbers are fine when the sources state them."""
     problems = []
     if len(draft.title) >= TEXT["title_limit_chars"]:
         problems.append(f"title is {len(draft.title)} characters; it must be under {TEXT['title_limit_chars']}")
@@ -134,9 +150,11 @@ def violations(draft: ListingDraft, identity: Identity) -> list[str]:
     if found := _words_found(text, CONDITION_WORDS):
         problems.append(f"mentions condition: {', '.join(found)}")
     specs = [m.group(0) for m in SPEC_PATTERN.finditer(text)] + _words_found(text, SPEC_PHRASES)
+    specs = [spec for spec in specs if not backed_by_text(spec, list(sources))]
     if specs:
-        problems.append(f"states specifications or features not in the identification: {', '.join(specs)}")
-    codes = [m.group(0) for m in CODE_PATTERN.finditer(text) if not backed_by_text(m.group(0), backing)]
+        problems.append(f"states specifications or features no source gives: {', '.join(specs)}")
+    codes = [m.group(0) for m in CODE_PATTERN.finditer(text)
+             if not backed_by_text(m.group(0), backing + list(sources))]
     codes = [c for c in codes if not SPEC_PATTERN.fullmatch(c)]  # already reported as specs
     if codes:
         problems.append(f"names a model number the identification doesn't have: {', '.join(dict.fromkeys(codes))}")
@@ -186,10 +204,51 @@ def template_draft(identity: Identity) -> ListingDraft:
 # --- I/O --------------------------------------------------------------------------------------
 
 
+def parse_sources(payload: dict[str, Any]) -> list[str]:
+    """Titles and snippets of the top web results (and the knowledge panel, if any), as one line each."""
+    lines = []
+    panel = payload.get("knowledgeGraph") or {}
+    if panel.get("description"):
+        lines.append(f"{panel.get('title') or ''}: {panel['description']}".strip(": "))
+    for key, value in (panel.get("attributes") or {}).items():
+        lines.append(f"{key}: {value}")
+    for item in payload.get("organic") or []:
+        text = " ".join(f"{item.get('title') or ''}. {item.get('snippet') or ''}".split()).strip(". ")
+        if text:
+            lines.append(text)
+    return lines[: TEXT["max_sources"]]
+
+
+async def fetch_sources(identity: Identity) -> tuple[list[str], dict[str, Any]]:
+    """Sources about the exact model, or none (no model, no key, a failed or slow search). Never raises."""
+    import httpx
+
+    from stages.baseline_lookup import SEARCH, _require_key
+
+    if identity.specificity != "model":
+        return [], {"skipped": "no exact model, so no specs"}
+    log: dict[str, Any] = {"query": identity.search_query}
+    try:
+        with timing.span("serper"):
+            async with httpx.AsyncClient(timeout=TEXT["sources_timeout_s"]) as client:
+                resp = await client.post(
+                    TEXT["sources_endpoint"], json={"q": identity.search_query, "gl": TEXT["sources_country"]},
+                    headers={"X-API-KEY": _require_key("SERPER_API_KEY"), "Content-Type": "application/json",
+                             "User-Agent": SEARCH["user_agent"]})
+        resp.raise_for_status()
+        sources = parse_sources(resp.json())
+    except (httpx.HTTPError, MissingKeyError, ValueError) as e:
+        log["error"] = f"{type(e).__name__}: {e}"
+        return [], log
+    log["sources"] = sources
+    return sources, log
+
+
 async def write_draft(identity: Identity) -> tuple[ListingDraft, dict[str, Any]]:
     """Gemini with one retry on rule problems, else the template. Returns the draft and a log."""
-    log: dict[str, Any] = {"attempts": []}
-    contents = identity_prompt(identity)
+    sources, log_sources = await fetch_sources(identity)
+    log: dict[str, Any] = {"sources": log_sources, "attempts": []}
+    contents = identity_prompt(identity, sources)
     for _ in range(TEXT["max_attempts"]):
         try:
             reply = await generate_json(contents, SYSTEM_PROMPT, response_schema(), timeout_s=TEXT["timeout_s"])
@@ -199,14 +258,14 @@ async def write_draft(identity: Identity) -> tuple[ListingDraft, dict[str, Any]]
             log["attempts"].append({"error": f"{type(e).__name__}: {e}"})
             break
         draft = to_draft(reply.raw, identity)
-        problems = violations(draft, identity)
+        problems = violations(draft, identity, sources)
         log["attempts"].append(
             {"model": reply.model, "latency_ms": round(reply.latency_ms), "raw": reply.raw, "problems": problems}
         )
         if not problems:
             log["source"] = "gemini"
             return draft, log
-        contents = retry_prompt(identity, reply.raw, problems)
+        contents = retry_prompt(identity, reply.raw, problems, sources)
     log["source"] = "template"
     return template_draft(identity), log
 

@@ -1,7 +1,7 @@
 """Per-run stage timing, saved to runs/<item>/timings.json so any run can be checked later.
 
 run_pipeline starts a RunTimer; run_stage opens a stage on it. Inside a stage, span(kind) marks time spent waiting on
-something outside our code (gemini, jev, serper, download). Spans of one kind that overlap (12 Jev requests
+something outside our code (gemini, jev, serper, download, upload). Spans of one kind that overlap (12 Jev requests
 at once) count as the time they cover together, not their sum, so each stage splits into wall = the union of its
 external spans + own (our code). note() attaches extra facts to a stage.
 
@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
-EXTERNAL_KINDS = ("gemini", "jev", "serper", "download")
+EXTERNAL_KINDS = ("gemini", "jev", "serper", "download", "upload")
 
 
 @dataclass
