@@ -104,6 +104,11 @@ Everything comes from the repo-root `.env`: `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECR
 are no Modal secrets to create; a part whose keys are missing is switched off (the deploy prints a note). Edit
 `.env`, redeploy.
 
+**Live workspace: `abhinavdave2020`** (since 2026-10-18). Its endpoints: api
+`https://abhinavdave2020--mint-gsplat-api.us-east.modal.run` (the website's `NEXT_PUBLIC_MINT_API_URL`), on_upload
+`https://abhinavdave2020--mint-gsplat-on-upload.us-east.modal.run` (the Supabase webhook). If you have a Modal profile
+for it (`modal profile list`), its token in `~/.modal.toml` is what goes into `.env`.
+
 **Someone else's Modal:** put their token in `.env`, then `modal deploy app.py` and `python client.py urls`. That
 writes the new `api` URL into `.env` (restart the web apps) and prints `webhook.sql` with the new `on_upload` URL:
 run it once in the Supabase SQL editor so uploads reach the new workspace.
