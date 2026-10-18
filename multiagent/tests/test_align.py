@@ -65,3 +65,16 @@ def test_too_few_points_rejected():
 def test_deterministic_with_seed():
     a, b = Cloud(lumpy()), Cloud(lumpy(seed=2))
     assert align(a, b, seed=4)["matrix"] == align(a, b, seed=4)["matrix"]
+
+
+@pytest.mark.parametrize("seed", range(4))
+def test_ambiguity_is_a_probability_for_symmetric_and_partial_scans(seed):
+    # A symmetric item fits in other orientations; err (after the scale search) can then pass the runner-up's
+    # error. AlignmentMetrics caps ambiguity at 1, so align must too (a live check crashed on 1.13).
+    rng = np.random.default_rng(seed)
+    v = rng.normal(size=(4000, 3))
+    v /= np.linalg.norm(v, axis=1, keepdims=True)
+    egg = v * np.array([1.0, 0.6, 1.0])
+    half = egg[egg[:, 1] > -0.2 + 0.1 * seed]
+    res = align(Cloud(egg), Cloud(half * (1.2 + 0.3 * seed)))
+    assert 0.0 <= res["metrics"]["ambiguity"] <= 1.0
