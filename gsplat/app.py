@@ -251,6 +251,7 @@ class Splatter:
                 _replace_container(str(e)[:120])
             # anything else would fail the same way again: report it and return (no retry)
             ev.send("error", {"stage": "splat", "message": str(e)[:300], "scan_id": scan_id})
+            jobs.pop(scan_id, None)  # let a new upload of this scan run it again
             return {"scan_id": scan_id, "error": f"{type(e).__name__}: {e}"[:500]}
         finally:
             ev.close()
@@ -327,6 +328,7 @@ class Splatter:
         except Exception as e:
             if _gpu_dead(e):
                 _replace_container(str(e)[:120])
+            jobs.pop(f"verify:{cid}", None)  # let the buyer rescan and try again
             return put_result(failed("INTERNAL", f"{type(e).__name__}: {e}"))
         finally:
             ev.close()
@@ -464,11 +466,16 @@ def on_upload(body: dict) -> dict:
         return {"ok": True, "ignored": f"{bucket}/{name}"}
     splatter = modal.Cls.from_name("mint-gsplat", "Splatter")
     if file == "rescan.mp4":  # a buyer's verify rescan (uploaded last): compare it with its listing
+        if not HAS_SUPABASE:
+            return {"ok": False, "error": "Supabase keys missing from .env; add them and redeploy"}
+        if file not in Supabase().list(SCANS, scan_id):  # the URL is public: no GPU for a made-up name
+            return {"ok": False, "error": f"scans/{name} not found"}
         if not jobs.put(f"verify:{scan_id}", time.time(), skip_if_exists=True):
             return {"ok": True, "duplicate": scan_id}
         return {"ok": True, "verify": scan_id, "call_id": splatter().run_verify.spawn(scan_id).object_id}
     if file != "video.mp4":
-        if file in PREWARM_ON and jobs.put(f"prewarm:{scan_id}", time.time(), skip_if_exists=True):
+        if (file in PREWARM_ON and HAS_SUPABASE and file in Supabase().list(SCANS, scan_id)  # an H100 idles 5 min
+                and jobs.put(f"prewarm:{scan_id}", time.time(), skip_if_exists=True)):
             splatter().prewarm.spawn()
             return {"ok": True, "prewarm": scan_id}
         return {"ok": True, "ignored": f"{bucket}/{name}"}
