@@ -9,3 +9,4 @@ __pycache__/
 .coverage
 session_context/
 .env
+scripts/out/
