@@ -17,7 +17,10 @@ export default function FilterBar() {
 
   const set = (patch: Record<string, string | null>) => {
     const next = new URLSearchParams(sp.toString());
-    for (const [k, v] of Object.entries(patch)) v ? next.set(k, v) : next.delete(k);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v) next.set(k, v);
+      else next.delete(k);
+    }
     const s = next.toString();
     router.replace(s ? `${path}?${s}` : path, { scroll: false });
   };
