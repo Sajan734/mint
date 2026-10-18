@@ -19,27 +19,38 @@ import modal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root: shared `supabase_setup` package
 
+if modal.is_local():  # containers have no .env: their keys arrive as the secrets below
+    from supabase_setup.env import load_env
+
+    load_env()  # repo-root .env: the Modal token picks the workspace; the keys below ship with the deploy
+
 CUDA_ARCHS = "8.0;8.6;8.9;9.0"
+SUPABASE_KEYS = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"]
+LISTING_KEYS = ["TYPESAFE_API_KEY", "GEMINI_API_KEY", "SERPER_API_KEY"]
+BUYER_KEYS = ["TYPESAFE_API_KEY", "GROQ_API_KEY", "BUYER_AGENT_TOKEN"]
 
 
-def _has_secret(name: str, env: str, what: str) -> bool:
-    """Whether a Modal secret exists. Only storage mode needs `mint-supabase` (and the listing step `mint-listing`),
-    so dev runs and deploys still work before they are created. Decided once where the app is defined (locally) and
-    baked into the image env, so the container sees the same answer: re-checking in the container would change the
-    function's dependency count and break start-up. Redeploy after creating a secret."""
+def _has_keys(env: str, keys: list[str], what: str) -> bool:
+    """Whether the .env (or the shell) has every key in `keys`. Only storage mode needs the Supabase keys (and the
+    listing step its own), so dev runs and deploys still work without them. Decided once where the app is defined
+    (locally) and baked into the image env, so the container sees the same answer: re-checking in the container
+    would change the function's dependency count and break start-up. Redeploy after editing .env."""
     if not modal.is_local():
         return os.environ.get(env) == "1"
-    try:
-        modal.Secret.from_name(name).hydrate()
-        return True
-    except modal.exception.NotFoundError:
-        print(f"note: Modal secret `{name}` not found: {what} disabled", file=sys.stderr)
-        return False
+    missing = [k for k in keys if not os.environ.get(k)]
+    if missing:
+        print(f"note: {', '.join(missing)} not in .env: {what} disabled", file=sys.stderr)
+    return not missing
 
 
-HAS_SUPABASE = _has_secret("mint-supabase", "MINT_SUPABASE", "storage mode (run_scan, on_upload)")
-HAS_LISTING = _has_secret("mint-listing", "MINT_LISTING", "the listing step after the splat (Jev + Gemini)")
-HAS_BUYER = _has_secret("mint-buyer", "MINT_BUYER", "the buyer's rescan check (multiagent/buyer_agent)")
+def _secrets(on: bool, keys: list[str]) -> list[modal.Secret]:
+    """The keys' values from .env, sent with the deploy (a container gets an empty stand-in, same count)."""
+    return [modal.Secret.from_local_environ(keys)] if on else []
+
+
+HAS_SUPABASE = _has_keys("MINT_SUPABASE", SUPABASE_KEYS, "storage mode (run_scan, on_upload)")
+HAS_LISTING = _has_keys("MINT_LISTING", LISTING_KEYS, "the listing step after the splat (Jev + Gemini)")
+HAS_BUYER = _has_keys("MINT_BUYER", BUYER_KEYS, "the buyer's rescan check (multiagent/buyer_agent)")
 MULTIAGENT_DIR = Path(__file__).resolve().parent.parent / "multiagent"
 LISTING_DIR = Path(__file__).resolve().parent.parent / "listing"
 GPU = "H100"  # one pool for everything (webhook scans, client.py, modal run), so warming it covers them all
@@ -84,14 +95,9 @@ image = (
 
 app = modal.App("mint-gsplat", image=image)
 models_vol = modal.Volume.from_name("mint-models", create_if_missing=True)
-SECRETS = ([modal.Secret.from_name("mint-supabase", required_keys=["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])]
-           if HAS_SUPABASE else [])
-LISTING_SECRETS = ([modal.Secret.from_name("mint-listing", required_keys=["TYPESAFE_API_KEY", "GEMINI_API_KEY",
-                                                                           "SERPER_API_KEY"])]
-                   if HAS_LISTING else [])
-BUYER_SECRETS = ([modal.Secret.from_name("mint-buyer", required_keys=["TYPESAFE_API_KEY", "GROQ_API_KEY",
-                                                                       "BUYER_AGENT_TOKEN"])]
-                 if HAS_BUYER else [])
+SECRETS = _secrets(HAS_SUPABASE, SUPABASE_KEYS)
+LISTING_SECRETS = _secrets(HAS_LISTING, LISTING_KEYS)
+BUYER_SECRETS = _secrets(HAS_BUYER, BUYER_KEYS)
 jobs = modal.Dict.from_name("mint-scan-jobs", create_if_missing=True)  # scan_id -> claimed at, so each runs once
 
 # The buyer agent (multiagent/buyer_agent, Abhinav) has its own stack (numpy 2), so it runs in its own container.
@@ -218,7 +224,7 @@ class Splatter:
         from supabase_setup.storage import Events, Supabase
 
         if not HAS_SUPABASE:
-            raise RuntimeError("storage mode needs the Modal secret `mint-supabase`; create it, then redeploy")
+            raise RuntimeError("storage mode needs the Supabase keys in the repo-root .env; add them, then redeploy")
         if _gpu_dead():
             _replace_container("found broken before the scan")
         sb = Supabase()
@@ -289,7 +295,7 @@ class Splatter:
             if not listing_id:
                 return put_result(failed("INPUT_INVALID", "The rescan does not say which listing it checks."))
             if not HAS_BUYER:
-                return put_result(failed("INTERNAL", "The comparison service has no keys (Modal secret mint-buyer)."))
+                return put_result(failed("INTERNAL", "The comparison service has no keys (missing from .env at deploy)."))
             # Like for like: a pass one side has and the other doesn't (the underside) would read as a difference.
             listing_manifest = json.loads(sb.download(ASSETS, f"splats/{listing_id}.json"))
             listing_two_pass = listing_manifest.get("coverage") == "full" or any(
@@ -423,7 +429,7 @@ def api():
         if not re.fullmatch(UUID_RE, scan_id):
             raise HTTPException(404, "unknown scan")
         if not HAS_SUPABASE:
-            raise HTTPException(503, "Modal secret mint-supabase missing")
+            raise HTTPException(503, "Supabase keys missing from .env at deploy")
         try:
             doc = set_published(Supabase(), scan_id, body.state == "published", body.title.strip(),
                                 body.description.strip(), body.price_cad)
@@ -467,7 +473,7 @@ def on_upload(body: dict) -> dict:
             return {"ok": True, "prewarm": scan_id}
         return {"ok": True, "ignored": f"{bucket}/{name}"}
     if not HAS_SUPABASE:
-        return {"ok": False, "error": "Modal secret mint-supabase missing; create it and redeploy"}
+        return {"ok": False, "error": "Supabase keys missing from .env; add them and redeploy"}
     if file not in Supabase().list(SCANS, scan_id):
         return {"ok": False, "error": f"scans/{name} not found"}
     if not jobs.put(scan_id, time.time(), skip_if_exists=True):

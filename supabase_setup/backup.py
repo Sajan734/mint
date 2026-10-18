@@ -7,21 +7,11 @@ object is on disk with its size, and writes inventory.json (bucket, path, size, 
 Needs SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY: read from the repo-root .env when not already set.
 """
 import json
-import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-
-
-def load_env() -> None:
-    env = ROOT / ".env"
-    if env.is_file():
-        for line in env.read_text(encoding="utf-8").splitlines():
-            if "=" in line and not line.lstrip().startswith("#"):
-                k, v = line.split("=", 1)
-                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
 
 
 def walk(sb, bucket: str, prefix: str = "") -> list[dict]:
@@ -78,6 +68,8 @@ def backup(out_dir: Path) -> dict:
 
 
 if __name__ == "__main__":
-    load_env()
     sys.path.insert(0, str(ROOT))
+    from supabase_setup.env import load_env
+
+    load_env()
     backup(Path(sys.argv[1]) if len(sys.argv) > 1 else ROOT / "supabase_clear")

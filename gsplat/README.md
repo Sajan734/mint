@@ -28,7 +28,7 @@ comparison needs one).
 ## Run locally against Modal
 
 ```bash
-cd gsplat && python -m venv .venv && .venv/Scripts/pip install modal   # once; then `modal setup`
+cd gsplat && python -m venv .venv && .venv/Scripts/pip install modal   # once; the Modal token is in the root .env
 modal run app.py --video orbit.mp4                                       # one video -> runs/orbit/
 modal run app.py --video orbit.mp4 --video2 orbit_reverse.mp4 --name merged   # top + bottom
 ```
@@ -99,11 +99,18 @@ iPhone app --scan-upload Edge Function--> scans/{id}/bottom.mp4 (optional), then
 The listing step gets the held-out photos as its item's `photos/` and their public URLs as `input.json`
 `photo_urls` (Google Lens needs them); `listing/ingest.py` builds the same item folder from a published scan.
 
-Needs three Modal secrets, written from the repo-root `.env` by `python push_secrets.py`: `mint-supabase`,
-`mint-listing` (Jev, Gemini, Serper) and `mint-buyer` (the buyer agent). Then `modal deploy app.py`.
+Everything comes from the repo-root `.env`: `MODAL_TOKEN_ID` / `MODAL_TOKEN_SECRET` pick the Modal workspace, and
+`modal deploy app.py` sends the Supabase, listing (Jev, Gemini, Serper) and buyer-agent keys with the app. There
+are no Modal secrets to create; a part whose keys are missing is switched off (the deploy prints a note). Edit
+`.env`, redeploy.
+
+**Someone else's Modal:** put their token in `.env`, then `modal deploy app.py` and `python client.py urls`. That
+writes the new `api` URL into `.env` (restart the web apps) and prints `webhook.sql` with the new `on_upload` URL:
+run it once in the Supabase SQL editor so uploads reach the new workspace.
 
 ```bash
 modal deploy app.py                                  # prints the on_upload + api URLs
+python client.py urls                                # api URL -> .env; webhook SQL for this workspace
 python client.py scan orbit.mp4 orbit_reverse.mp4    # exactly the phone's path; times each hop
 python client.py relist <scan_id> --title "Lenovo ThinkPad Essential Wireless Mouse"   # redo only the listing
 python client.py rescan <scan_id> [...]              # redo splat + photos + listing for scans already uploaded
@@ -122,7 +129,8 @@ python client.py rescan <scan_id> [...]              # redo splat + photos + lis
   misaligned, ambiguity <= 0.85) the rescan's `splat_url` also gets `ry=<deg>` in its fragment, the B->A yaw of the
   aligner's matrix (`mintsplat/yaw.py`), so the viewer shows both scans in one orientation.
 - **Gemini quota:** development runs on `GEMINI_MODEL=gemini-3.5-flash-lite` (500 requests a day). Demo day:
-  `gemini-3.5-flash` in the root `.env`, then `python push_secrets.py && modal deploy app.py` (and `warm` again).
+  `gemini-3.5-flash` in `listing/stages/identify.py` (`GEMINI["model"]`), then `modal deploy app.py` (and `warm`
+  again).
 
 **Supabase backup:** `python supabase_setup/backup.py` copies every bucket into `supabase_clear/` (gitignored) and
 checks each file's size. Run it before deleting anything.

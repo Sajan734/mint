@@ -4,8 +4,9 @@
 -- session.json (the scan was requested / picked up) and bottom.mp4 (uploaded before video.mp4) also POST: they
 -- only warm a GPU container, so the cold start happens while the seller is still scanning. rescan.mp4 (a buyer's
 -- verify rescan, uploaded last) starts the comparison with the listing (Splatter.run_verify).
--- Run once in the SQL editor of the `mint` project. Idempotent. Uses pg_net (async HTTP, never blocks the upload).
--- The URL is the deployed endpoint (`modal deploy gsplat/app.py` prints it); it carries no secret.
+-- Run once in the SQL editor of the `mint` project, and again after moving to another Modal workspace. Idempotent.
+-- Uses pg_net (async HTTP, never blocks the upload). Don't paste this file as is: `python gsplat/client.py urls`
+-- prints it with the deployed on_upload URL of the workspace in .env filled in (the URL carries no secret).
 
 create extension if not exists pg_net with schema extensions;
 
@@ -15,7 +16,7 @@ begin
   if new.bucket_id = 'scans' and (new.name like '%/video.mp4' or new.name like '%/session.json'
                                   or new.name like '%/bottom.mp4' or new.name like '%/rescan.mp4') then
     perform net.http_post(
-      url := 'https://doalnikhil--mint-gsplat-on-upload.us-east.modal.run',
+      url := '<on_upload URL: python gsplat/client.py urls>',
       body := jsonb_build_object('bucket_id', new.bucket_id, 'name', new.name),
       timeout_milliseconds := 10000
     );
