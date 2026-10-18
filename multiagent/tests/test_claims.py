@@ -138,12 +138,10 @@ def finding(status):
     return ClaimsFinding(claim="c", source="accessory", status=status, p_present=0.1, views=[])
 
 
-@pytest.mark.parametrize(
-    "label", ["same", "different", "uncertain", "alignment_failed", "scan_quality_poor"]
-)
+@pytest.mark.parametrize("label", ["same", "different"])
 @pytest.mark.parametrize("status", ["supported", "contradicted", "unverifiable"])
 def test_label_never_changes(label, status):
-    v = verdict(label, 0.9 if label in ("same", "different") else None)
+    v = verdict(label, 0.9)
     assert apply_claims(v, [finding(status)]).label == label
 
 

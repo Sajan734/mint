@@ -50,8 +50,7 @@ final class CaptureSession: NSObject, ObservableObject {
     static let tickCount = 72
 
     @Published private(set) var phase: Phase = .waiting {
-        // Read QR codes only while waiting for a product (or on the done / failed screens).
-        didSet { loop.lookForCodes = phase == .waiting || phase == .finished || phase.isFailed }
+        didSet { loop.lookForCodes = phase.readsCodes }
     }
     @Published private(set) var job: Job?
     @Published private(set) var link: Link = DashboardLink.url == nil ? .notSetUp : .connecting
@@ -65,9 +64,6 @@ final class CaptureSession: NSObject, ObservableObject {
     /// How far the paper has turned this pass (radians, clockwise from above), eased for display: the ring's
     /// bright spot sits at this angle (clockwise from the top), on the side the camera is looking at now.
     @Published private(set) var ringTurn: Double = 0
-    /// The item's box on screen (view points, eased), and whether it's in view right now.
-    @Published private(set) var itemBox: CGRect?
-    @Published private(set) var itemVisible = false
     @Published private(set) var lapCompletedAt: Date?
     /// The sheet's edges were read in the last moment (false: no paper, or hands covering it).
     @Published private(set) var paperSeen = false
@@ -81,21 +77,20 @@ final class CaptureSession: NSObject, ObservableObject {
     private var ticker: Timer?
     private var poller: Task<Void, Never>?
     private var handled: Set<String> = []
+    private var sent: Set<String> = []
     private var linkFailures = 0
     private var turn = PaperTurn()
     private var coverage = TurnCoverage()
     private var lastObservation: TimeInterval?
     private var lastPaperAt = Date.distantPast
     private var fullSlices = 0
-    private var targetBox: CGRect?
-    private var pendingBox: CGRect?
-    private var pendingCount = 0
-    private var lastItemAt = Date.distantPast
     private var previewing = false   // Debug screen previews only
     private var reportedTenth = -1
     private var exposureLocked = false
-    private var lastAim: CGPoint?
-    private var lastAimAt = Date.distantPast
+    /// The AR session should be running (between `run()` and `pause()`).
+    private(set) var isRunning = false
+    private var startedAt = Date.distantPast
+    private var lastRestart = Date.distantPast
     private let tick = UIImpactFeedbackGenerator(style: .light)
     private let bump = UIImpactFeedbackGenerator(style: .heavy)
     private let success = UINotificationFeedbackGenerator()
@@ -108,11 +103,34 @@ final class CaptureSession: NSObject, ObservableObject {
         arView.session.delegate = loop
         arView.session.delegateQueue = loop.queue
         loop.onSight = { [weak self] in self?.apply($0) }
+        loop.onNeedsRestart = { [weak self] _ in self?.restartCamera() }
+        // `phase` starts at .waiting without running its didSet: read QR codes from the very first screen.
+        loop.lookForCodes = phase.readsCodes
     }
 
     // MARK: - Lifecycle
 
+    /// Starts the camera, AR tracking, the 30 Hz tick and the dashboard polling. Safe to call again.
     func run() {
+        arView.session.run(Self.configuration(), options: [.resetTracking])
+        isRunning = true
+        startedAt = Date()
+        ticker?.invalidate()
+        ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.onTick() }
+        }
+        startPolling()
+        #if DEBUG
+        if let screen = UserDefaults.standard.string(forKey: "MintPreview") { preview(screen) }
+        #endif
+    }
+
+    /// Back in the foreground (from the Camera app's QR banner, the app switcher, a call…): run again if paused.
+    func resume() {
+        if !isRunning { run() }
+    }
+
+    private static func configuration() -> ARWorldTrackingConfiguration {
         let config = ARWorldTrackingConfiguration()
         // Full 4:3 sensor frames from the main (1x, wide-angle) back camera: ARKit's K refers to exactly these
         // pixels (the poses stay exact). Asking for the wide camera by name: a format is otherwise picked by size
@@ -125,23 +143,26 @@ final class CaptureSession: NSObject, ObservableObject {
             config.videoFormat = format
         }
         config.isAutoFocusEnabled = true
-        arView.session.run(config, options: [.resetTracking])
-        ticker?.invalidate()
-        ticker = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
-            MainActor.assumeIsolated { self?.onTick() }
-        }
-        startPolling()
-        #if DEBUG
-        if let screen = UserDefaults.standard.string(forKey: "MintPreview") { preview(screen) }
-        #endif
+        return config
     }
 
     func pause() {
         if phase == .recording { cancelPass() }
         arView.session.pause()
+        isRunning = false
         ticker?.invalidate()
         poller?.cancel()
         poller = nil
+    }
+
+    /// The camera stopped while the app is open (frozen preview: no frames for a while, the camera came back
+    /// from another app, or the session failed). Run the session again; mid-pass, keep its tracking so the
+    /// pass's poses stay in one world. At most once every 2 s.
+    private func restartCamera() {
+        guard isRunning, Date().timeIntervalSince(lastRestart) > 2 else { return }
+        lastRestart = Date()
+        arView.session.run(Self.configuration(), options: phase == .recording ? [] : [.resetTracking])
+        if phase == .recording { CameraLock.lock() }
     }
 
     // MARK: - Getting a product to scan
@@ -175,10 +196,20 @@ final class CaptureSession: NSObject, ObservableObject {
 
     /// A website link (`mint://scan?id=…` / `mint://verify?id=…&listing=…`) opened the app, or its QR code
     /// was read on the waiting screen.
-    func open(_ url: URL) { follow(url.absoluteString) }
+    func open(_ url: URL) { follow(url.absoluteString, explicit: true) }
 
-    private func follow(_ text: String) {
-        guard let link = DashboardLink.parse(text), !inScanner, !isSending, !handled.contains(link.scanID) else { return }
+    /// `explicit`: the link was opened on purpose (tapped, or from the Camera app's QR banner). Such a link
+    /// always wins, unless that scan was already sent or something has been recorded for the current one.
+    /// A QR code read by this app's own camera never reopens an id it has seen: a cancelled scan's QR may
+    /// still be on the laptop's screen.
+    private func follow(_ text: String, explicit: Bool = false) {
+        guard let link = DashboardLink.parse(text), !isSending, !sent.contains(link.scanID), link.scanID != job?.scanID,
+              explicit || !handled.contains(link.scanID) else { return }
+        if inScanner {
+            // In the scanner only before anything was recorded: drop that job for the new one.
+            guard phase == .ready, passes.isEmpty, let old = job else { return }
+            DashboardLink.report(.cancelled, scanID: old.scanID, passes: 0)
+        }
         begin(Job(scanID: link.scanID, fromDashboard: true, title: nil, listingID: link.listingID))
     }
 
@@ -189,6 +220,7 @@ final class CaptureSession: NSObject, ObservableObject {
 
     private func begin(_ job: Job) {
         handled.insert(job.scanID)
+        CameraLock.unlock(resetPoint: true)   // a new item: focus on the middle until tapped
         self.job = job
         passes = []
         resetCoverage()
@@ -206,6 +238,7 @@ final class CaptureSession: NSObject, ObservableObject {
     }
 
     func backToWaiting() {
+        CameraLock.unlock(resetPoint: true)
         job = nil
         passes = []
         recordStart = nil
@@ -339,6 +372,7 @@ final class CaptureSession: NSObject, ObservableObject {
                         DashboardLink.report(.uploading, scanID: job.scanID, passes: count, progress: p)
                     }
                 }
+                sent.insert(job.scanID)
                 DashboardLink.report(.uploaded, scanID: job.scanID, passes: count, progress: 1)
                 success.notificationOccurred(.success)
                 phase = .finished
@@ -350,36 +384,25 @@ final class CaptureSession: NSObject, ObservableObject {
 
     // MARK: - Measuring
 
-    /// 30 Hz: the size limit on a pass, whether the paper and item are in view, and easing the item's box
-    /// and the ring's turn towards the latest readings (which come ~8 times a second).
+    /// 30 Hz: the size limit on a pass, whether the paper is in view, and easing the ring's turn towards the
+    /// latest reading (they come ~8 times a second).
     private func onTick() {
+        // Watchdog: frames normally arrive 30–60 times a second. None for 1.5 s (and not just started) = frozen.
+        let now = Date()
+        if isRunning, now.timeIntervalSince(startedAt) > 3,
+           ProcessInfo.processInfo.systemUptime - loop.lastFrameAt > 1.5 { restartCamera() }
         if phase == .recording, let start = recordStart, Date().timeIntervalSince(start) >= Self.maxPassSeconds { stopPass() }
         let seen = Date().timeIntervalSince(lastPaperAt) < 0.6
         if seen != paperSeen { paperSeen = seen }
-        let visible = Date().timeIntervalSince(lastItemAt) < 0.9
-        if visible != itemVisible { itemVisible = visible }
-        if let target = targetBox {
-            if let box = itemBox {
-                let k: CGFloat = 0.3
-                itemBox = CGRect(x: box.minX + (target.minX - box.minX) * k, y: box.minY + (target.minY - box.minY) * k,
-                                 width: box.width + (target.width - box.width) * k, height: box.height + (target.height - box.height) * k)
-            } else {
-                itemBox = target
-            }
-        }
         // The ring follows the paper while recording, then stays where the paper stopped.
         let goal = Double(turn.turned)
         if phase == .recording, lapCompletedAt == nil, !previewing, abs(goal - ringTurn) > 0.0005 { ringTurn += (goal - ringTurn) * 0.3 }
     }
 
-    /// A new reading of the frame: a QR code (while waiting), where the item is, and how far the paper has
-    /// turned, which while recording fills the coverage.
+    /// A new reading of the frame: a QR code (while waiting), or how far the paper has turned, which while
+    /// recording fills the coverage.
     private func apply(_ sight: PaperReader.Sight) {
         if let code = sight.code { follow(code) }
-        if let box = sight.itemBox {
-            track(box)
-            aimCamera(at: box)
-        }
         guard let reading = sight.paper, turn.update(reading, time: sight.timestamp) else { return }
         lastPaperAt = Date()
         // Once the lap is done the measurement stops: hand-held touch-ups (walking round, other heights)
@@ -390,45 +413,26 @@ final class CaptureSession: NSObject, ObservableObject {
         publishCoverage()
     }
 
-    /// While lining up, keep autofocus and exposure on the item (twice a second at most, and only when it
-    /// has moved), so the lens has settled on it when the scan starts and locks.
-    private func aimCamera(at sensorBox: CGRect) {
-        guard phase == .ready else { return }
-        let centre = CGPoint(x: sensorBox.midX, y: sensorBox.midY)
-        let moved = lastAim.map { hypot($0.x - centre.x, $0.y - centre.y) > 0.04 } ?? true
-        guard moved, Date().timeIntervalSince(lastAimAt) > 0.5 else { return }
-        CameraLock.aim(at: centre)
-        lastAim = centre
-        lastAimAt = Date()
-    }
+    // MARK: - Tap to focus
 
-    /// The item's box from a reading, on screen. The paper finder only ever reports what the sheet
-    /// encloses, but a sudden jump (a hand, a shadow) has to repeat 3 times before the brackets follow.
-    private func track(_ sensorBox: CGRect) {
-        guard let frame = arView.session.currentFrame else { return }
+    /// Focus where the screen was tapped (window points), like the Camera app. Before a scan, focus and exposure
+    /// follow that point until the scan starts and locks them; during a scan, focus runs once there and holds
+    /// (exposure stays locked). false: the tap wasn't on the camera picture, or the camera can't be set.
+    @discardableResult
+    func focus(atScreen point: CGPoint) -> Bool {
+        guard isRunning, phase == .waiting || phase == .ready || phase == .recording,
+              let frame = arView.session.currentFrame else { return false }
         let size = arView.bounds.size
-        guard size.width > 0 else { return }
+        let p = arView.convert(point, from: nil)
+        guard size.width > 0, size.height > 0, arView.bounds.contains(p) else { return false }
+        // View → sensor-normalized (the camera's landscape image, top-left origin): the inverse of how the
+        // camera image is laid onto the view.
         let toView = frame.displayTransform(for: .portrait, viewportSize: size)
-        let corners = [CGPoint(x: sensorBox.minX, y: sensorBox.minY), CGPoint(x: sensorBox.maxX, y: sensorBox.minY),
-                       CGPoint(x: sensorBox.minX, y: sensorBox.maxY), CGPoint(x: sensorBox.maxX, y: sensorBox.maxY)]
-            .map { $0.applying(toView) }.map { CGPoint(x: $0.x * size.width, y: $0.y * size.height) }
-        let xs = corners.map(\.x), ys = corners.map(\.y)
-        // In screen coordinates: the camera preview is letterboxed to the sensor's 4:3 (CaptureView), so it no
-        // longer starts at the top of the screen where the brackets' overlay does.
-        let origin = arView.convert(CGPoint.zero, to: nil)
-        let box = CGRect(x: xs.min()! + origin.x, y: ys.min()! + origin.y, width: xs.max()! - xs.min()!, height: ys.max()! - ys.min()!)
-        let area = box.width * box.height / (size.width * size.height)
-        guard area > 0.002, area < 0.5 else { return }
-        func far(_ a: CGRect, _ b: CGRect) -> Bool { hypot(a.midX - b.midX, a.midY - b.midY) > 0.25 * size.width }
-        if let target = targetBox, Date().timeIntervalSince(lastItemAt) < 1.5, far(box, target) {
-            if let p = pendingBox, !far(box, p) { pendingCount += 1 } else { pendingCount = 1 }
-            pendingBox = box
-            guard pendingCount >= 3 else { return }
-        }
-        pendingBox = nil
-        pendingCount = 0
-        targetBox = box
-        lastItemAt = Date()
+        let sensor = CGPoint(x: p.x / size.width, y: p.y / size.height).applying(toView.inverted())
+        let target = CGPoint(x: min(max(sensor.x, 0), 1), y: min(max(sensor.y, 0), 1))
+        guard CameraLock.focus(at: target, holdExposure: phase == .recording) else { return false }
+        tick.impactOccurred(intensity: 0.6)
+        return true
     }
 
     private func publishCoverage() {
@@ -458,8 +462,6 @@ final class CaptureSession: NSObject, ObservableObject {
         let fake = VideoRecorder.Summary(directory: URL(fileURLWithPath: "/nonexistent"), scanID: job!.scanID, pass: 1,
                                          seconds: 23, frames: 690, megabytes: 23)
         lastPaperAt = .distantFuture
-        lastItemAt = .distantFuture
-        targetBox = CGRect(x: 125, y: 330, width: 150, height: 120)
         // Made-up coverage: the paper turned `deg` clockwise, so sides −deg…0 have been seen.
         let fill = { (deg: Double) in
             self.ticks = (0..<Self.tickCount).map { i in

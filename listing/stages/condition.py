@@ -44,7 +44,7 @@ JEV = {"timeout_s": 30.0, "max_retries": 1}
 
 THRESHOLDS = {
     "usable_min": 0.60,  # item_usable P(yes) for a view to count
-    "min_usable_views": 6,  # fewer usable views than this -> seller check
+    "min_usable_share": 0.5,  # fewer usable photos than this share of them -> seller check (4 of the usual 8)
     # Upper bounds of the aggregated wear score (0 = like new .. 3 = heavy wear) for each grade.
     "grade_bands": [(0.5, "like_new"), (1.5, "light_wear"), (2.5, "moderate_wear"), (math.inf, "heavy_wear")],
     "grade_confidence_min": 0.50,  # mean Score confidence below this -> seller check
@@ -106,8 +106,8 @@ def build_condition(
     t = thresholds
     usable, pool = usable_pool(answers, t)
     reasons = []
-    if len(usable) < t["min_usable_views"]:
-        reasons.append(f"only {len(usable)} of {len(answers)} views were usable")
+    if len(usable) < max(1, math.ceil(t["min_usable_share"] * len(answers))):
+        reasons.append(f"only {len(usable)} of {len(answers)} photos were usable")
 
     agg = aggregates(pool)
     wear = agg["wear"]

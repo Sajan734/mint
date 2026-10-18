@@ -2,7 +2,7 @@
 
 The key covers the stage's inputs (upstream outputs, the seller's name, the asking price) and the run settings, so
 a changed input is a miss rather than a stale hit, and replaying a run hits every stage. Files a stage writes next
-to its JSON (the highlighted splat, its debug sheet) are cached with it and put back when they've gone missing.
+to its JSON are cached with it and put back when they've gone missing.
 Layout: <cache_dir>/<item>/<stage>.<key>.json, and <stage>.<key>.files/ with a files.json manifest.
 """
 

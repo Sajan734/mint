@@ -1,17 +1,24 @@
-# PREREG: buyer-agent evaluation
+# PREREG: buyer-agent evaluation (v2)
 Frozen before the first PASLCD run. Approved by: <user>, <date>. results.md quotes this file's commit.
 
+## Version history
+v2: the verdict is strictly binary (same / different). Replaced `same` (0.25) with `match_min`
+(0.70): same iff match_score = 1 - strongest category evidence >= 0.70. The 0.70 was chosen from
+mismatch and synthetic data only; there is no real true-match data yet. If real matches get
+rejected, loosen it to 0.60 and make a new version (v3).
+v1 (superseded): sha256 37d9ed4f3fcf050453430871d00961eafbc45b7a4bd0029373665a3288bd3187.
+
 ## Frozen thresholds
-thresholds_sha256: 37d9ed4f3fcf050453430871d00961eafbc45b7a4bd0029373665a3288bd3187
+thresholds_sha256: cc1fc424ac6470f227b85c91762dfbb33f81d3aaee6a82ef4b0ad106e3e3a8ba
 ```json thresholds
 {
   "ambiguity_max": 0.85,
   "different": 0.5,
+  "match_min": 0.7,
   "min_answered": 8,
   "min_views": 6,
   "quality_frac": 0.75,
   "quality_min": 0.5,
-  "same": 0.25,
   "same_usable_frac": 0.75,
   "support": 2,
   "viewpoint_min": 0.5

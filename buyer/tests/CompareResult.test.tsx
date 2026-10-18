@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
-import type { CompareResponse, VerdictLabel } from "@/lib/compare-types";
+import type { CompareResponse, VerdictCause, VerdictLabel } from "@/lib/compare-types";
 import r435 from "@/mock/compare/435e1251.json";
 import rcce from "@/mock/compare/cce6fb01.json";
 import rfc4 from "@/mock/compare/fc4b95cb.json";
@@ -31,13 +31,34 @@ describe("CompareResult", () => {
   it.each([
     ["same", "Looks like the same item"],
     ["different", "Does not match the listing"],
-    ["uncertain", "We cannot tell"],
-    ["alignment_failed", "The two scans do not line up"],
-    ["scan_quality_poor", "Your scan is not clear enough"],
-    ["listing_rejected", "The listing scan cannot be used"],
   ] as const)("heads a %s verdict with %s", (label, text) => {
     show(withLabel(label));
     expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(text);
+  });
+
+  it.each([
+    ["low_quality", "Your scan was not clear enough to confirm a match"],
+    ["misaligned", "The two scans did not line up"],
+    ["listing_rejected", "The listing scan could not be used"],
+  ] as const)("shows the %s cause line under a different verdict", (cause: VerdictCause, text) => {
+    show({ ...R435, verdict: { ...R435.verdict!, label: "different", cause } });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Does not match the listing");
+    expect(screen.getByText(text)).toBeInTheDocument();
+    expect(document.querySelector('[data-icon="check"]')?.closest("h1")).toBeNull();
+  });
+
+  it("shows no cause line when there is no cause (old recorded runs)", () => {
+    show(R435);
+    expect(screen.queryByText(/not clear enough|did not line up|could not be used/)).toBeNull();
+  });
+
+  it("only a same verdict gets the match mark; different gets a cross, never a dash", () => {
+    for (const label of ["same", "different"] as const) {
+      const { container, unmount } = show(withLabel(label));
+      const icons = [...container.querySelectorAll("h1 svg")].map((s) => (s as SVGElement).dataset.icon);
+      expect(icons).toEqual([label === "same" ? "check" : "cross"]);
+      unmount();
+    }
   });
 
   it("shows how sure, the views compared, the flagged differences and the next step", () => {
@@ -91,17 +112,24 @@ describe("CompareResult", () => {
 
   it("explains a failed check and offers Try again", () => {
     show({ ...R435, status: "failed", verdict: null, next_step: null, explanation: null, error: { code: "jev_down", message: "The comparison service did not answer." } });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("The check did not finish");
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Could not run the check, try again");
     expect(screen.getByText("The comparison service did not answer.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Try again" })).toHaveAttribute("href", "/listing/pots_i1/check");
     expect(screen.queryByRole("slider")).toBeNull();
   });
 
-  it("moves the wipe to a view from its chip", () => {
+  it("never renders a failed check as a match or with any verdict mark", () => {
+    const { container } = show({ ...R435, status: "failed", verdict: R435.verdict, error: { code: "x", message: "Nope." } });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Could not run the check, try again");
+    expect(screen.getByRole("heading", { level: 1 })).not.toHaveTextContent(/Looks like the same/);
+    expect(container.querySelector("h1 svg")).toBeNull();
+  });
+
+  it("has no view-by-view compare UI", () => {
     show(R435);
-    expect(screen.getByAltText("Your scan, view 1")).toBeInTheDocument();
-    fireEvent.click(within(screen.getByRole("region", { name: "What looks different" })).getAllByRole("button", { name: "Show view 7" })[0]);
-    expect(screen.getByAltText("Your scan, view 7")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Compare views" })).toBeNull();
+    expect(screen.queryByRole("button", { name: /Show view/ })).toBeNull();
+    expect(screen.queryByRole("slider")).toBeNull();
   });
 
   it("copies the drafted message", async () => {

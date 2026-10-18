@@ -27,7 +27,7 @@ HEADLINE = {
     "none": "The item you received appears to match the listing.",
     "request_refund": "The item you received likely does not match the listing.",
     "message_seller": "The item you received appears to differ from the listing in some way.",
-    "request_more_photos": "We could not tell for sure, so more photos are likely needed.",
+    "request_more_photos": "The scans were too unclear to compare, so more photos likely help.",
     "escalate": "This check appears unresolved, so support should likely look at it.",
 }
 MAX_REFUND_CLAIMS = 3
@@ -38,15 +38,15 @@ def _views(verdict: Verdict) -> int:
     return ev.usable_views or ev.answered_views or ev.requested_views
 
 
-def how_sure(score: float | None) -> str:
-    if score is None:
+def how_sure(score: float | None, cause: str | None = None) -> str:
+    if score is None or cause:
         return "We could not rate how strong the evidence is. This is not proof."
     word = "fairly strong" if score >= STRONG else "moderate" if score >= MODERATE else "weak"
     return f"We have {word} evidence. This is not proof."
 
 
 def found_lines(verdict: Verdict) -> list[str]:
-    if verdict.label == "listing_rejected":
+    if verdict.cause == "listing_rejected":
         return ["The listing's scan did not match the product it describes."]
     total = _views(verdict)
     lines = [
@@ -56,8 +56,10 @@ def found_lines(verdict: Verdict) -> list[str]:
     ]
     if lines:
         return lines
-    if verdict.label in ("same", "different"):
+    if verdict.label == "same":
         return ["We saw no clear difference between the two scans."]
+    if verdict.cause is None:
+        return ["The two scans were not a close enough match."]
     return ["The scans could not be compared reliably."]
 
 
@@ -71,13 +73,13 @@ def claim_lines(findings: Sequence[ClaimsFinding]) -> list[str]:
 
 
 def _headline(verdict: Verdict, plan: Plan) -> str:
-    if verdict.label == "listing_rejected":
+    if verdict.cause == "listing_rejected":
         return "This listing did not pass the platform's product check."
     return HEADLINE[plan.category]
 
 
 def _compared(verdict: Verdict) -> str:
-    if verdict.label == "listing_rejected":
+    if verdict.cause == "listing_rejected":
         return "We did not compare the scans, because the listing failed the product check first."
     return f"We compared {_views(verdict)} views of the listing scan with your scan."
 
@@ -101,7 +103,7 @@ def refund_text(verdict: Verdict, findings: Sequence[ClaimsFinding]) -> str:
 
 
 def _steps(verdict: Verdict, plan: Plan, found: list[str]) -> list[str]:
-    if verdict.label == "listing_rejected":
+    if verdict.cause == "listing_rejected":
         return [
             "Do not rely on this listing's scan.",
             "Contact support and tell them the listing did not pass the product check.",
@@ -142,7 +144,7 @@ def build_explanation(
     plan: Plan, verdict: Verdict, findings: Sequence[ClaimsFinding], step: NextStep
 ) -> Explanation:
     found = found_lines(verdict)
-    sure = how_sure(verdict.evidence_score)
+    sure = how_sure(verdict.evidence_score, verdict.cause)
     headline = _headline(verdict, plan)
     friendly = (
         step.summary

@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import timing
-from stages.identify import GEMINI, _api_key, _strip_defaults, gemini_client, gemini_model
+from stages.identify import GEMINI, _api_key, _strip_defaults, gemini_client, gemini_model, retry_wait_s
 
 
 @dataclass(frozen=True)
@@ -83,6 +83,7 @@ async def generate_json(
                 if e.code not in GEMINI["retry_client_codes"]:
                     raise
                 last_error = e
+                await asyncio.sleep(retry_wait_s(e))
             except (errors.APIError, asyncio.TimeoutError) as e:
                 last_error = e
         else:

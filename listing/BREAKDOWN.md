@@ -1,65 +1,55 @@
 # listing/ breakdown
 
-What the listing pipeline does today, what's about to change, and how to build on it now. For the rules of working inside this folder, see [CLAUDE.md](CLAUDE.md).
+What the listing pipeline does, how to run it, and how to build on its output. For the rules of working inside this folder, see [CLAUDE.md](CLAUDE.md).
 
-## What it does today
+## What it does
 
-Input: one item folder holding a trained Gaussian splat (`splat.spz` or `splat.ply`) and an optional `input.json` (`seller_name`, `asking_price_cad`, `up_axis`).
-Output: `runs/<item>/result.json`, which is either a **Listing** (title, description, condition, price, deal rating) or a **Rejection** (the scan isn't the product the seller named).
+**Input:** an item folder with `photos/` (the product from several angles, normally 8 JPGs), plus an optional `input.json`:
+
+```json
+{"seller_name": "Logitech MX Master 3S", "asking_price_cad": 90, "photo_urls": ["https://.../p1.jpg", "..."]}
+```
+
+`photo_urls` are public URLs of the same photos, in the same order. Google Lens needs one. Without them the pipeline uploads two photos to the public Supabase bucket itself (`assets/listing-photos/<item>/`, needs `SUPABASE_SERVICE_ROLE_KEY`).
+
+**Output:** `runs/<item>/result.json`, which is either a **Listing** (title, description, condition, price with the listings it came from, deal rating) or a **Rejection** (the photos aren't the product the seller named).
 
 ```
-render ─► identify ─┬─► baseline_lookup ─► match_gate ──┬─► (mismatch) Rejection
-                    │                  └─► condition ───┤
-                    ├─► listing_text ───────────────────┤
-                    └─► reference_price ────────────────┴─► deal_rating ─► finalize ─► result.json
-                                          (condition) ─► highlight (background, rewrites result.json)
+load_photos ─► identify ─┬─► baseline_lookup ─► match_gate ─┬─► (mismatch, seller-named) Rejection
+  (local)    [read ∥ Lens]│                  └─► condition ──┤
+             (+ fuse)     ├─► listing_text (+ model sources) ┤
+                          └─► reference_price ───────────────┴─► deal_rating ─► finalize ─► result.json
 ```
 
 | Stage | What it does | Calls |
 |---|---|---|
-| `render` | 12 views of the splat (8 around, 4 from above), 1024 px | Modal GPU or local GPU |
-| `identify` | category, brand and model, but only text actually read off the item counts | 1 Gemini call |
-| `baseline_lookup` | one clean product photo of the named product, to compare against | Serper image search + Jev photo checks |
-| `match_gate` | is the scan the product named? Only a seller-typed name or a printed model can make it a rejection | 12 Jev calls |
-| `condition` | grade (like new … heavy wear) and defects, with printed logos treated as design, not damage | 12 Jev calls |
-| `listing_text` | title, description, tags; falls back to a template if Gemini fails or is slow | 1 Gemini call |
-| `reference_price` | new price in CAD from real listings (Serper shopping, Canada), filtered by Gemini, median of at least 2 listings from 2 sellers; otherwise a model estimate, then a category default | Serper + 1 Gemini call |
+| `load_photos` | photos upright, shrunk to 1024 px, saved as JPEG (one size serves every model) | none (local) |
+| `identify` | what the product is: brand and model when the evidence agrees, else brand and type, else type | 1–2 Gemini + 2 Lens |
+| `baseline_lookup` | one clean product photo of it, to compare against | Serper images + Jev photo checks |
+| `match_gate` | are the photos that product? Only a seller-typed name can lead to a rejection | 8 Jev (one per photo) |
+| `condition` | grade (like new … heavy wear) and defects; printed logos count as design, not damage | 8 Jev |
+| `listing_text` | title, description, tags; with an exact model, real features from sources about it | 1 Gemini (+1 Serper search) |
+| `reference_price` | new price in CAD from real Canadian listings of that model (or of the brand's line, flagged), median of ≥2 from ≥2 sellers; else an estimate | Serper shopping + 1 Gemini |
 | `deal_rating` | asking price vs what the item is worth in its condition | pure code |
 | `finalize` | assembles the Listing; the price is computed here in code | pure code |
-| `highlight` | a copy of the splat with defects tinted red | Gemini + GPU (**being removed**) |
 
-The decisions are always made in code. The models only supply probabilities and fields.
+### How identification decides what to claim
 
-Every run writes these to `runs/<item>/`:
+Gemini reads the photos (printed text, product type, its best guess at brand and model) while Google Lens finds visually matching products. If the read alone doesn't settle a model, one more Gemini call weighs the read, the seller's name and the Lens titles. **Code then decides what's claimed:**
+
+- A value is **backed** when it's printed on the item, in the seller's name, or in at least 3 Lens titles from 2 different sites (whole words only: "MX Master 3" isn't backed by "MX Master 3S").
+- A **brand** needs one kind of backing. An exact **model** needs two kinds plus a backed brand, and must be more than one plain word (a single word like "ThinkPad" is usually a product line).
+- `product_name` is the most specific backed name ("Logitech MX Master 3S" / "Sony wireless headphones" / "plush toy"). `specificity` says which, and `evidence` says what backed it.
+
+Nothing is tuned to particular products.
+
+### What every run writes to `runs/<item>/`
+
 - `result.json`: the Listing or Rejection (what gets posted)
-- `<stage>.json`, plus `*_raw.json` with each stage's raw API answers
-- `timings.json`: each stage's wall time split into Gemini, Jev, Serper and download waiting versus our own code, the time to result.json, and the critical path
+- `<stage>.json` and `*_raw.json`: each stage's output and raw API answers. `identify_raw.json` has the read, the Lens matches, the fuse answer and what wasn't claimed, and why.
+- `timings.json`: each stage's wall time split into Gemini, Jev, Serper, download and upload waiting versus our own code, the time to result.json, and the critical path. Typical: **8–10 s** to result.json.
 
-### Recent changes on this branch
-
-- **Real prices.** `reference_price` uses real Canadian listings instead of a Gemini guess, and records them in `Listing.price_sources` (title, seller, price, link), so the site can show where a price came from. Deal ratings backed by real listings are normal confidence.
-- **Fewer false "uncertain" matches.** When identify read "ThinkPad" but not a model, the reference photo search used to be skipped. Four ThinkPad mouse scans in Supabase went from uncertain to match. Rejections still happen, but only when the seller typed a name or a model is printed on the item.
-- **Faster and bounded.** Stages start as soon as their inputs exist, and slow Gemini or Serper calls fall back instead of stalling the listing. Each run's timings are saved in `timings.json`.
-
-## What's going to change
-
-These are planned, not built yet:
-
-1. **The input becomes a JPG, not a splat.** We'll receive one JPG showing the product from several angles. `render` and all GPU work (Modal and local) leave the pipeline, and the views come from the JPG instead.
-2. **The highlighted splat is cancelled.** A teammate has a better alternative. The `highlight` stage, `Listing.highlight` and its files will be removed. Condition stays, because it drives the price and the description.
-3. **Identification gets much better, and stays honest.**
-   - Planned evidence sources: Google Lens matches through Serper (it needs a public image URL; our Supabase bucket is public), the text read off the item, and the seller's name. Possibly a stronger Gemini model for identify alone.
-   - An exact model is claimed only when the evidence agrees; otherwise the pipeline gives the most specific product it can support (e.g. "Logitech wireless mouse"), never just "black mouse".
-   - A confidence for the identification will be recorded.
-4. **The listing follows from the model.**
-   - Titles that name the product the way a real listing does.
-   - Descriptions with that exact model's real features plus the honest condition.
-   - Prices from listings of that exact model, not the whole product line.
-5. **Measured, not assumed.** A small ground-truth set (items we have photos of, plus the Supabase scans we know) will score identification and price before and after.
-
-Expect `contracts.py` to change: the input contract changes, `highlight` disappears from `Listing`, and an identification confidence is added. Anything that reads `result.json` should treat the fields below as the stable core.
-
-## How to work off what's here now
+## How to work with it
 
 ### Run it
 
@@ -70,47 +60,43 @@ From `listing/`, on Windows PowerShell:
 pip install -r requirements.txt
 python pipeline.py fixtures/item01                      # offline fixture -> Listing
 python pipeline.py fixtures/item02                      # offline fixture -> Rejection
-python ingest.py <scan_id> [--seller-name "..."]        # download a finished scan from Supabase into samples/<scan_id>
-python pipeline.py samples/<scan_id> [--asking-price 30]   # live run on it
-python -m pytest                                         # 448 tests, never call a real API
+python pipeline.py samples/<item> [--asking-price 30]   # live, on any folder with photos/
+python ingest.py <scan_id> [--seller-name "..."]        # a Supabase scan's 8 views as an item folder
+python scripts/try_identify.py samples/<item>           # identification alone, with its evidence
+python -m pytest                                         # never calls a real API
 ```
 
-You need these keys in the repo-root `.env`: `GEMINI_API_KEY`, `TYPESAFE_API_KEY`, `SERPER_API_KEY`, and `RENDER_BACKEND` (`modal` or `local`, until rendering goes away). The Gemini key is shared and its quota is small (one listing makes about 3 calls), so use the cache when you aren't testing a live change:
+You need these keys in the repo-root `.env`: `GEMINI_API_KEY`, `TYPESAFE_API_KEY`, `SERPER_API_KEY`, and optionally `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` (for photos without public URLs).
 
-- `DEMO_MODE=1` reads every stage from `demo_cache/` first, keyed by its inputs, and caches what it computes.
-- `DEMO_MODE=offline` (or `--offline`) never calls an API: a missing cache entry is an error naming the stage.
+The Gemini key is shared and free-tier: **15 requests a minute, 500 a day**, at about 4 per listing. Space listings out, and use the cache when you aren't testing a live change:
+
+- `DEMO_MODE=1` reads every stage from `demo_cache/` first, keyed by its inputs.
+- `DEMO_MODE=offline` (or `--offline`) never calls an API.
 
 ### Read its output
 
-`result.json` (a `Listing` in `contracts.py`). These fields are safe to build on:
+`result.json` (a `Listing` in `contracts.py`):
 
 | Field | Meaning |
 |---|---|
-| `title`, `description`, `tags`, `attributes` | listing text (will get more specific once identification improves) |
-| `condition_grade`, `condition_notes` | `like_new` / `light_wear` / `moderate_wear` / `heavy_wear`, plus buyer-facing notes |
+| `title`, `description`, `tags`, `attributes` | listing text; names the exact model and its real features only when identify backed that model |
+| `condition_grade`, `condition_notes` | `like_new` / `light_wear` / `moderate_wear` / `heavy_wear`, plus buyer-facing notes ("Photo 3 shows a scuff.") |
 | `price_cad`, `price_justification` | Mint's price for the item in its condition, and the one-sentence maths behind it |
 | `price_sources` | the real listings the new price came from (empty when it's an estimate) |
 | `deal_rating` | `great` / `good` / `fair` / `high` / `overpriced` for the asking price, with `confidence` and the reasons |
 | `needs_seller_check`, `seller_check_reasons` | what the seller should confirm before publishing |
-| `highlight` | **going away**; don't build on it |
+| `preview_images` | the first 4 photos (resized) |
 
-A `Rejection` has `match_check` with a seller-facing `reason`.
+A `Rejection` has `match_check` with a seller-facing `reason`. The identification itself (`product_name`, `specificity`, `evidence`) is in `runs/<item>/identify.json`.
 
-From Python, `run_pipeline(item_dir, on_listing=hook)` (`pipeline.py`) returns the finished result. `on_listing` gets it as soon as the listing is ready, which is how a caller can post early.
+From Python, `run_pipeline(item_dir, on_listing=hook)` (`pipeline.py`) returns the result; `on_listing` gets it the moment `result.json` is written.
 
 ### How it reaches the website
 
-`gsplat/app.py` runs this pipeline in-process after each scan (`gsplat/mintsplat/market.py`) and publishes `assets/listings/{scan_id}.json` plus each stage's JSON under `listings/{scan_id}/run/`. The whole `Listing` dict goes into the site document, so new fields such as `price_sources` reach the site without a code change. **Production only picks up this branch once mint-gsplat is redeployed.**
-
-### Useful scripts
-
-- `scripts/match_before_after.py [scan_id ...]`: Supabase's recorded match and price vs this code, per listing. It only reads from Supabase.
-- `scripts/timing_runs.py samples/<scan_id> --label x --runs 2`: timed live runs, saved for comparison.
-- `scripts/try_identify.py`, `try_baseline.py`, `try_condition.py`, `try_listing.py`: run one stage live.
-- `scripts/replay_match_gate.py`: re-apply match thresholds to saved Jev answers, with no API calls.
+`gsplat/mintsplat/market.py` runs this pipeline in-process after each scan and publishes `assets/listings/{scan_id}.json`. **It still passes a splat**, so it needs a small change before it works with this version. Once the app uploads the 8 photos, `market.prepare_item` should write them to `<item>/photos/` with their public URLs as `photo_urls` in `input.json`, and stop setting `RENDER_BACKEND`. The site reads the `Listing` dict as-is.
 
 ### If you change something here
 
-- Stay inside `listing/`. If you need a change in a stage, keep `contracts.py` as the source of truth.
-- Thresholds and weights live in a dict at the top of their stage file.
+- Stay inside `listing/`, and keep `contracts.py` as the source of truth.
+- Thresholds and weights live in a dict at the top of their stage file. No product-specific rules.
 - Run the tests and both fixtures before pushing.

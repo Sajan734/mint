@@ -102,18 +102,14 @@ export interface Explanation {
   disclaimer: string;
   friendly_summary?: string | null;
 }
-export type VerdictLabel =
-  | "same"
-  | "different"
-  | "uncertain"
-  | "alignment_failed"
-  | "scan_quality_poor"
-  | "listing_rejected";
+export type VerdictLabel = "same" | "different";
+export type VerdictCause = "low_quality" | "misaligned" | "listing_rejected";
 // The subset of CompareResponse the site uses.
 export interface CompareResult {
   comparison_id: string;
   status: "done" | "failed";
   verdict_label: VerdictLabel | null;
+  verdict_cause?: VerdictCause | null;
   explanation: Explanation | null;
   error: { code: string; message: string } | null;
 }

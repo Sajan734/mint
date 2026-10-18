@@ -68,7 +68,8 @@ def test_jev_unavailable_gives_failed_no_plan(tmp_path):
 def test_scan_quality_poor_routes_to_r1(tmp_path):
     jev = FakeJev([])
     out = go(tmp_path, jev, splat_req(), resolver=stub_resolver("icp", ["scan_too_sparse_a"]))
-    assert out.verdict.label == "scan_quality_poor" and out.next_step.reason_code == "R1"
+    assert (out.verdict.label, out.verdict.cause) == ("different", "low_quality")
+    assert out.next_step.reason_code == "R1"
     assert jev.calls == []
 
 
@@ -152,7 +153,10 @@ def test_listing_mismatch_is_rejected_without_jev_or_claims(tmp_path):
     claims = ListingClaims(title="Lamp", accessories_included=["charger"])
     check = {"verdict": "mismatch", "reason": "Different product."}
     out = go(tmp_path, jev, req(claims=claims, listing_match_check=check))
-    assert out.status == "done" and out.verdict.label == "listing_rejected"
+    assert out.status == "done" and (out.verdict.label, out.verdict.cause) == (
+        "different",
+        "listing_rejected",
+    )
     assert out.next_step.reason_code == "R8" and out.next_step.category == "escalate"
     assert jev.calls == [] and out.claims_findings == [] and not out.claims_available
     assert "repeated" not in out.next_step.summary

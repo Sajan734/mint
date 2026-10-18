@@ -27,7 +27,7 @@ from contracts import Baseline, Identity, RunContext
 from images import FittedImage, ImageProblem, fit_for_jev
 from jev_questions import BASELINE_CONTEXT, BASELINE_QUESTIONS, IMAGE_HEADERS, MODEL
 from stages._fixture import has_stub, load_stub
-from stages.identify import MissingKeyError, text_in_query
+from stages.identify import MissingKeyError
 
 LISTING_ROOT = Path(__file__).resolve().parent.parent
 
@@ -106,19 +106,16 @@ def baseline_query(identity: Identity | None, seller_name: str | None) -> str:
 
 
 def has_claim(identity: Identity | None, seller_name: str | None) -> bool:
-    """Someone named this exact product: the seller typed its name, or its model is printed on it. Only then can a
-    reference photo that looks like a different product mean the scan is the wrong item (see match_gate)."""
-    return seller_typed(seller_name) or (identity is not None and identity.model is not None)
+    """The seller named the product. Only then can a reference photo that looks like a different product mean the
+    item is the wrong one (see match_gate). Whatever identify concluded, even from printed text, can be our own
+    mistake (seen live: "ThinkPad" taken as a model found a ThinkPad laptop), so it never rejects a seller's item."""
+    return seller_typed(seller_name)
 
 
 def names_a_product(identity: Identity | None, seller_name: str | None) -> bool:
-    """Worth searching: a product name, or text read off the item in the query (a brand or product line such as
-    "ThinkPad"). A query of colour and category alone ("white stuffed animal") finds some other product."""
-    if has_claim(identity, seller_name):
-        return True
-    if identity is None:
-        return False
-    return identity.brand is not None or bool(text_in_query(identity.visible_text, identity.search_query))
+    """Worth searching: a seller-typed name, or identify backed at least a brand. A product type alone ("stuffed
+    animal") finds some other product."""
+    return seller_typed(seller_name) or (identity is not None and identity.specificity != "type")
 
 
 # --- decisions (pure) -------------------------------------------------------------------------
@@ -328,7 +325,7 @@ def load_manual(ctx: RunContext, query: str) -> Baseline:
 
 async def baseline_lookup(ctx: RunContext, identity: Identity | None, seller_name: str | None) -> Baseline:
     """identity may be None when the seller typed the product's name: the search needs nothing else, so the pipeline
-    starts it before the scan is even rendered."""
+    starts it before the photos are even loaded."""
     query = baseline_query(identity, seller_name)
     if ctx.manual_baseline:
         return load_manual(ctx, query)

@@ -4,8 +4,7 @@
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import type { ClaimsFinding, CompareResponse, VerdictLabel } from "@/lib/compare-types";
-import { CATEGORY_WORDS, CLAIM_WORDS, flaggedByView, heading, run8, runFooter, viewIndex } from "@/lib/compare";
-import WipeSlider from "@/components/WipeSlider";
+import { CATEGORY_WORDS, CLAIM_WORDS, causeLine, heading, runFooter } from "@/lib/compare";
 import SplatWipe from "@/components/SplatWipe";
 
 export interface CompareResultProps {
@@ -28,39 +27,15 @@ const CLAIM_MARK: Record<ClaimsFinding["status"], { mark: Mark; cls: string }> =
   contradicted: { mark: "cross", cls: "text-ink" },
   unverifiable: { mark: "dash", cls: "text-ink-2" },
 };
+// Binary: a match is a check, anything else a cross. A failed check has no verdict and shows no mark at all.
 const VERDICT_MARK = (label: VerdictLabel | undefined): { mark: Mark; cls: string } =>
-  label === "same" ? { mark: "check", cls: "bg-mint-wash text-mint-ink" } : label === "different" ? { mark: "cross", cls: "bg-coral-wash text-ink" } : { mark: "dash", cls: "bg-surface-2 text-ink-2" };
+  label === "same" ? { mark: "check", cls: "bg-mint-wash text-mint-ink" } : { mark: "cross", cls: "bg-coral-wash text-ink" };
 
 const h2 = "text-[length:var(--t-xl)]";
 
-/** Small buttons that put a view on the wipe. Visible text is the view number; the name says which view. */
-function ViewChips({ label, views, current, onPick }: { label: string; views: string[]; current: number; onPick: (i: number) => void }) {
-  const idx = views.map(viewIndex).filter((i): i is number => i !== null);
-  if (!idx.length) return null;
-  return (
-    <div className="flex flex-wrap items-center gap-1.5">
-      <span className="mr-1 text-sm text-ink-2">{label}</span>
-      {idx.map((i) => (
-        <button
-          key={i}
-          type="button"
-          aria-label={`Show view ${i + 1}`}
-          aria-pressed={i === current}
-          onClick={() => onPick(i)}
-          className="min-h-11 min-w-11 rounded-md bg-surface px-2 text-sm font-semibold tabular-nums transition-colors hover:border-ink aria-pressed:border-ink aria-pressed:bg-ink aria-pressed:text-bg"
-        >
-          {i + 1}
-        </button>
-      ))}
-    </div>
-  );
-}
-
 export default function CompareResult({ result, listingId, recorded = false, note = null, splats = null }: CompareResultProps) {
-  const [index, setIndex] = useState(0);
   const [copy, setCopy] = useState<"idle" | "copied" | "failed">("idle");
   const title = useRef<HTMLHeadingElement>(null);
-  const viewer = useRef<HTMLDivElement>(null);
   useEffect(() => title.current?.focus(), []); // the scan flow just swapped out: move focus to the answer
   useEffect(() => {
     if (copy !== "copied") return;
@@ -74,12 +49,8 @@ export default function CompareResult({ result, listingId, recorded = false, not
   const caveats = v?.caveats ?? [];
   const disclaimer = result.explanation?.disclaimer;
   const mark = VERDICT_MARK(v?.label);
+  const cause = causeLine(result);
 
-  const pick = (i: number) => {
-    setIndex(i);
-    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    viewer.current?.scrollIntoView?.({ block: "nearest", behavior: reduce ? "auto" : "smooth" });
-  };
   const copyMessage = (text: string) =>
     navigator.clipboard?.writeText(text).then(() => setCopy("copied"), () => setCopy("failed")) ?? setCopy("failed");
 
@@ -88,11 +59,14 @@ export default function CompareResult({ result, listingId, recorded = false, not
       <header className="flex max-w-3xl flex-col gap-3">
         {/* Focus lands here for screen readers; it is not a control, so no ring (inline: the global :focus-visible rule is unlayered) */}
         <h1 id="result-h" ref={title} tabIndex={-1} style={{ outline: "none" }} className="flex items-center gap-3 text-[2rem] md:text-[2.5rem]">
-          <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${mark.cls}`}>
-            <Icon mark={mark.mark} className="" />
-          </span>
+          {v && (
+            <span className={`flex size-10 shrink-0 items-center justify-center rounded-full ${mark.cls}`}>
+              <Icon mark={mark.mark} className="" />
+            </span>
+          )}
           {heading(result)}
         </h1>
+        {cause && <p className="text-[length:var(--t-lg)]">{cause}</p>}
         {note && (
           <p role="note" className="w-fit rounded-full bg-amber-wash px-4 py-1.5 text-sm font-medium text-amber">
             {note}
@@ -117,15 +91,13 @@ export default function CompareResult({ result, listingId, recorded = false, not
 
       {v && ev && (
         <div className="grid grid-cols-1 gap-8 md:grid-cols-12 md:gap-10">
-          <div ref={viewer} className="flex min-w-0 scroll-mt-24 flex-col gap-8 md:sticky md:top-24 md:col-span-7 md:self-start">
-            <section aria-labelledby="views-h" className="flex flex-col gap-3">
-              <h2 id="views-h" className={h2}>Compare views</h2>
-              <WipeSlider run8={run8(result.run_id)} count={ev.requested_views} index={index} onIndex={setIndex} flagged={flaggedByView(result)} />
-            </section>
-            {splats && <SplatWipe listingSrc={splats.listing} buyerSrc={splats.buyer} />}
-          </div>
+          {splats && (
+            <div className="min-w-0 md:sticky md:top-24 md:col-span-7 md:self-start">
+              <SplatWipe listingSrc={splats.listing} buyerSrc={splats.buyer} />
+            </div>
+          )}
 
-          <div className="flex min-w-0 flex-col gap-8 md:col-span-5">
+          <div className={`flex min-w-0 flex-col gap-8 ${splats ? "md:col-span-5" : "md:col-span-12 md:max-w-3xl"}`}>
             <section aria-labelledby="diff-h" className="flex flex-col gap-2">
               <h2 id="diff-h" className={h2}>What looks different</h2>
               {ev.flagged.length === 0 ? (
@@ -143,7 +115,6 @@ export default function CompareResult({ result, listingId, recorded = false, not
                             <span className="text-ink-2">{`in ${views.length} of ${ev.usable_views} views`}</span>
                           </span>
                         </p>
-                        <ViewChips label="Views" views={views} current={index} onPick={pick} />
                       </li>
                     );
                   })}
@@ -164,7 +135,6 @@ export default function CompareResult({ result, listingId, recorded = false, not
                         <Icon mark={CLAIM_MARK[f.status].mark} className={CLAIM_MARK[f.status].cls} />
                         {CLAIM_WORDS[f.status]}
                       </p>
-                      <ViewChips label="Checked in" views={f.views} current={index} onPick={pick} />
                     </li>
                   ))}
                 </ul>

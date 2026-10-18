@@ -80,7 +80,8 @@ python client.py cold      # ALWAYS afterwards: back to scale-to-zero (it shuts 
 iPhone app --scan-upload Edge Function--> scans/{id}/bottom.mp4 (optional), then video.mp4
   --Supabase webhook (supabase_setup/webhook.sql)--> on_upload (Modal endpoint, starts each scan once)
   --> Splatter.run_scan: splat + 8 held-out photos + 24 spin frames  (mintsplat/publish.py)
-  --> listing/ pipeline in the same container: render, identify, Jev match + condition, price  (mintsplat/market.py)
+  --> listing/ pipeline in the same container, on the 8 held-out photos: identify (Gemini + Google Lens on their
+      public URLs), Jev match + condition, price  (mintsplat/market.py)
   --> assets/listings/index.json  --> the website (buyer/lib/data/live.ts) lists it at /listing/{id} once published
 ```
 
@@ -95,7 +96,8 @@ iPhone app --scan-upload Edge Function--> scans/{id}/bottom.mp4 (optional), then
 | `listings/{id}/vNN.png`, `listings/{id}/run/*.json`, `listings/index.json` | preview renders; each listing stage's JSON (debugging); every listing document inline |
 | Realtime `batch:{id}` | `stage` events (incl. `7_listing`), `passport_ready`, `listing_ready` |
 
-The listing step gets the held-out photo URLs in its item's `input.json` (`heldout_urls`).
+The listing step gets the held-out photos as its item's `photos/` and their public URLs as `input.json`
+`photo_urls` (Google Lens needs them); `listing/ingest.py` builds the same item folder from a published scan.
 
 Needs three Modal secrets, written from the repo-root `.env` by `python push_secrets.py`: `mint-supabase`,
 `mint-listing` (Jev, Gemini, Serper) and `mint-buyer` (the buyer agent). Then `modal deploy app.py`.
@@ -115,7 +117,10 @@ python client.py rescan <scan_id> [...]              # redo splat + photos + lis
 - **Buyer's rescan check** (`mint://verify?id=<cid>&listing=<scan_id>`): the phone uploads `rescan.capture.json`
   and `rescan.mp4` last. `Splatter.run_verify` splats it, compares like with like (a rescan without an underside
   is compared with the listing's top lap, cached as `splats/{listing}.top.spz`) and runs the buyer agent
-  (`multiagent/buyer_agent`) -> `assets/comparisons/{cid}.json` + view pairs.
+  (`multiagent/buyer_agent`, its own container `compare_scans`, upright alignment) -> `assets/comparisons/{cid}.json`
+  (CompareResponse; the per-view pairs feed Jev but aren't published). If the alignment is trusted (ok, not
+  misaligned, ambiguity <= 0.85) the rescan's `splat_url` also gets `ry=<deg>` in its fragment, the B->A yaw of the
+  aligner's matrix (`mintsplat/yaw.py`), so the viewer shows both scans in one orientation.
 - **Gemini quota:** development runs on `GEMINI_MODEL=gemini-3.5-flash-lite` (500 requests a day). Demo day:
   `gemini-3.5-flash` in the root `.env`, then `python push_secrets.py && modal deploy app.py` (and `warm` again).
 

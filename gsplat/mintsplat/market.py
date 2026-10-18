@@ -3,7 +3,7 @@ MarketListing (buyer/lib/types.ts) to the public bucket.
 
   assets/listings/{scan_id}.json      {"v", "scan_id", "status": listed | rejected | failed, "market_listing" |
                                        "rejection" | "error", "timings_ms", ...}
-  assets/listings/{scan_id}/vNN.png   the listing pipeline's preview renders (Listing.preview_images point here)
+  assets/listings/{scan_id}/pNN.jpg   the listing's preview photos (its first held-out photos, as listing/ sized them)
   assets/listings/{scan_id}/run/      each stage's JSON (identify, baseline_lookup, match_gate, condition, ...):
                                        where to look when a listing comes out wrong or fails
   assets/listings/index.json          every scan, newest first, documents inline (one fetch for the website)
@@ -11,13 +11,14 @@ MarketListing (buyer/lib/types.ts) to the public bucket.
 A listed scan starts unpublished: the seller reviews the draft and publishes it (set_published, called by the
 website through gsplat/app.py `api`), which applies their title, description and price. Buyers see published ones.
 
-listing/ runs unchanged, in-process: the item folder is built the way listing/ingest.py builds it, and the
-render stage uses this container's GPU (RENDER_BACKEND=local), so there is no second cold start.
+listing/ runs unchanged, in-process: the item folder is built the way listing/ingest.py builds it, from the scan's
+8 held-out photos (photos/ + their public URLs in input.json, which Google Lens needs), so no second container.
 """
 import asyncio
 import json
 import os
 import re
+import shutil
 import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -79,21 +80,33 @@ def now_iso() -> str:
 # --- running listing/ ---------------------------------------------------------------------------------
 
 
-def prepare_item(scan_id: str, spz: bytes, seller_name: str | None = None, root: Path | None = None,
-                 heldout_urls: list[str] | None = None) -> Path:
-    """samples/<scan_id>/ with splat.spz + input.json, as listing/ingest.py writes it. input.json also lists the
-    scan's held-out photos (real masked video frames, public URLs) for stages that want photos, not renders."""
+def prepare_item(scan_id: str, photos: dict[str, bytes], photo_urls: list[str], seller_name: str | None = None,
+                 root: Path | None = None) -> Path:
+    """samples/<scan_id>/ as listing/ingest.py writes it: photos/ (the scan's held-out photos, named in order) and
+    input.json with their public URLs in the same order and the seller's product name."""
     item = (root or LISTING_DIR / "samples") / scan_id
-    item.mkdir(parents=True, exist_ok=True)
-    (item / "splat.spz").write_bytes(spz)
-    (item / "input.json").write_text(json.dumps({"seller_name": seller_name, "up_axis": "+y", "scan_id": scan_id,
-                                                 "heldout_urls": heldout_urls or []}))
+    if item.exists():
+        shutil.rmtree(item)  # a relist must not mix in an older run's photos
+    (item / "photos").mkdir(parents=True)
+    for name, data in photos.items():
+        (item / "photos" / name).write_bytes(data)
+    (item / "input.json").write_text(json.dumps({"seller_name": seller_name, "photo_urls": photo_urls,
+                                                 "scan_id": scan_id}))
     return item
+
+
+def heldout_photos(sb, scan_id: str, manifest: dict) -> dict[str, bytes]:
+    """The scan's held-out photos, {file name: jpg}, in order. ValueError for scans made before they existed."""
+    items = (manifest.get("heldout") or {}).get("items") or []
+    if not items:
+        raise ValueError("this scan has no held-out photos (made before 2026-10-17); run it again: client.py rescan")
+    with ThreadPoolExecutor(8) as ex:
+        data = list(ex.map(lambda h: sb.download(ASSETS, f"heldout/{scan_id}/{h['file']}"), items))
+    return dict(zip([h["file"] for h in items], data))
 
 
 def run_listing_pipeline(item: Path) -> tuple[dict, str, Path]:
     """-> (result as a dict, "listing" | "rejection", run dir with the per-stage JSON)."""
-    os.environ["RENDER_BACKEND"] = "local"  # render on this container's GPU
     if str(LISTING_DIR) not in sys.path:
         sys.path.insert(0, str(LISTING_DIR))
     from pipeline import RUNS_ROOT, run_pipeline  # listing/pipeline.py
@@ -136,9 +149,10 @@ def upload_previews(sb, scan_id: str, listing: dict) -> list[str]:
     """Listing.preview_images are paths under listing/; upload the ones that exist, return their public URLs."""
     paths = [p if Path(p).is_absolute() else LISTING_DIR / p for p in map(Path, listing.get("preview_images", []))]
     paths = [p for p in paths if p.is_file()]
+    types = {".png": "image/png", ".webp": "image/webp"}
     with ThreadPoolExecutor(8) as ex:
         return list(ex.map(lambda p: sb.upload(ASSETS, f"listings/{scan_id}/{p.name}", p.read_bytes(),
-                                               "image/png"), paths))
+                                               types.get(p.suffix.lower(), "image/jpeg")), paths))
 
 
 def upload_run(sb, scan_id: str, run_dir: Path) -> list[str]:
@@ -208,7 +222,7 @@ def refresh_listing_index(sb, fresh: dict[str, dict] | None = None) -> dict:
     return index
 
 
-def list_scan(sb, scan_id: str, manifest: dict, spz: bytes, cfg: dict | None = None) -> dict:
+def list_scan(sb, scan_id: str, manifest: dict, cfg: dict | None = None) -> dict:
     """Run listing/ on a published scan and publish the outcome. Never raises: the splat is already out, so a
     failure here is recorded (status "failed") instead of failing the whole scan."""
     cfg = cfg or {}
@@ -219,7 +233,8 @@ def list_scan(sb, scan_id: str, manifest: dict, spz: bytes, cfg: dict | None = N
            "published": False}
     run_dir = LISTING_DIR / "runs" / scan_id  # listing/pipeline.py RUNS_ROOT / item id
     try:
-        item = prepare_item(scan_id, spz, cfg.get("seller_name"), heldout_urls=heldout_urls(manifest))
+        item = prepare_item(scan_id, heldout_photos(sb, scan_id, manifest), heldout_urls(manifest),
+                            cfg.get("seller_name"))
         result, kind, run_dir = run_listing_pipeline(item)
         doc["timings_ms"] = {"listing_pipeline": int((time.perf_counter() - t0) * 1000)}
         if kind == "rejection":

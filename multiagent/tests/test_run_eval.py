@@ -22,10 +22,10 @@ from tests.test_pipeline import DIFF, stub_resolver
 CASES = [
     {"case": "pots_same", "split": "heldout", "scene": "Pots", "mode": "views",
      "manifest": "m.json", "claims": None, "expected_label": "same",
-     "acceptable": ["same", "uncertain"], "wrong": ["different"]},
+     "acceptable": ["same"], "wrong": ["different"]},
     {"case": "pots_changed", "split": "heldout", "scene": "Pots", "mode": "views",
      "manifest": "m2.json", "claims": None, "expected_label": "different",
-     "acceptable": ["different", "uncertain"], "wrong": ["same"]},
+     "acceptable": ["different"], "wrong": ["same"]},
 ]  # fmt: skip
 VIEWS = 12
 
@@ -89,7 +89,7 @@ def test_unknown_split_refuses(tmp_path):
 
 def test_classify():
     assert classify(CASES[0], "different") == "wrong"
-    assert classify(CASES[0], "uncertain") == "ok"
+    assert classify(CASES[1], "different") == "ok"
     assert classify(CASES[0], "failed") == "other"
 
 
@@ -145,6 +145,6 @@ def test_run_eval_reports_false_same_on_changed(tmp_path):
 
 def test_run_eval_refuses_changed_thresholds(tmp_path, monkeypatch):
     pre, exp = write_files(tmp_path)
-    monkeypatch.setattr("eval.run_eval.Thresholds", lambda: Thresholds(same=0.2))
+    monkeypatch.setattr("eval.run_eval.Thresholds", lambda: Thresholds(match_min=0.6))
     with pytest.raises(PreregMismatch):
         go(tmp_path, FakeJev([]), pre, exp)

@@ -3,8 +3,9 @@
     python scripts/match_before_after.py [scan_id ...] [--skip-ingest]
 
 Before: what Supabase recorded (the public listings/index.json and each scan's listings/<id>/run/ files).
-After: this checkout on the same splat, with the seller's name the scan was listed with: ingest.py downloads it
-to samples/<scan_id>/, then render -> identify -> baseline_lookup -> match_gate -> reference_price run live
+After: this checkout on the scan's 8 views, with the seller's name the scan was listed with: ingest.py downloads
+them to samples/<scan_id>/photos/, then load_photos -> identify -> baseline_lookup -> match_gate -> reference_price
+run live
 (stage JSON in runs/<scan_id>/). Writes runs/match_before_after.json and prints one row per scan.
 """
 
@@ -23,12 +24,12 @@ sys.path.insert(0, str(ROOT))
 
 from contracts import Baseline, Identity, MatchCheck, ReferencePrice, RunContext, Views  # noqa: E402
 from ingest import IngestError, fetch, ingest, public_url  # noqa: E402
-from pipeline import CACHE_ROOT, RUNS_ROOT, item_input, resolve_item, run_stage  # noqa: E402
+from pipeline import CACHE_ROOT, RUNS_ROOT, item_input, photos_key, run_stage  # noqa: E402
 from stages.baseline_lookup import baseline_lookup  # noqa: E402
 from stages.identify import identify  # noqa: E402
 from stages.match_gate import match_gate  # noqa: E402
 from stages.reference_price import reference_price  # noqa: E402
-from stages.render import render  # noqa: E402
+from stages.load_photos import load_photos  # noqa: E402
 
 SAMPLES = ROOT / "samples"
 QUERY_IN_REASON = re.compile(r"reference photo for (.+?), so we couldn't")
@@ -67,11 +68,11 @@ def before(doc: dict[str, Any]) -> dict[str, Any]:
 
 
 async def after(scan_id: str, seller_name: str | None) -> dict[str, Any]:
-    item_dir, splat = resolve_item(SAMPLES / scan_id)
-    ctx = RunContext(item_id=scan_id, item_dir=item_dir, run_dir=RUNS_ROOT / scan_id, cache_dir=CACHE_ROOT,
-                     up_axis=item_input(item_dir).get("up_axis", "+y"))
-    views = await run_stage(ctx, "render", Views, render, splat)
-    identity = await run_stage(ctx, "identify", Identity, identify, views)
+    item_dir = SAMPLES / scan_id
+    ctx = RunContext(item_id=scan_id, item_dir=item_dir, run_dir=RUNS_ROOT / scan_id, cache_dir=CACHE_ROOT)
+    views = await run_stage(ctx, "load_photos", Views, load_photos, item_input(item_dir).get("photo_urls"),
+                            photos_key(item_dir))
+    identity = await run_stage(ctx, "identify", Identity, identify, views, seller_name)
     baseline = await run_stage(ctx, "baseline_lookup", Baseline, baseline_lookup, identity, seller_name)
     match = await run_stage(ctx, "match_gate", MatchCheck, match_gate, views, baseline, identity, seller_name)
     price = await run_stage(ctx, "reference_price", ReferencePrice, reference_price, identity, seller_name)
@@ -107,7 +108,7 @@ async def main_async(args: argparse.Namespace) -> int:
         row: dict[str, Any] = {"scan_id": scan_id, "before": before(doc)}
         seller_name = doc.get("seller_name")
         try:
-            if not (args.skip_ingest and (SAMPLES / scan_id / "splat.spz").is_file()):
+            if not (args.skip_ingest and (SAMPLES / scan_id / "photos").is_dir()):
                 ingest(scan_id, seller_name)
             row["after"] = await after(scan_id, seller_name)
         except Exception as e:  # noqa: BLE001  one scan failing shouldn't stop the table

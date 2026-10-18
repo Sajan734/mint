@@ -1,6 +1,6 @@
 """Re-apply match gate thresholds to saved per-view Jev answers. No API calls.
 
-    python scripts/replay_match_gate.py [files...] [--set match_min=0.65 --set min_usable_views=5]
+    python scripts/replay_match_gate.py [files...] [--set match_min=0.65 --set min_usable_share=0.4]
 
 Default files: runs/*/match_gate_raw.json and fixtures/*/stubs/match_gate.json.
 """

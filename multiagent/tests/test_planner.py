@@ -9,7 +9,7 @@ from buyer_agent.models import (
 from buyer_agent.planner import plan
 
 
-def verdict(label, score=None, flagged=(), views=("front",)):
+def verdict(label, score=None, flagged=(), views=("front",), cause=None):
     cats = {c: CategoryEvidence(evidence=0.9, max=0.9, views=list(views)) for c in flagged}
     ev = Evidence(
         requested_views=12,
@@ -21,7 +21,9 @@ def verdict(label, score=None, flagged=(), views=("front",)):
         alignment=None,
         alignment_mode="icp",
     )
-    return Verdict(label=label, evidence_score=score, reason="r", evidence=ev, caveats=[])
+    return Verdict(
+        label=label, evidence_score=score, reason="r", evidence=ev, caveats=[], cause=cause
+    )
 
 
 def finding(status="contradicted", source="accessory"):
@@ -36,10 +38,20 @@ def got(v, findings=(), attempt=1):
 @pytest.mark.parametrize(
     ("v", "findings", "attempt", "expected"),
     [
-        (verdict("uncertain"), [], 2, ("R0", "escalate", "support")),
-        (verdict("scan_quality_poor"), [], 1, ("R1", "request_more_photos", "buyer")),
-        (verdict("alignment_failed"), [], 1, ("R2", "request_more_photos", "buyer")),
-        (verdict("uncertain"), [], 1, ("R3", "request_more_photos", "seller")),
+        (verdict("different", 0.0, cause="low_quality"), [], 2, ("R0", "escalate", "support")),
+        (
+            verdict("different", 0.0, cause="low_quality"),
+            [],
+            1,
+            ("R1", "request_more_photos", "buyer"),
+        ),
+        (
+            verdict("different", 0.0, cause="misaligned"),
+            [],
+            1,
+            ("R2", "request_more_photos", "buyer"),
+        ),
+        (verdict("different", 0.4), [], 1, ("R5", "message_seller", "seller")),
         (verdict("different", 0.8, ["part_diff"]), [], 1, ("R4", "request_refund", "seller")),
         (verdict("different", 0.8, ["color_diff"]), [], 1, ("R5", "message_seller", "seller")),
         (verdict("same", 0.9), [finding()], 1, ("R6", "message_seller", "seller")),
@@ -71,10 +83,10 @@ def test_r0_attempt2_different_goes_to_r4_r5():
     assert got(verdict("same", 0.9), attempt=2)[0] == "R7"
 
 
-@pytest.mark.parametrize("label", ["uncertain", "alignment_failed", "scan_quality_poor"])
-def test_r0_for_each_escalating_label(label):
-    assert got(verdict(label), attempt=2)[0] == "R0"
-    assert got(verdict(label), attempt=1)[0] != "R0"
+@pytest.mark.parametrize("cause", ["low_quality", "misaligned"])
+def test_r0_for_each_escalating_cause(cause):
+    assert got(verdict("different", 0.0, cause=cause), attempt=2)[0] == "R0"
+    assert got(verdict("different", 0.0, cause=cause), attempt=1)[0] != "R0"
 
 
 def test_planner_uses_evidence_score_field():
@@ -89,5 +101,5 @@ def test_same_inputs_same_output_100_times():
 
 
 def test_r8_listing_rejected_escalates_on_any_attempt():
-    v = verdict("listing_rejected")
+    v = verdict("different", 0.0, cause="listing_rejected")
     assert got(v) == got(v, attempt=3) == ("R8", "escalate", "support")
