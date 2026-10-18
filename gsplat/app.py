@@ -110,7 +110,7 @@ compare_image = (
 
 
 @app.function(image=compare_image, secrets=BUYER_SECRETS, cpu=4.0, memory=8192, timeout=600)
-def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: bytes, listing: dict,
+def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: bytes, listing: dict | None,
                   match_check: dict | None) -> dict:
     """The buyer agent on two splats, unchanged: it aligns them, renders matching views, asks Jev (and Groq for the
     listing's claims) and returns its CompareResponse. -> {"response": CompareResponse JSON, "align": {"matrix": 4x4 B->A, "ambiguity": float}
@@ -155,11 +155,31 @@ def compare_scans(cid: str, listing_id: str, listing_ply: bytes, buyer_ply: byte
         comparison_id=cid, listing_id=listing_id,
         listing_splat=SplatRef(path=f"{cid}/listing.ply", format="ply", up_axis="+y", scan_id=listing_id),
         buyer_splat=SplatRef(path=f"{cid}/buyer.ply", format="ply", up_axis="+y", scan_id=cid),
-        claims=claims_from_listing(listing),
-        listing_match_check=ListingMatchCheck(verdict=match_check["verdict"], reason=match_check["reason"][:300])
+        claims=claims_from_listing(listing) if listing else None,  # no listing text: the agent says so
+        listing_match_check=ListingMatchCheck(verdict=match_check["verdict"], reason=(match_check.get("reason") or "")[:300])
         if match_check and match_check.get("verdict") else None)
     resp = asyncio.run(compare(req, deps))
     return {"response": json.loads(resp.model_dump_json()), "align": align_out or None}
+
+
+def listing_inputs(sb, listing_id: str) -> tuple[dict | None, dict | None]:
+    """(the listing's Listing, its match gate) for the buyer agent, either None when missing. A rejected listing has
+    no Listing but its match check says `mismatch`, so the agent answers "the listing scan could not be used"; a
+    failed or not yet finished listing step leaves both None and the scans are still compared."""
+    from supabase_setup.storage import ASSETS
+
+    try:
+        doc = json.loads(sb.download(ASSETS, f"listings/{listing_id}.json", fresh=True))
+    except (RuntimeError, ValueError):
+        doc = {}
+    listing = (doc.get("market_listing") or {}).get("listing")
+    match = (doc.get("rejection") or {}).get("match_check")
+    if match is None:
+        try:
+            match = json.loads(sb.download(ASSETS, f"listings/{listing_id}/run/match_gate.json"))
+        except (RuntimeError, ValueError):
+            match = None
+    return listing, match
 
 
 def _gpu_dead(e: BaseException | None = None) -> bool:
@@ -261,6 +281,8 @@ class Splatter:
         -> the buyer's splat (published as splats/{cid}, kept out of the listing index; the check page shows it)
         -> the buyer agent against the listing's splat -> assets/comparisons/{cid}.json (CompareResponse), which the check page polls for. The buyer's splat manifest
         gets '#ry=<deg>' on its splat_url (the B->A yaw), so the 3D slider shows both scans in one orientation."""
+        import re
+
         import torch
 
         from mintsplat import export as export_mod
@@ -291,13 +313,16 @@ class Splatter:
             for name in ("rescan.capture.json", "session.json"):
                 if name in names:
                     meta = {**json.loads(sb.download(SCANS, f"{cid}/{name}")), **meta}
-            listing_id = meta.get("listing_scan_id")
-            if not listing_id:
+            listing_id = str(meta.get("listing_scan_id") or "")
+            if not re.fullmatch(UUID_RE, listing_id):  # it comes from the phone and names storage paths below
                 return put_result(failed("INPUT_INVALID", "The rescan does not say which listing it checks."))
             if not HAS_BUYER:
                 return put_result(failed("INTERNAL", "The comparison service has no keys (missing from .env at deploy)."))
             # Like for like: a pass one side has and the other doesn't (the underside) would read as a difference.
-            listing_manifest = json.loads(sb.download(ASSETS, f"splats/{listing_id}.json"))
+            try:
+                listing_manifest = json.loads(sb.download(ASSETS, f"splats/{listing_id}.json"))
+            except RuntimeError:
+                return put_result(failed("INPUT_INVALID", "The listing's 3D scan was not found."))
             listing_two_pass = listing_manifest.get("coverage") == "full" or any(
                 p.rsplit("/", 1)[-1].startswith("bottom.") for p in listing_manifest.get("inputs", []))
             keys, videos, io = fetch_inputs(sb, cid, verify=True)
@@ -313,11 +338,7 @@ class Splatter:
                 spz = sb.download(ASSETS, f"splats/{listing_id}.spz")
             params = export_mod.from_spz(spz)
             listing_ply = export_mod.to_ply(params, torch.ones(len(params["means"]), dtype=torch.bool, device="cuda"))
-            listing = json.loads(sb.download(ASSETS, f"listings/{listing_id}.json"))["market_listing"]["listing"]
-            try:
-                match = json.loads(sb.download(ASSETS, f"listings/{listing_id}/run/match_gate.json"))
-            except RuntimeError:
-                match = None
+            listing, match = listing_inputs(sb, listing_id)
             out = compare_scans.remote(cid, listing_id, listing_ply, res["files"]["splat.ply"], listing, match)
             resp = put_result(out["response"])
             self._rotate_to_listing(sb, cid, resp, out.get("align"))
