@@ -27,6 +27,7 @@ TOP_NAMES, BOTTOM_NAMES = ("top", "video"), ("bottom",)  # video.mp4 is what the
 VERIFY_TOP_NAMES, VERIFY_BOTTOM_NAMES = ("rescan",), ("rescan2",)  # a buyer's verify rescan (scanner/HANDOFF.md)
 CONTENT_TYPES = {".json": "application/json", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg"}
 MAX_POLAR_DEG = {"top": 90, "full": 180}  # how far below straight-above a viewer may orbit
+RESCANS = "splats/rescans"  # an empty marker per buyer rescan: its manifest sits in splats/ but is no scan to list
 
 
 def fetch_inputs(sb, scan_id: str, verify: bool = False) -> tuple[list[str], list[bytes], dict]:
@@ -99,15 +100,19 @@ def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dic
     }
     sb.upload(ASSETS, f"splats/{scan_id}.json", json.dumps(manifest, indent=1).encode(), "application/json",
               cache_control="no-cache")
-    if index:  # a buyer's rescan is not a scan to list, so listing/ingest.py must not see it
+    if index:
         refresh_index(sb)
+    else:  # a buyer's rescan is not a scan to list: mark it so no later refresh_index lists it either
+        sb.upload(ASSETS, f"{RESCANS}/{scan_id}", b"", "text/plain")
     return manifest
 
 
 def refresh_index(sb) -> dict:
     """Rebuild splats/index.json from the folder listing (not read-modify-write, so scans that finish at the
     same time can't drop each other's entry). no-cache, so pollers never see a stale CDN copy."""
-    objs = [o for o in sb.list_objects(ASSETS, "splats") if o["name"].endswith(".json") and o["name"] != "index.json"]
+    rescans = set(sb.list(ASSETS, RESCANS))
+    objs = [o for o in sb.list_objects(ASSETS, "splats") if o["name"].endswith(".json") and o["name"] != "index.json"
+            and o["name"].removesuffix(".json") not in rescans]
     index = {"v": 3, "updated_at": datetime.now(timezone.utc).isoformat(), "scans": [
         {"scan_id": o["name"].removesuffix(".json"), "created_at": o.get("created_at"),
          "manifest_url": sb.public_url(ASSETS, f"splats/{o['name']}")} for o in objs]}
