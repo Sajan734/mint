@@ -508,11 +508,12 @@ Summary per role; the full plans with interfaces, fixtures and fallbacks are in 
 | Variable / secret | Used by | Secret? | Where |
 |---|---|---|---|
 | `MINT_ROLE` | Claude Code (§1) | no | shell profile |
-| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | backend **only** | **YES** | Modal secret `mint-supabase` |
+| `MODAL_TOKEN_ID`, `MODAL_TOKEN_SECRET` | every deploy and Modal call (picks the workspace) | **YES** | root `.env` |
+| `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | backend **only** | **YES** | root `.env`, sent to Modal with `modal deploy` |
 | `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `NEXT_PUBLIC_API_URL` | web | public | Vercel env + `web/.env.local` |
 | `MINT_API_URL` | iOS app | no | `ios/Config.xcconfig` (no secrets in the app) |
-| VLM key (`GEMINI_API_KEY` or `ANTHROPIC_API_KEY`) | recognition (A); N1/N2 agents (D) | yes | Modal secret `mint-llm` |
-| `JEV_API_KEY` (name TBD) | decisions (B) | yes | Modal secret `mint-jev` |
+| VLM key (`GEMINI_API_KEY` or `ANTHROPIC_API_KEY`) | recognition (A); N1/N2 agents (D) | yes | root `.env`, sent to Modal with `modal deploy` |
+| `JEV_API_KEY` (name TBD) | decisions (B) | yes | root `.env`, sent to Modal with `modal deploy` |
 
 Commit `.env.example` files with names only. Never commit keys. If one leaks, rotate it and tell the team.
 

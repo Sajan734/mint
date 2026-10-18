@@ -12,12 +12,14 @@
         # signs the uploads (no key on the client), bottom.mp4 goes first, video.mp4 last; its arrival fires the
         # Supabase webhook -> run_scan -> splat + held-out photos + spin -> listing/ (Jev) -> assets/listings/{id}.json,
         # which the website shows. Times each hop and saves everything to runs/scan_<id>/.
+    python client.py urls                       # after a deploy: the website's API URL into .env + the webhook SQL
 
 Everything (the webhook's scans too) runs in one H100 pool, so `warm` covers all of it. Warm H100: one video
 ~24-28 s, top + bottom ~35 s (training resolution is set automatically; see README).
 """
 import argparse
 import json
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -27,7 +29,14 @@ from pathlib import Path
 
 import modal
 
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root: shared `supabase_setup` package
+from supabase_setup.env import load_env, set_env
+
+load_env()  # repo-root .env: MODAL_TOKEN_ID / MODAL_TOKEN_SECRET pick the workspace
+
 APP, CLS = "mint-gsplat", "Splatter"
+WEBHOOK_SQL = Path(__file__).resolve().parent.parent / "supabase_setup" / "webhook.sql"
+WEBHOOK_URL_SLOT = "<on_upload URL: python gsplat/client.py urls>"
 SUPABASE_URL = "https://jpanyhsifoxxiizkgjno.supabase.co"  # public project URL, not a secret
 PUBLIC = f"{SUPABASE_URL}/storage/v1/object/public/assets"
 UPLOAD_FN = f"{SUPABASE_URL}/functions/v1/scan-upload"  # the iOS app's signer (scanner/supabase), needs no key
@@ -100,10 +109,22 @@ def scan(videos: list[Path], scan_id: str | None = None, timeout_s: float = 900)
             "website_path": f"/listing/{scan_id}", "manifest": manifest, "listing": listing}
 
 
+def urls() -> None:
+    """The deployed endpoints of the workspace the .env token is for. The website's `api` URL goes into .env;
+    the webhook SQL is printed with `on_upload` filled in, to run once in Supabase after changing workspace."""
+    api = modal.Function.from_name(APP, "api").get_web_url()
+    on_upload = modal.Function.from_name(APP, "on_upload").get_web_url()
+    changed = set_env("NEXT_PUBLIC_MINT_API_URL", api)
+    print(f"api        {api}\n           .env NEXT_PUBLIC_MINT_API_URL "
+          f"{'updated: restart the web apps' if changed else 'already set'}")
+    print(f"on_upload  {on_upload}\n           new workspace? run this once in the Supabase SQL editor:\n")
+    print(WEBHOOK_SQL.read_text(encoding="utf-8").replace(WEBHOOK_URL_SLOT, on_upload))
+
+
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("warm", "cold", "status"):
+    for name in ("warm", "cold", "status", "urls"):
         sub.add_parser(name)
     r = sub.add_parser("run")
     r.add_argument("--scale", type=float, default=0.0, help="training resolution (0 = auto; 1.0 = full res)")
@@ -123,6 +144,9 @@ def main():
     rl.add_argument("scan_id")
     rl.add_argument("--title", default=None, help="product name, as the seller would type it")
     args = ap.parse_args()
+    if args.cmd == "urls":
+        urls()
+        return
     if args.cmd == "relist":
         t0 = time.perf_counter()
         doc = modal.Cls.from_name(APP, CLS)().relist.remote(args.scan_id, args.title)

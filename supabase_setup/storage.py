@@ -1,7 +1,7 @@
 """Minimal Supabase client (Storage + Realtime broadcast) over plain HTTPS.
 
-Runs only inside Modal: the service-role key comes from the `mint-supabase` secret
-(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) and never leaves the backend. Clients (the iOS app,
+Runs inside Modal (and backup.py): the service-role key (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY) comes from
+the repo-root .env, which `modal deploy` sends with the app, and never leaves the backend. Clients (the iOS app,
 client.py) only ever see short-lived signed upload URLs.
 """
 import json
@@ -18,8 +18,8 @@ SCANS, ASSETS = "scans", "assets"  # private videos / public outputs (Supabase r
 class Supabase:
     def __init__(self):
         if not os.environ.get("SUPABASE_URL") or not os.environ.get("SUPABASE_SERVICE_ROLE_KEY"):
-            raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set: attach the Modal secret "
-                               "`mint-supabase` (see supabase_setup/README.md)")
+            raise RuntimeError("SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set: put them in the repo-root "
+                               ".env, then redeploy (see supabase_setup/README.md)")
         self.url = os.environ["SUPABASE_URL"].rstrip("/")
         key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
         self._auth = {"apikey": key, "Authorization": f"Bearer {key}"}

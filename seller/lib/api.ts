@@ -2,14 +2,15 @@
 // holds none). Publish puts a live scan's listing on Mint for every buyer; Save draft takes it off again.
 import type { Fields } from "@/components/ListingEditor";
 
-const DEFAULT_API_URL = "https://doalnikhil--mint-gsplat-api.us-east.modal.run";
-export const API_URL = (process.env.NEXT_PUBLIC_MINT_API_URL || DEFAULT_API_URL).replace(/\/$/, "");
+// From the repo-root .env; `python gsplat/client.py urls` writes it after a deploy.
+export const API_URL = (process.env.NEXT_PUBLIC_MINT_API_URL || "").replace(/\/$/, "");
 const TIMEOUT_MS = 20_000; // the endpoint may cold-start
 
 export type PublishResult = { ok: true } | { ok: false; error: string };
 
 /** Never throws. `fields` are already validated (validateFields); price is whole dollars. */
 export async function publishRemote(scanId: string, fields: Fields, state: "published" | "draft"): Promise<PublishResult> {
+  if (!API_URL) return { ok: false, error: "NEXT_PUBLIC_MINT_API_URL is not set in .env" };
   try {
     const res = await fetch(`${API_URL}/listings/${scanId}/publish`, {
       method: "POST",

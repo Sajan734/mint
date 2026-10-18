@@ -3,7 +3,8 @@
     modal run supabase_setup/modal_app.py      # smoke test: secret, buckets, signed upload, realtime
     modal deploy supabase_setup/modal_app.py   # makes sign_uploads callable by other apps / clients
 
-Needs the Modal secret `mint-supabase` (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY).
+Everything comes from the repo-root .env: the Modal token picks the workspace, and SUPABASE_URL and
+SUPABASE_SERVICE_ROLE_KEY are sent with the app (no Modal secret to create first).
 """
 import sys
 from pathlib import Path
@@ -12,7 +13,11 @@ import modal
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # repo root, so `supabase_setup` imports
 
-secret = modal.Secret.from_name("mint-supabase", required_keys=["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])
+if modal.is_local():  # containers have no .env: their keys arrive as the secret below
+    from supabase_setup.env import load_env
+
+    load_env()
+secret = modal.Secret.from_local_environ(["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"])
 image = modal.Image.debian_slim(python_version="3.11").add_local_python_source("supabase_setup")
 app = modal.App("mint-supabase", image=image)
 
