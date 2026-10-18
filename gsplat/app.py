@@ -464,6 +464,10 @@ def on_upload(body: dict) -> dict:
         return {"ok": True, "ignored": f"{bucket}/{name}"}
     splatter = modal.Cls.from_name("mint-gsplat", "Splatter")
     if file == "rescan.mp4":  # a buyer's verify rescan (uploaded last): compare it with its listing
+        if not HAS_SUPABASE:
+            return {"ok": False, "error": "Supabase keys missing from .env; add them and redeploy"}
+        if file not in Supabase().list(SCANS, scan_id):  # the URL is public: no GPU for a made-up name
+            return {"ok": False, "error": f"scans/{name} not found"}
         if not jobs.put(f"verify:{scan_id}", time.time(), skip_if_exists=True):
             return {"ok": True, "duplicate": scan_id}
         return {"ok": True, "verify": scan_id, "call_id": splatter().run_verify.spawn(scan_id).object_id}
