@@ -25,13 +25,22 @@ class Supabase:
         self._auth = {"apikey": key, "Authorization": f"Bearer {key}"}
 
     def _req(self, method: str, path: str, body: bytes | None = None, headers: dict | None = None) -> bytes:
-        req = urllib.request.Request(self.url + path, data=body, method=method,
-                                     headers={**self._auth, **(headers or {})})
-        try:
-            with urllib.request.urlopen(req, timeout=120) as r:
-                return r.read()
-        except urllib.error.HTTPError as e:
-            raise RuntimeError(f"Supabase {method} {path} -> {e.code}: {e.read()[:300]!r}") from None
+        """Every failure is a RuntimeError (callers catch that one type, e.g. for "not there yet"). A dropped
+        connection, a timeout or a 5xx is tried once more: every request here is safe to repeat (uploads upsert)."""
+        for attempt in range(2):
+            req = urllib.request.Request(self.url + path, data=body, method=method,
+                                         headers={**self._auth, **(headers or {})})
+            try:
+                with urllib.request.urlopen(req, timeout=120) as r:
+                    return r.read()
+            except urllib.error.HTTPError as e:
+                if e.code < 500 or attempt:
+                    raise RuntimeError(f"Supabase {method} {path} -> {e.code}: {e.read()[:300]!r}") from None
+            except (urllib.error.URLError, TimeoutError, ConnectionError) as e:
+                if attempt:
+                    raise RuntimeError(f"Supabase {method} {path} -> {type(e).__name__}: {e}") from None
+            time.sleep(1.0)
+        raise AssertionError("unreachable")
 
     # ---- storage
     def download(self, bucket: str, path: str, fresh: bool = False) -> bytes:
