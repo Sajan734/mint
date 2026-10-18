@@ -77,7 +77,8 @@ final class PaperReader {
         return Sight(paper: paper, elevation: n > 0 ? frame.elevation(sx / n, sy / n, k) : nil, code: nil, timestamp: camera.timestamp)
     }
 
-    /// Brightness + colour strength from the YCbCr camera image, every `step`-th pixel.
+    /// Brightness + colour strength from the YCbCr camera image, every `step`-th pixel. Colour is measured
+    /// against the paper's tint (`ImageGrid(luma:cb:cr:)`), so the sheet still reads under warm room light.
     static func grid(_ buffer: CVPixelBuffer, step: Int) -> ImageGrid? {
         CVPixelBufferLockBaseAddress(buffer, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(buffer, .readOnly) }
@@ -86,18 +87,16 @@ final class PaperReader {
         let yp = yb.assumingMemoryBound(to: UInt8.self), cp = cb.assumingMemoryBound(to: UInt8.self)
         let yBpr = CVPixelBufferGetBytesPerRowOfPlane(buffer, 0), cBpr = CVPixelBufferGetBytesPerRowOfPlane(buffer, 1)
         let w = CVPixelBufferGetWidthOfPlane(buffer, 0) / step, h = CVPixelBufferGetHeightOfPlane(buffer, 0) / step
-        var luma = [UInt8](repeating: 0, count: w * h), chroma = [UInt8](repeating: 0, count: w * h)
+        var luma = [UInt8](repeating: 0, count: w * h), us = [Float](repeating: 0, count: w * h), vs = us
         for gy in 0..<h {
             for gx in 0..<w {
                 let x = gx * step, y = gy * step
-                let l = Float(yp[y * yBpr + x])
                 let ci = (y / 2) * cBpr + (x / 2) * 2
-                let u = Float(cp[ci]) - 128, v = Float(cp[ci + 1]) - 128
-                let r = l + 1.402 * v, g = l - 0.344 * u - 0.714 * v, b = l + 1.772 * u
-                luma[gy * w + gx] = UInt8(max(0, min(255, l)))
-                chroma[gy * w + gx] = UInt8(max(0, min(255, max(r, g, b) - min(r, g, b))))
+                luma[gy * w + gx] = yp[y * yBpr + x]
+                us[gy * w + gx] = Float(cp[ci]) - 128
+                vs[gy * w + gx] = Float(cp[ci + 1]) - 128
             }
         }
-        return ImageGrid(width: w, height: h, luma: luma, chroma: chroma)
+        return ImageGrid(width: w, height: h, luma: luma, cb: us, cr: vs)
     }
 }
