@@ -336,10 +336,10 @@ class Splatter:
         """Tag the buyer's splat_url with '#ry=<deg>' (the viewer's fragmentRotation) so it faces the listing's way.
         Only when the alignment is trustworthy: the check succeeded, wasn't judged misaligned, ambiguity <= 0.85
         (aggregate.py's ambiguity_max). Never fails the check."""
-        from mintsplat.yaw import yaw_deg
-        from supabase_setup.storage import ASSETS
-
         try:
+            from mintsplat.yaw import yaw_deg
+            from supabase_setup.storage import ASSETS
+
             amb = (align or {}).get("ambiguity")
             if (not align or resp.get("status") == "failed" or resp.get("verdict") == "alignment_failed"
                     or resp.get("cause") == "misaligned" or amb is None or amb > 0.85):
