@@ -1,4 +1,9 @@
 .venv/
+__pycache__/
+# Old experiments, test videos and outputs: kept on this machine, not in git
+legacy/
+# Local runs (modal run app.py, client.py run / scan). out/ holds only the frozen runs the buyer app's demo reads
+runs/
 *.ply
 *.spz
 !out/**/*.spz

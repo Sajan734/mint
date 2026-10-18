@@ -1,147 +1,150 @@
 # gsplat: phone video → clean object splat (role A)
 
-One or two phone orbit videos in, an object-only Gaussian splat plus 8 reference views out, on a Modal GPU.
+One or two phone videos of an item in, an item-only Gaussian splat plus 8 held-out photos out, on a Modal H100.
 
-| Input | Output |
+| Videos recorded | Coverage | What viewers may do |
+|---|---|---|
+| 1 (the upright lap) | `top`: the underside was never filmed | orbit the **top half** only: `splat_url` ends in `#maxpolar=90`, which the website's viewer reads (`lib/splat-scene.ts` `fragmentMaxPolar`) |
+| 2 (upright lap, then the item flipped over: `bottom.mp4`) | `full` | orbit the **whole sphere** |
+
+The iPhone app can record more passes (`pass3.mp4`, ...); only the first two are used.
+
+The splat is in the **scan frame**: +Y up, +X along the item's long axis, origin on the ground under the item,
+right-handed (SPZ's native RUB, so viewers need no flip). Scale is **not metric** yet (VGGT poses).
+
+## Outputs
+
+| File | What |
 |---|---|
-| `top.*` (upright orbit), optional `bottom.*` (same object flipped over), any phone video incl. 60/120 fps | `splat.spz` (~2.5 MB; Spark and `listing/` read it directly), 8 reference views + `views.json` |
+| `splat.spz` | the splat (~2.5 MB); Spark and `listing/` read it directly |
+| `heldout/00.jpg` … `07.jpg` + `heldout.json` | 8 **real video frames** of the item, for the agents to find the exact product online (identify, Google Lens via Serper): masked to the item's outline (convex hull: everything inside it is kept, e.g. the mouse's red button), on white, 768 px square. One video: one every 45° around the item. Two videos: 6 around the top + 2 of the underside (labels, model stickers). In each direction the **sharpest frame with the item biggest and fully in view, from a product-photo angle** wins. They are **held out of training**, so the splat never saw them. `heldout.json`: pass, video frame, camera angles, score |
+| `spin/f00.webp` … `f23.webp` | the website's drag-to-spin frames |
+| `run.json` | timings, coverage, frame counts, pose and cleanup stats (`--debug`: + held-out PSNR) |
 
-The splat is in the **scan frame**: +Y up, +X along the object's long axis, origin on the ground under the object
-(its lowest points at y = 0), right-handed (SPZ's native RUB, so viewers need no flip). Scale is **not metric** yet
-(VGGT poses).
+`--debug` also writes `masks_*.jpg`, `poses_*.jpg` and `register.jpg` contact sheets. Nothing else is written:
+no turntable videos, no rendered reference views, no `.ply` unless asked (`--ply`; only the buyer agent's
+comparison needs one).
 
-## Run
+## Run locally against Modal
 
 ```bash
 cd gsplat && python -m venv .venv && .venv/Scripts/pip install modal   # once; then `modal setup`
-modal run app.py --video orbit.mp4 --gpu H100                            # one video
-modal run app.py --video orbit.mp4 --video2 orbit_reverse.mp4 --name merged --gpu H100   # top + bottom
+modal run app.py --video orbit.mp4                                       # one video -> runs/orbit/
+modal run app.py --video orbit.mp4 --video2 orbit_reverse.mp4 --name merged   # top + bottom
 ```
 
-Results land in `out/<name>/` (gitignored): `splat.spz`, `views/` (reference views), `run.json` (timings, quality),
-and debug media (`masks_*.jpg`, `poses_*.jpg`, `register.jpg`, `heldout.jpg`, `turntable.mp4`). Open `viewer.html`
-and pick the `.spz`.
+Results land in `runs/<name>/` (gitignored). Open `viewer.html` and pick the `.spz`. Flags: `--scale 1.0`
+(training resolution; default auto), `--ply`, `--no-debug`, `--no-box-refine`, `--stop-after masks|poses|register`,
+`--train-json '{"iters": 1500}'`, `--gpu A100` (a different GPU type to compare; its own pool, always cold).
 
-Useful flags: `--gpu H100` (faster), `--scale 1.0` (training resolution; default auto from a pixel budget), `--ply`
-(also write a ~35 MB `.ply`, only for inspecting in desktop tools; nothing downstream uses it),
-`--no-debug`, `--no-box-refine`, `--stop-after masks|poses|register`, `--train-json '{"iters": 1500}'`.
+`out/` holds frozen runs from the first pipeline that the buyer app's demo reads (`buyer/scripts/make_demo_assets.py`,
+`buyer/e2e-demo`); leave it alone. `legacy/` (gitignored) holds old experiments, test videos and turntables.
 
-### Live pipeline: phone video -> website
+## Warm and cold containers (Modal)
+
+Every GPU job (webhook scans, buyer rescans, `client.py`, `modal run`) runs in **one pool**: class `Splatter` on
+an H100, app `mint-gsplat`. A container in it is either cold (not running) or warm (running with SAM 2 and VGGT
+loaded).
+
+| | Cold | Warm |
+|---|---|---|
+| What happens on a scan | Modal boots a container, loads the models (~25-30 s), then runs the scan | the scan starts at once |
+| Phone upload → splat published (orbit pair, 2026-10-17) | ~66 s | ~40 s |
+| Cost | nothing while idle | the H100's per-second price **for every second it is up**, busy or not |
+
+**Defaults (no action needed):** containers scale to zero. After a job a container stays warm for **5 minutes**
+(`scaledown_window=300`), so back-to-back scans are warm. When the dashboard starts a scan (`session.json`) or the
+phone uploads `bottom.mp4`, the webhook calls `Splatter.prewarm`, so the cold start mostly happens while the
+seller is still recording. A container whose GPU breaks (CUDA assert) exits and Modal retries the scan on a fresh
+one.
+
+**Keep one warm (demo, recording, judging):**
+
+```bash
+python client.py warm      # min_containers=1: one H100 always up (billed continuously)
+python client.py status    # "containers up: 1" once it has booted (~30-60 s); or `modal container list`
+python client.py run orbit.mp4 --name warmup   # optional: one throwaway run warms CUDA and the caches too
+...
+python client.py cold      # ALWAYS afterwards: back to scale-to-zero (it shuts down after 5 idle minutes)
+```
+
+- **`modal deploy app.py` resets it**: run `warm` again after every deploy.
+- Warm only the pool you use. There is just one now, so `warm` covers the webhook too.
+- Several scans at once each get their own container; only the first is warm.
+- Check the bill at modal.com → Usage. A forgotten `warm` is the expensive mistake: run `cold`.
+- The CPU functions (`on_upload`, `api`, `compare_scans`) start in ~1-3 s and never need warming.
+
+## Live pipeline: phone video -> website
 
 ```
-iPhone app --scan-upload Edge Function--> scans/{id}/video.mp4
+iPhone app --scan-upload Edge Function--> scans/{id}/bottom.mp4 (optional), then video.mp4
   --Supabase webhook (supabase_setup/webhook.sql)--> on_upload (Modal endpoint, starts each scan once)
-  --> Splatter.run_scan on an H100: splat + 8 views + 24 spin frames  (mintsplat/publish.py)
+  --> Splatter.run_scan: splat + 8 held-out photos + 24 spin frames  (mintsplat/publish.py)
   --> listing/ pipeline in the same container: render, identify, Jev match + condition, price  (mintsplat/market.py)
-  --> assets/listings/index.json  --> the website (buyer/lib/data/live.ts) lists it at /listing/{id}
+  --> assets/listings/index.json  --> the website (buyer/lib/data/live.ts) lists it at /listing/{id} once published
 ```
 
 | Where (Supabase, public `assets` bucket unless noted) | What |
 |---|---|
-| `scans/{id}/video.mp4` (private) | the phone's video (+ `bottom.mp4`, the item flipped over, uploaded first); the app's `poses.jsonl` turns its sideways frames upright |
-| `splats/{id}.spz`, `splats/{id}.json` | the splat; manifest (inputs, URLs, views, spin frames, Gaussians, stage timings) |
-| `views/{id}/` | 8 reference views (transparent + grey PNG) + `views.json` (cameras) + `spin/f00..f23.webp` |
+| `scans/{id}/` (private) | the phone's `video.mp4` (+ `bottom.mp4`, the item flipped over, uploaded first), `poses.jsonl` (turns its sideways frames upright), `session.json` (the dashboard's product title) |
+| `splats/{id}.spz`, `splats/{id}.json` | the splat; manifest: `coverage`, `passes`, `orbit.max_polar_deg`, `splat_url` (with the fragment), `heldout.items[]` (url + angles), `spin_urls`, stage timings |
+| `heldout/{id}/` | `00.jpg` … `07.jpg` + `heldout.json` |
+| `spin/{id}/` | `f00.webp` … `f23.webp` |
 | `splats/index.json` | every splat, newest first (`listing/ingest.py` reads it) |
-| `listings/{id}.json` | `status` listed / rejected / failed, with the website's `MarketListing`, the `Rejection` or the error |
-| `listings/{id}/vNN.png`, `listings/index.json` | the listing's preview renders; every listing document inline, newest first |
-| Realtime `batch:{id}` | `stage` events (started/done per step, incl. `7_listing`), `passport_ready`, `listing_ready` |
+| `listings/{id}.json` | `status` listed / rejected / failed, `published`, `coverage`, `heldout_urls`, the website's `MarketListing` |
+| `listings/{id}/vNN.png`, `listings/{id}/run/*.json`, `listings/index.json` | preview renders; each listing stage's JSON (debugging); every listing document inline |
+| Realtime `batch:{id}` | `stage` events (incl. `7_listing`), `passport_ready`, `listing_ready` |
 
-Needs two Modal secrets: `mint-supabase` (`SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`) and `mint-listing`
-(`TYPESAFE_API_KEY`, `GEMINI_API_KEY`, `SERPER_API_KEY`, the keys in `listing/.env`). Fill in the repo-root
-`.env` (copy of `../.env.example`, gitignored), run `python push_secrets.py` (checks the Supabase key, writes both secrets, prints only
-names), then `modal deploy app.py`. Without `mint-listing` the splat still publishes and the listing step is skipped. Live scans go
-on the website under the seller and garage sale in `market.LIVE`; the category comes from the identified product.
+The listing step gets the held-out photo URLs in its item's `input.json` (`heldout_urls`).
+
+Needs three Modal secrets, written from the repo-root `.env` by `python push_secrets.py`: `mint-supabase`,
+`mint-listing` (Jev, Gemini, Serper) and `mint-buyer` (the buyer agent). Then `modal deploy app.py`.
 
 ```bash
-modal deploy app.py                          # prints the on_upload URL that webhook.sql calls
-python client.py scan orbit.mp4 orbit_reverse.mp4   # exactly the phone's path (bottom.mp4 first, video.mp4 last);
-                                                   # the webhook does the rest; prints the time of each hop
-python client.py relist <scan_id> [--title "Lenovo ThinkPad wireless mouse"]   # re-run only the listing step
+modal deploy app.py                                  # prints the on_upload + api URLs
+python client.py scan orbit.mp4 orbit_reverse.mp4    # exactly the phone's path; times each hop
+python client.py relist <scan_id> --title "Lenovo ThinkPad Essential Wireless Mouse"   # redo only the listing
+python client.py rescan <scan_id> [...]              # redo splat + photos + listing for scans already uploaded
 ```
 
-- **Product name:** the title the seller types on the dashboard (`scans/{id}/session.json`, scanner/DASHBOARD.md) goes
-  to listing/ as `seller_name`. Without it listing/ only searches for a reference photo when the model is printed on
-  the item, so condition is judged from the scan alone and the listing asks for a seller check.
-- **Cold start:** `session.json` (scan requested or picked up) and `bottom.mp4` also hit the webhook, which starts
-  `Splatter.prewarm` on an H100: models load and one tiny real job warms CUDA while the seller is still recording.
-- **Debugging a listing:** each stage's JSON is published to `assets/listings/{id}/run/` (`run_url` in the document),
-  also when it fails.
+- **Product name:** the title the seller types on the dashboard (`session.json`) goes to listing/ as
+  `seller_name`, which finds real prices for that exact model (Serper shopping).
 - **Publish:** a listing starts unpublished. The seller's editor calls the `api` endpoint
-  (`POST /listings/{id}/publish {state, title, description, price_cad}`, CORS open, the service key stays on Modal),
-  which applies their edits and sets `published`; the buyer site shows only published listings.
+  (`POST /listings/{id}/publish {state, title, description, price_cad}`; 404 unknown scan, 409 not publishable,
+  502 storage hiccup: press Publish again). The buyer site shows only published listings.
 - **Buyer's rescan check** (`mint://verify?id=<cid>&listing=<scan_id>`): the phone uploads `rescan.capture.json`
-  (`listing_scan_id`) and `rescan.mp4` last (+ `rescan2.mp4` flipped). The webhook starts `Splatter.run_verify`: it
-  splats the rescan (published as `splats/{cid}`, not indexed), compares like with like (a rescan without an underside
-  is compared with the listing's top lap only, cached as `splats/{listing}.top.spz`), and runs the buyer agent
-  (`multiagent/buyer_agent`, Jev + Groq, in its own container `compare_scans`, upright alignment) on the two splats.
-  Result: `assets/comparisons/{cid}.json` (CompareResponse) + view pairs `assets/comparisons/{cid[:8]}/a_NN.png`.
-  Tested: the same mouse -> `same`; another object -> `alignment_failed` ("we could not tell"), by the agent's design.
-- **A broken GPU context** (CUDA assert) makes the container exit; Modal retries the scan on a fresh one.
+  and `rescan.mp4` last. `Splatter.run_verify` splats it, compares like with like (a rescan without an underside
+  is compared with the listing's top lap, cached as `splats/{listing}.top.spz`) and runs the buyer agent
+  (`multiagent/buyer_agent`) -> `assets/comparisons/{cid}.json` + view pairs.
+- **Gemini quota:** development runs on `GEMINI_MODEL=gemini-3.5-flash-lite` (500 requests a day). Demo day:
+  `gemini-3.5-flash` in the root `.env`, then `python push_secrets.py && modal deploy app.py` (and `warm` again).
 
-Measured on 2026-10-17, `orbit.mp4` + `orbit_reverse.mp4` (43 MB), H100:
-
-| Path | Upload done | Splat published | Listing published |
-|---|---|---|---|
-| Cold (no prewarm) | 7.0 s | 65.9 s | 84.9 s |
-| Dashboard flow (prewarm from session.json, 30 s recording) | 4.0 s | 42.8 s | 72.7-78.6 s |
-| Warm container | 4.0 s | 39.9 s | 56.2 s |
-
-The listing step is 15-35 s of that: listing/'s render (~3-7.5 s) and Gemini identify (~5-19 s, varies).
-
-**Gemini model and quota:** each listing makes ~3 Gemini requests (identify, title/text, price). On the free tier
-the Flash models allow 20 a day (~6 listings), then `429 RESOURCE_EXHAUSTED` and the listing is published as `failed`
-(the splat is fine). So development runs on `GEMINI_MODEL=gemini-3.5-flash-lite` (500 a day, ~160 listings; tested:
-listed in 19 s, but it reads less off the item, e.g. no brand from the ThinkPad logo, so the seller's product title
-matters more). **Demo day:** set `GEMINI_MODEL=gemini-3.5-flash` in the root `.env` (or enable billing), then
-`python push_secrets.py && modal deploy app.py`. `python client.py relist <scan_id>` redoes a failed listing.
-
-### Demo (no cold start)
-
-```bash
-python client.py warm --gpu H100        # keeps one GPU container loaded (billed while warm)
-python client.py run orbit.mp4 orbit_reverse.mp4 --gpu H100 --name merged
-python client.py cold --gpu H100        # always after the demo
-```
-
-## The 8 reference views
-
-On a cube centred on the object, yaw-aligned with it, framed so the object fills ~85% of each 1024 px image:
-
-- **top + bottom captured:** the 8 cube corners (4 upper at +35°, 4 lower at -35°)
-- **top only:** 8 points around the cube's top face: its 4 corners (+35°) and the midpoints of its 4 top edges (+45°)
-
-Each view is a transparent PNG (web) and an opaque PNG on the listing pipeline's mid-grey (Jev). `views.json` has
-every camera (OpenCV camera-to-world in the scan frame, intrinsics), so anyone can re-render the same viewpoint.
+**Supabase backup:** `python supabase_setup/backup.py` copies every bucket into `supabase_clear/` (gitignored) and
+checks each file's size. Run it before deleting anything.
 
 ## Pipeline (`mintsplat/`)
 
 | Stage | File | What |
 |---|---|---|
-| frames | `frames.py` | sharpest frame per time bucket (80 per video); videos decoded in parallel; >30 fps only scores every k-th frame |
-| masks | `masks.py` | SAM 2 video propagation from a centre prompt, re-prompted with the grown box so attached parts (stands, casters) are included; only small enclosed holes are filled, real see-through gaps stay open |
-| poses | `poses.py` | VGGT on unmasked frames; support plane constrained to be roughly horizontal w.r.t. the cameras' up (walls and box sides rejected), camera up as fallback; yaw along the object's long axis |
+| frames | `frames.py` | sharpest frame per time bucket (80 per video), turned upright from the app's poses |
+| masks | `masks.py` | SAM 2 video propagation from a centre prompt, re-prompted with the grown box so attached parts are included; the mask is the item's **outline** (its convex hull), with everything inside kept, so parts SAM 2 drops (the mouse's red button) stay in the splat |
+| poses | `poses.py` | VGGT on the frames; support plane roughly horizontal w.r.t. the cameras' up; yaw along the long axis |
+| heldout | `heldout.py` | the 8 held-out photos (above), chosen per pass |
 | register | `merge.py` | bottom capture → top frame: similarity fit so each video's points stay inside the other's silhouettes |
-| train | `train.py` | gsplat MCMC (200k cap), L1 + SSIM, random backgrounds, alpha loss, per-view pose refinement, needle regulariser; training resolution from a 0.5 MP crop budget |
-| export | `export.py` | mask-vote cleanup, drop Gaussians invisible in every training view, SPZ v3 (6/5-bit SH) |
-| views | `views.py` | the 8 reference views above |
-| publish | `publish.py` | storage mode: Supabase in/out, `mint-work`, index |
+| train | `train.py` | gsplat MCMC (200k cap), L1 + SSIM, random backgrounds, alpha loss, per-view pose refinement, needle regulariser; the held-out photos' frames are never trained on |
+| export | `export.py` | mask-vote cleanup, drop Gaussians invisible in every training view, SPZ v3 |
+| spin | `spin.py` | the 24 spin frames |
+| publish | `publish.py` | Supabase in/out, manifest, index |
 
-## Numbers (warm H100, top-only unless noted)
+## Numbers (warm H100, orbit videos of the ThinkPad mouse, 2026-10-17)
 
-Held-out PSNR is measured inside the object mask on ~10% of frames never trained on, after letting each held-out
-camera fit its pose to the splat (training refines poses, so fixed poses would understate quality).
+Held-out PSNR is measured inside the item mask on the 8 held-out frames, after letting each held-out camera fit
+its pose to the splat.
 
-| Object (video) | Time | Held-out PSNR | `.spz` |
+| Videos | GPU time | Held-out PSNR | `.spz` |
 |---|---|---|---|
-| chair (25 s, 120 fps, thin legs, casters) | ~28 s | 24.8 | 2.6 MB |
-| backpack (20 s, people in frame) | ~24 s | 27.2 | 3.0 MB |
-| desk phone (20 s, on a box, coiled cord) | ~27 s | 26.8 | 2.3 MB |
-| ThinkPad mouse, top + bottom (2 × 23 s) | ~35 s | 29.5 | 2.7 MB |
+| 1 (top) | 27 s | 30.0 | ~2.6 MB |
+| 2 (top + bottom) | 35 s | 29.0 | ~2.7 MB |
 
-Known limits: thin dangling parts that SAM 2 includes only sometimes (a phone's coiled cord) reconstruct as wisps;
-glossy black surfaces show some mottling; a side the video never saw stays empty.
-
-## Not done yet
-
-Keyframes / `bbox` / `sha256` for the passport contract, metric scale, and the live Supabase test (needs the
-`mint-supabase` secret).
+Known limits: thin dangling parts that SAM 2 includes only sometimes (a coiled cord) reconstruct as wisps;
+glossy black surfaces show some mottling; a side the video never saw stays empty (hence `#maxpolar=90`).

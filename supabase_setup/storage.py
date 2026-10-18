@@ -6,6 +6,7 @@ client.py) only ever see short-lived signed upload URLs.
 """
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 import uuid
@@ -33,8 +34,11 @@ class Supabase:
             raise RuntimeError(f"Supabase {method} {path} -> {e.code}: {e.read()[:300]!r}") from None
 
     # ---- storage
-    def download(self, bucket: str, path: str) -> bytes:
-        return self._req("GET", f"/storage/v1/object/authenticated/{bucket}/{path}")
+    def download(self, bucket: str, path: str, fresh: bool = False) -> bytes:
+        """fresh: bypass caches with a unique query string. Use it for objects that are overwritten in place
+        (listing documents): a plain read straight after a write has returned the previous copy."""
+        query = f"?t={time.time_ns()}" if fresh else ""
+        return self._req("GET", f"/storage/v1/object/authenticated/{bucket}/{path}{query}")
 
     def list_objects(self, bucket: str, folder: str, limit: int = 1000) -> list[dict]:
         """Files directly inside `folder`, newest first: dicts with name, created_at, updated_at, metadata."""

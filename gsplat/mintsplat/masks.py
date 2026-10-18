@@ -3,33 +3,23 @@ import numpy as np
 
 
 MASK = {
-    "max_hole_frac": 0.025,  # enclosed holes smaller than this share of the object are filled (logos,
-                             # highlights); bigger ones are real see-through gaps (chair legs, handles)
     "min_part_frac": 0.015,  # extra connected pieces at least this share of the main body are kept ...
     "part_reach": 0.25,      # ... if their centre lies within the main body's box grown by this fraction
-    "close_px": 9,
     "box_grow": 0.12,  # box re-prompt: first-frame point mask's box grown by this share of its size per side
 }
 
 
-def fill_small_holes(m: np.ndarray, max_frac: float = MASK["max_hole_frac"]) -> np.ndarray:
-    """Fill enclosed holes smaller than max_frac of the object's area.
-
-    Background = pixels connected to the image border. Small enclosed regions are SAM dropping a logo or
-    a specular patch; large ones are background seen through the object and must stay open.
-    """
-    m = m.astype(bool)
-    h, w = m.shape
-    pad = np.zeros((h + 2, w + 2), np.uint8)
-    pad[1:-1, 1:-1] = m
-    cv2.floodFill(pad, None, (0, 0), 2)
-    holes = (pad[1:-1, 1:-1] == 0).astype(np.uint8)
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(holes)
-    if n <= 1:
-        return m
-    small = np.zeros(n, bool)
-    small[1:] = stats[1:, cv2.CC_STAT_AREA] < max_frac * max(int(m.sum()), 1)
-    return m | small[lab]
+def outline(m: np.ndarray) -> np.ndarray:
+    """The item's outline (convex hull), filled: everything inside it is the item. SAM 2 drops parts that look
+    different from the body (a mouse's red button, logos, highlights) as holes or as notches in the silhouette;
+    training would then make them see-through. The hull keeps them all. An item with real hollows (a chair) gets
+    the background in them too; compact items (the demo's mouse) are what we scan."""
+    pts = cv2.findNonZero(m.astype(np.uint8))
+    if pts is None:
+        return m.astype(bool)
+    out = np.zeros(m.shape, np.uint8)
+    cv2.fillConvexPoly(out, cv2.convexHull(pts), 1)
+    return out.astype(bool)
 
 
 def main_parts(m: np.ndarray) -> np.ndarray:
@@ -50,10 +40,7 @@ def main_parts(m: np.ndarray) -> np.ndarray:
 
 
 def clean(m: np.ndarray) -> np.ndarray:
-    m = main_parts(m)
-    k = MASK["close_px"]
-    m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((k, k), np.uint8)).astype(bool)
-    return fill_small_holes(m)
+    return outline(main_parts(m))
 
 
 class Segmenter:

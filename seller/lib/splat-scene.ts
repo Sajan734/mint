@@ -36,6 +36,14 @@ export function fragmentRotation(src: string): [number, number, number] {
   return (["rx", "ry", "rz"] as const).map((k) => (Number(q.get(k)) || 0) * (Math.PI / 180)) as [number, number, number];
 }
 
+/** Optional orbit limit in the URL fragment, e.g. `….spz#maxpolar=90`: how far down the camera may go, in degrees
+ *  from straight above (90 = level with the item). gsplat sets it on scans filmed in one pass, which never saw the
+ *  underside; without it the camera goes all the way round. */
+export function fragmentMaxPolar(src: string): number {
+  const deg = Number(new URLSearchParams(new URL(src, "http://x").hash.slice(1)).get("maxpolar"));
+  return deg > 0 && deg < 180 ? deg * (Math.PI / 180) : Math.PI;
+}
+
 /** meta.json + the files it lists -> the bytes of an equivalent .sog zip. */
 async function sogsZip(metaUrl: string): Promise<Uint8Array> {
   const { zipSync } = await import("fflate");
@@ -85,6 +93,7 @@ export async function mountSplatScene(host: HTMLElement, o: SceneOptions): Promi
   const controls = new OrbitControls(camera, canvas);
   controls.enabled = o.interactive;
   controls.enablePan = false; // keep the item centred
+  controls.maxPolarAngle = fragmentMaxPolar(o.src); // a one-pass scan has no underside to look at
   controls.enableDamping = !o.sharedPose;
   controls.autoRotate = o.autoRotate;
   controls.autoRotateSpeed = o.interactive ? 1.5 : 4; // 60 / speed = seconds per turn: 40 s on a page, 15 s on a card
@@ -105,7 +114,7 @@ export async function mountSplatScene(host: HTMLElement, o: SceneOptions): Promi
     const s = new THREE.Spherical().setFromVector3(camera.position.clone().sub(controls.target));
     const [dTheta, dPhi] = turn[e.key] ?? [0, 0];
     s.theta += dTheta;
-    s.phi = THREE.MathUtils.clamp(s.phi - dPhi, 0.05, Math.PI - 0.05);
+    s.phi = THREE.MathUtils.clamp(s.phi - dPhi, 0.05, Math.min(Math.PI - 0.05, controls.maxPolarAngle));
     s.radius = THREE.MathUtils.clamp(s.radius * (zoom[e.key] ?? 1), controls.minDistance, controls.maxDistance);
     camera.position.setFromSpherical(s).add(controls.target);
     if (o.sharedPose) o.sharedPose.current = poseOf(camera.position, center, radius);

@@ -68,6 +68,10 @@ def category_for(identity: dict, listing: dict | None = None) -> str:
     return DEFAULT_CATEGORY
 
 
+def heldout_urls(manifest: dict) -> list[str]:
+    return [h["url"] for h in (manifest.get("heldout") or {}).get("items", [])]
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # the site sorts listed_at as text
 
@@ -75,12 +79,15 @@ def now_iso() -> str:
 # --- running listing/ ---------------------------------------------------------------------------------
 
 
-def prepare_item(scan_id: str, spz: bytes, seller_name: str | None = None, root: Path | None = None) -> Path:
-    """samples/<scan_id>/ with splat.spz + input.json, as listing/ingest.py writes it."""
+def prepare_item(scan_id: str, spz: bytes, seller_name: str | None = None, root: Path | None = None,
+                 heldout_urls: list[str] | None = None) -> Path:
+    """samples/<scan_id>/ with splat.spz + input.json, as listing/ingest.py writes it. input.json also lists the
+    scan's held-out photos (real masked video frames, public URLs) for stages that want photos, not renders."""
     item = (root or LISTING_DIR / "samples") / scan_id
     item.mkdir(parents=True, exist_ok=True)
     (item / "splat.spz").write_bytes(spz)
-    (item / "input.json").write_text(json.dumps({"seller_name": seller_name, "up_axis": "+y", "scan_id": scan_id}))
+    (item / "input.json").write_text(json.dumps({"seller_name": seller_name, "up_axis": "+y", "scan_id": scan_id,
+                                                 "heldout_urls": heldout_urls or []}))
     return item
 
 
@@ -106,7 +113,7 @@ def market_listing(scan_id: str, listing: dict, run_dir: Path, manifest: dict, p
     """listing/ Listing + the website's wrapper fields (buyer/lib/schema.ts MarketListingSchema). The scan id
     is the item id, so the website's /listing/<scan_id> page is the scan's page."""
     spin = manifest.get("spin_urls") or []
-    previews = preview_urls or spin[::6][:4] or [v["grey_url"] for v in manifest["views"]["items"][:4]]
+    previews = preview_urls or spin[::6][:4] or heldout_urls(manifest)[:4]
     return {
         "listing": {**listing, "item_id": scan_id, "preview_images": previews},
         "seller_id": live["seller_id"],
@@ -115,7 +122,7 @@ def market_listing(scan_id: str, listing: dict, run_dir: Path, manifest: dict, p
         "location": live["location"],
         "reference_price_cad": listing["price_cad"],  # Mint's fair value for this item in this condition
         "frames": spin or previews,
-        "splat_url": manifest.get("splat_url"),
+        "splat_url": manifest.get("splat_url"),  # a one-pass scan's ends in #maxpolar=90 (publish.viewer_url)
         "usable_view_count": int(_stage(run_dir, "condition").get("usable_view_count", 0)),
         "listed_at": now_iso(),
         "status": "available",
@@ -153,8 +160,11 @@ def put_doc(sb, scan_id: str, doc: dict) -> dict:
 def set_published(sb, scan_id: str, published: bool, title: str, description: str, price_cad: int) -> dict:
     """The seller's Publish (or Save draft): their title, description and price go into the listing; `published`
     decides whether buyers see it. The pipeline's own price stays as suggested_price_cad and reference_price_cad
-    (the fair value the buyer's price badge compares against)."""
-    doc = json.loads(sb.download(ASSETS, f"listings/{scan_id}.json"))
+    (the fair value the buyer's price badge compares against). LookupError: no listing document for this scan."""
+    try:
+        doc = json.loads(sb.download(ASSETS, f"listings/{scan_id}.json", fresh=True))
+    except RuntimeError as e:
+        raise LookupError(f"no listing for scan {scan_id}") from e
     ml = doc.get("market_listing")
     if doc.get("status") != "listed" or not ml:
         raise ValueError(f"scan {scan_id} has no listing to publish (status {doc.get('status')!r})")
@@ -177,12 +187,22 @@ def refresh_listing_index(sb, fresh: dict[str, dict] | None = None) -> dict:
     fresh = fresh or {}
     objs = [o for o in sb.list_objects(ASSETS, "listings") if o["name"].endswith(".json") and o["name"] != "index.json"]
 
-    def doc_for(o: dict) -> dict:
+    def doc_for(o: dict) -> dict | None:
         sid = o["name"].removesuffix(".json")
-        return fresh[sid] if sid in fresh else json.loads(sb.download(ASSETS, f"listings/{o['name']}"))
+        if sid in fresh:
+            return fresh[sid]
+        for attempt in range(2):  # another job may be rewriting it right now: one retry, then leave it out
+            try:
+                return json.loads(sb.download(ASSETS, f"listings/{o['name']}", fresh=True))
+            except RuntimeError as e:
+                if attempt:
+                    print(f"index: skipped listings/{o['name']} ({str(e)[:120]}); the next refresh adds it back")
+                    return None
+                time.sleep(0.5)
+        return None
 
     with ThreadPoolExecutor(8) as ex:
-        docs = list(ex.map(doc_for, objs))
+        docs = [d for d in ex.map(doc_for, objs) if d is not None]
     index = {"v": 3, "updated_at": now_iso(), "scans": docs}  # objs are newest first
     sb.upload(ASSETS, "listings/index.json", json.dumps(index).encode(), "application/json", cache_control="no-cache")
     return index
@@ -194,11 +214,12 @@ def list_scan(sb, scan_id: str, manifest: dict, spz: bytes, cfg: dict | None = N
     cfg = cfg or {}
     t0 = time.perf_counter()
     doc = {"v": 3, "scan_id": scan_id, "batch_id": manifest.get("batch_id"), "splat_url": manifest.get("splat_url"),
-           "spin_urls": manifest.get("spin_urls", []), "seller_name": cfg.get("seller_name"), "created_at": now_iso(),
+           "coverage": manifest.get("coverage"), "spin_urls": manifest.get("spin_urls", []),
+           "heldout_urls": heldout_urls(manifest), "seller_name": cfg.get("seller_name"), "created_at": now_iso(),
            "published": False}
     run_dir = LISTING_DIR / "runs" / scan_id  # listing/pipeline.py RUNS_ROOT / item id
     try:
-        item = prepare_item(scan_id, spz, cfg.get("seller_name"))
+        item = prepare_item(scan_id, spz, cfg.get("seller_name"), heldout_urls=heldout_urls(manifest))
         result, kind, run_dir = run_listing_pipeline(item)
         doc["timings_ms"] = {"listing_pipeline": int((time.perf_counter() - t0) * 1000)}
         if kind == "rejection":

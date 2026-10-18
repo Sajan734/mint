@@ -1,20 +1,20 @@
-"""Talk to the DEPLOYED splat app (run `modal deploy app.py` once first).
+"""Talk to the DEPLOYED splat app (`modal deploy app.py` first). Warm and cold containers: README.md.
 
-    python client.py warm [--gpu H100]          # keep 1 GPU container loaded (billed while on)
-    python client.py run orbit.mp4 [--name x]   # mp4 -> out/<name>/splat.spz on the warm container
+    python client.py warm                       # keep 1 H100 loaded: no cold start (billed every second it is on)
+    python client.py status                     # is a container up?
+    python client.py cold                       # back to scale-to-zero (always after a demo)
+    python client.py run orbit.mp4 [--name x]   # mp4 -> runs/<name>/ (splat.spz, heldout/, spin/, run.json)
     python client.py run orbit.mp4 orbit_reverse.mp4 --name merged   # top + flipped-over bottom
-    python client.py cold [--gpu H100]          # back to scale-to-zero after the demo
     python client.py relist <scan_id> [--title "Lenovo ThinkPad mouse"]   # re-run only the listing step
+    python client.py rescan <scan_id> [...]     # re-run the whole live pipeline on scans already in Supabase
     python client.py scan orbit.mp4 [orbit_reverse.mp4]
         # the live pipeline end to end, exactly like the iPhone (scanner/HANDOFF.md): the scan-upload Edge Function
         # signs the uploads (no key on the client), bottom.mp4 goes first, video.mp4 last; its arrival fires the
-        # Supabase webhook -> run_scan on an H100 -> splat + views -> listing/ (Jev) -> assets/listings/{id}.json,
-        # which the website shows. Times each hop and saves everything to out/scan_<id>/.
+        # Supabase webhook -> run_scan -> splat + held-out photos + spin -> listing/ (Jev) -> assets/listings/{id}.json,
+        # which the website shows. Times each hop and saves everything to runs/scan_<id>/.
 
-Use the same --gpu for warm, run and cold: each GPU type is its own pool of containers.
-Warm H100: one video ~24-28 s, top + bottom ~35 s (training resolution is set automatically; see README).
-
-`modal run app.py` starts a fresh app every time (always cold); this script reuses the deployed one.
+Everything (the webhook's scans too) runs in one H100 pool, so `warm` covers all of it. Warm H100: one video
+~24-28 s, top + bottom ~35 s (training resolution is set automatically; see README).
 """
 import argparse
 import json
@@ -103,16 +103,18 @@ def scan(videos: list[Path], scan_id: str | None = None, timeout_s: float = 900)
 def main():
     ap = argparse.ArgumentParser()
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for name in ("warm", "cold"):
-        sub.add_parser(name).add_argument("--gpu", default="")
+    for name in ("warm", "cold", "status"):
+        sub.add_parser(name)
     r = sub.add_parser("run")
-    r.add_argument("--gpu", default="", help="e.g. H100 (default: the app's L40S)")
     r.add_argument("--scale", type=float, default=0.0, help="training resolution (0 = auto; 1.0 = full res)")
     r.add_argument("video")
     r.add_argument("video2", nargs="?", help="same object flipped over; merged into one splat")
     r.add_argument("--name", default="")
-    r.add_argument("--debug", action="store_true", help="also produce eval sheets + turntable")
+    r.add_argument("--debug", action="store_true", help="also the masks/poses contact sheets + held-out PSNR")
     r.add_argument("--ply", action="store_true", help="also return the uncompressed .ply")
+    rs = sub.add_parser("rescan", help="re-run splat + listing on scans already in Supabase (overwrites them)")
+    rs.add_argument("scan_ids", nargs="+")
+    rs.add_argument("--no-listing", action="store_true", help="only the splat, held-out photos and spin")
     s = sub.add_parser("scan")
     s.add_argument("video", help="the main lap (uploaded as video.mp4)")
     s.add_argument("video2", nargs="?", help="the item flipped over (uploaded first, as bottom.mp4)")
@@ -130,9 +132,22 @@ def main():
                           "seller_check_reasons": ml.get("seller_check_reasons"), "run_url": doc.get("run_url"),
                           "timings_ms": doc.get("timings_ms"), "wall_s": round(time.perf_counter() - t0, 1)}, indent=2))
         return
+    if args.cmd == "rescan":  # all at once: each gets its own container (up to the app's GPU limit)
+        splatter = modal.Cls.from_name(APP, CLS)()
+        t0 = time.perf_counter()
+        calls = {sid: splatter.run_scan.spawn(sid, None, {"listing": not args.no_listing}) for sid in args.scan_ids}
+        for sid, call in calls.items():
+            m = call.get()
+            doc = m.get("listing") or {}
+            ml = (doc.get("market_listing") or {}).get("listing") or {}
+            print(json.dumps({"scan_id": sid, "error": m.get("error"), "coverage": m.get("coverage"),
+                              "heldout": len((m.get("heldout") or {}).get("items", [])),
+                              "listing": doc.get("status"), "title": ml.get("title"), "price_cad": ml.get("price_cad"),
+                              "wall_s": round(time.perf_counter() - t0, 1)}))
+        return
     if args.cmd == "scan":  # no Modal call: the upload alone starts the pipeline, as from the phone
         m = scan([Path(args.video)] + ([Path(args.video2)] if args.video2 else []), args.scan_id)
-        out = Path("out") / f"scan_{m['scan_id'][:8]}"
+        out = Path("runs") / f"scan_{m['scan_id'][:8]}"
         out.mkdir(parents=True, exist_ok=True)
         (out / "scan.json").write_text(json.dumps(m, indent=2))
         print(json.dumps({k: m[k] for k in ("scan_id", "client_timings", "website_path")}, indent=2))
@@ -144,21 +159,27 @@ def main():
         print(f"\nsaved to {out}/scan.json")
         return
 
-    cls = modal.Cls.from_name(APP, CLS)
-    splatter = (cls.with_options(gpu=args.gpu) if args.gpu else cls)()
+    splatter = modal.Cls.from_name(APP, CLS)()
     if args.cmd == "warm":
-        print(splatter.update_autoscaler(min_containers=1))
-        print("Keeping 1 container warm. Give it ~30 s to boot and load models. Run `cold` when done.")
+        splatter.update_autoscaler(min_containers=1)
+        print("Keeping 1 H100 warm (billed while on). It boots and loads its models in ~30-60 s; `status` shows when "
+              "it is up. A redeploy resets this: run `warm` again after every `modal deploy`. Run `cold` when done.")
     elif args.cmd == "cold":
-        print(splatter.update_autoscaler(min_containers=0))
-        print("Scale-to-zero restored (the container idles out after scaledown_window).")
+        splatter.update_autoscaler(min_containers=0)
+        print("Scale-to-zero restored: the container shuts down after 5 idle minutes (scaledown_window).")
+    elif args.cmd == "status":
+        try:
+            s = splatter.run_scan.get_current_stats()
+            print(f"containers up: {s.num_total_runners}, scans waiting: {s.backlog}")
+        except Exception as e:  # noqa: BLE001 - older SDKs: the CLI shows the same
+            print(f"({type(e).__name__}) use `modal container list` to see running containers")
     else:
         src = Path(args.video)
         t0 = time.perf_counter()
         payload = [src.read_bytes(), Path(args.video2).read_bytes()] if args.video2 else src.read_bytes()
         res = splatter.run.remote(payload, {"debug": args.debug, "ply": args.ply,
                                             "train": {"train_scale": args.scale or None}})
-        save(res, Path("out") / (args.name or src.stem), time.perf_counter() - t0)
+        save(res, Path("runs") / (args.name or src.stem), time.perf_counter() - t0)
 
 
 if __name__ == "__main__":

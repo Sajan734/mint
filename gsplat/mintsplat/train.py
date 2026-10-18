@@ -19,7 +19,7 @@ DEFAULTS = {
     "batch": 4,
     "cap_max": 200_000,
     "sh_degree": 3,
-    "holdout_every": 10,  # every Nth view is held out for evaluation (0 = none)
+    "holdout_ids": (),  # views never trained on: the scan's held-out photos (heldout.py), evaluated in debug runs
     "crop_margin": 0.12,
     "edge_band_px": 2,
     "ssim_w": 0.2,
@@ -195,11 +195,6 @@ def contribution(params, c2w, views, ids, batch: int = 4) -> torch.Tensor:
     return total
 
 
-def split_views(n: int, every: int) -> tuple[list[int], list[int]]:
-    test = [i for i in range(n) if every and i % every == every // 2]
-    return [i for i in range(n) if i not in test], test
-
-
 def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     from gsplat.strategy import MCMCStrategy
 
@@ -207,7 +202,8 @@ def train(c2w, K, frames, masks, pts, cols, cfg: dict):
     cfg = {**DEFAULTS, **(cfg or {})}
     iters, B = cfg["iters"], cfg["batch"]
     torch.manual_seed(0)
-    train_ids, test_ids = split_views(len(frames), cfg["holdout_every"])
+    test_ids = sorted(set(cfg["holdout_ids"]))
+    train_ids = [i for i in range(len(frames)) if i not in test_ids]
     ts = cfg["train_scale"] or auto_scale(masks, cfg["crop_margin"], cfg["train_px_budget"])
     if ts != 1.0:
         h, w = masks[0].shape
@@ -378,24 +374,3 @@ def look_at(pos, target):
     m = torch.eye(4, device=pos.device)
     m[:3, 0], m[:3, 1], m[:3, 2], m[:3, 3] = x, y, f, pos
     return m
-
-
-@torch.no_grad()
-def turntable(params, c2w, K, center, sh_degree, n=72, W=640, H=480, elev_deg=None):
-    """Frames of a 360° orbit around +Y at the capture's mean distance (and elevation unless given)."""
-    cams = c2w[:, :3, 3] - center
-    dist = float(cams.norm(dim=1).mean())
-    elev = math.radians(elev_deg) if elev_deg is not None else float(torch.asin(cams[:, 1] / cams.norm(dim=1)).mean())
-    k = K[0].clone()
-    s = W / (2 * float(k[0, 2]))
-    k[:2] *= s
-    k[0, 2], k[1, 2] = W / 2, H / 2
-    bg = torch.full((3,), 0.07, device="cuda")
-    out = []
-    for i in range(n):
-        az = 2 * math.pi * i / n
-        pos = center + dist * torch.tensor([math.cos(elev) * math.cos(az), math.sin(elev),
-                                            math.cos(elev) * math.sin(az)], device="cuda")
-        rgb, _, _ = render(params, torch.linalg.inv(look_at(pos, center))[None], k[None], W, H, sh_degree, bg[None])
-        out.append((rgb[0].clamp(0, 1).cpu().numpy() * 255).astype(np.uint8))
-    return out

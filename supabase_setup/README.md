@@ -14,8 +14,8 @@ a dependency-free Python client for backends, and a smoke test.
 
 | Bucket | Access | Keys |
 |---|---|---|
-| `scans` | private (signed URLs) | `{scan_id}/top.mp4`, `{scan_id}/bottom.mp4` (any video extension) |
-| **`assets`** | public read | `splats/{scan_id}.spz`, `splats/{scan_id}.json` (manifest), `splats/index.json` (all scans, newest first), `views/{scan_id}/` (8 reference views: `NN_azAAA_elEE.png` transparent + `_grey.png`, and `views.json` with cameras), later `thumbs/…`, `refs/…`, `renders/…`, `maps/…`, `wipes/…` |
+| `scans` | private (signed URLs) | `{scan_id}/video.mp4`, `{scan_id}/bottom.mp4` (optional), the app's `poses.jsonl`, `capture.json`, `session.json` (scanner/HANDOFF.md) |
+| **`assets`** | public read | `splats/{scan_id}.spz`, `splats/{scan_id}.json` (manifest), `splats/index.json` (all scans, newest first), `heldout/{scan_id}/` (8 masked video frames `00.jpg`…`07.jpg` + `heldout.json`), `spin/{scan_id}/` (spin frames), `listings/…`, `comparisons/…` (gsplat/README.md). Scans made before 2026-10-17 have `views/{scan_id}/` instead |
 | `fixtures` | private | raw eval and test captures |
 
 Supabase reserves the name `public`, so ARCHITECTURE.md §12's `public` bucket is **`assets`**.
@@ -26,6 +26,10 @@ Everything in `assets` is readable by URL without a key, so consumers that only 
 
 Recreate on a fresh project with [`buckets.sql`](buckets.sql). Free plan: **50 MB per file**, 1 GB total
 storage, 5 GB egress / month; delete raw videos after processing if space gets tight.
+
+**Back up before deleting anything:** `python supabase_setup/backup.py [out_dir]` copies every object of every
+bucket into `supabase_clear/` (gitignored), skips files already there, checks every size and writes
+`inventory.json`. The 2026-10-17 cleanup's full copy is there (1,229 objects, 853 MB).
 
 ## Keys: who holds what
 

@@ -4,12 +4,17 @@
 against an in-memory fake in tests.
 
 Published layout (public `assets` bucket, readable without a key):
-  splats/{scan_id}.spz      the splat (SPZ v3)
-  splats/{scan_id}.json     manifest
-  views/{scan_id}/          8 reference views (transparent + grey PNG each) + views.json (cameras)
-                            + spin/f00..f23.webp (turntable for the website's spin viewer)
-  splats/index.json         every published scan, newest first (listing/ingest.py polls this)
+  splats/{scan_id}.spz        the splat (SPZ v3)
+  splats/{scan_id}.json       manifest (below)
+  splats/index.json           every published scan, newest first (listing/ingest.py polls this)
+  heldout/{scan_id}/          00.jpg..07.jpg: 8 real video frames masked to the item, on white, never trained on
+                              (heldout.py), + heldout.json (pass, video frame, camera angles per photo)
+  spin/{scan_id}/             f00..f23.webp, the website's spin viewer
 The .spz is the only splat format that leaves the GPU: ~10x smaller than a PLY, and listing/ renders it directly.
+
+Coverage: one video -> "top" (the underside was never filmed), two -> "full". A "top" splat's splat_url ends in
+#maxpolar=90, which the website's viewer reads (lib/splat-scene.ts fragmentMaxPolar) to keep the camera above the
+item; HTTP clients drop the fragment, so the file downloads as usual.
 """
 import json
 import time
@@ -19,19 +24,17 @@ from datetime import datetime, timezone
 SCANS, ASSETS = "scans", "assets"
 VIDEO_EXTS = (".mp4", ".mov", ".m4v")
 TOP_NAMES, BOTTOM_NAMES = ("top", "video"), ("bottom",)  # video.mp4 is what the iOS app uploads
-CONTENT_TYPES = {".json": "application/json", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg"}
-
-
 VERIFY_TOP_NAMES, VERIFY_BOTTOM_NAMES = ("rescan",), ("rescan2",)  # a buyer's verify rescan (scanner/HANDOFF.md)
+CONTENT_TYPES = {".json": "application/json", ".png": "image/png", ".webp": "image/webp", ".jpg": "image/jpeg"}
+MAX_POLAR_DEG = {"top": 90, "full": 180}  # how far below straight-above a viewer may orbit
 
 
 def fetch_inputs(sb, scan_id: str, verify: bool = False) -> tuple[list[str], list[bytes], dict]:
     """scans/{scan_id}/top.* or video.* (required) and bottom.* (optional) -> (names, video bytes, io timings).
-    io["rotate_cw"] turns each video's frames upright, from the app's poses.jsonl / bottom.poses.jsonl when
-    present (its frames are stored sideways); 0 for videos without one. io["session"] is the scan's session.json
-    (scanner/DASHBOARD.md: the product title the seller typed, seller, kind) when there is one."""
-    import json
-
+    Later passes (pass3.mp4, ...) are not used. io["rotate_cw"] turns each video's frames upright, from the app's
+    poses.jsonl / bottom.poses.jsonl when present (its frames are stored sideways); 0 for videos without one.
+    io["session"] is the scan's session.json (scanner/DASHBOARD.md: the product title the seller typed, seller,
+    kind) when there is one."""
     from .frames import upright_rotation
 
     t0 = time.perf_counter()
@@ -59,36 +62,43 @@ def fetch_inputs(sb, scan_id: str, verify: bool = False) -> tuple[list[str], lis
     return keys, videos, io
 
 
+def viewer_url(url: str, coverage: str) -> str:
+    """The splat's URL as viewers get it: a one-pass scan carries its orbit limit in the fragment."""
+    return url if coverage == "full" else f"{url}#maxpolar={MAX_POLAR_DEG[coverage]}"
+
+
 def publish(sb, scan_id: str, batch_id: str, keys: list[str], res: dict, io: dict, index: bool = True) -> dict:
     """Upload the pipeline result `res` (with res["files"]) to the public bucket; return the manifest."""
     files = dict(res["files"])
     t0 = time.perf_counter()
-    folder = f"views/{scan_id}"
     targets = [(f"splats/{scan_id}.spz", files.pop("splat.spz"), "application/octet-stream")]
-    targets += [(f"{folder}/{k.split('/', 1)[1]}", v, CONTENT_TYPES["." + k.rsplit(".", 1)[-1]])
-                for k, v in files.items() if k.startswith("views/")]
+    for k, v in files.items():
+        folder, _, name = k.partition("/")
+        if folder in ("heldout", "spin"):
+            targets.append((f"{folder}/{scan_id}/{name}", v, CONTENT_TYPES["." + name.rsplit(".", 1)[-1]]))
     with ThreadPoolExecutor(8) as ex:
         urls = dict(zip([p for p, _, _ in targets], ex.map(lambda x: sb.upload(ASSETS, *x), targets)))
     io["upload_s"] = round(time.perf_counter() - t0, 2)
     io["upload_mb"] = round(sum(len(d) for _, d, _ in targets) / 1e6, 2)
 
-    meta = json.loads(files["views/views.json"])
+    coverage = res["coverage"]
+    held = json.loads(files["heldout/heldout.json"])
     manifest = {
-        "v": 3, "scan_id": scan_id, "batch_id": batch_id, "inputs": [f"{SCANS}/{scan_id}/{k}" for k in keys],
-        "splat_path": f"{ASSETS}/splats/{scan_id}.spz", "splat_url": urls[f"splats/{scan_id}.spz"],
-        "views_json_url": urls[f"{folder}/views.json"],
-        "views": {"layout": meta["layout"], "includes_bottom": meta["includes_bottom"], "items": [
-            {"name": v["name"], "azimuth_deg": v["azimuth_deg"], "elevation_deg": v["elevation_deg"],
-             "transparent_url": urls[f"{folder}/{v['files']['transparent']}"],
-             "grey_url": urls[f"{folder}/{v['files']['grey']}"]} for v in meta["views"]]},
-        "spin_urls": [urls[p] for p in sorted(p for p in urls if p.startswith(f"{folder}/spin/"))],
+        "v": 4, "scan_id": scan_id, "batch_id": batch_id, "inputs": [f"{SCANS}/{scan_id}/{k}" for k in keys],
+        "coverage": coverage, "passes": res["passes"], "orbit": {"max_polar_deg": MAX_POLAR_DEG[coverage]},
+        "splat_path": f"{ASSETS}/splats/{scan_id}.spz",
+        "splat_url": viewer_url(urls[f"splats/{scan_id}.spz"], coverage),
+        "heldout": {"json_url": urls[f"heldout/{scan_id}/heldout.json"],
+                    "items": [{**h, "url": urls[f"heldout/{scan_id}/{h['file']}"]} for h in held["items"]]},
+        "spin_urls": [urls[p] for p in sorted(p for p in urls if p.startswith(f"spin/{scan_id}/"))],
         "metric_scale": None,  # video-only scans are not metric yet
         "frame": "scan frame: +Y up, +X along the object's long axis, origin under the object, right-handed (SPZ's RUB)",
         "gaussians": res["gaussians"]["after"], "sizes_mb": res["sizes_mb"],
         "stage_timings_ms": {k: int(v * 1000) for k, v in res["timings"].items()},
         "register": res.get("register"), "io": io,
     }
-    sb.upload(ASSETS, f"splats/{scan_id}.json", json.dumps(manifest, indent=1).encode(), "application/json")
+    sb.upload(ASSETS, f"splats/{scan_id}.json", json.dumps(manifest, indent=1).encode(), "application/json",
+              cache_control="no-cache")
     if index:  # a buyer's rescan is not a scan to list, so listing/ingest.py must not see it
         refresh_index(sb)
     return manifest

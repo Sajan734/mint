@@ -43,6 +43,7 @@ Thumbs.db
 
 orbit.mp4
 gsplat/.agents/skills/modal/references/
-gsplat/legacy/
+# Local copy of the Supabase storage taken before a cleanup (supabase_setup/backup.py)
+supabase_clear/
 # Git Bash crash dumps (Windows)
 *.stackdump

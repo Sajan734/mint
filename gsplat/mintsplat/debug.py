@@ -2,6 +2,10 @@ import cv2
 import numpy as np
 
 
+def jpg(rgb: np.ndarray) -> bytes:
+    return cv2.imencode(".jpg", cv2.cvtColor(rgb, cv2.COLOR_RGB2BGR), [cv2.IMWRITE_JPEG_QUALITY, 90])[1].tobytes()
+
+
 def sheet(images: list[np.ndarray], cols: int = 4, width: int = 360) -> bytes:
     """RGB images -> one JPEG contact sheet."""
     tiles = [cv2.resize(i, (width, int(width * i.shape[0] / i.shape[1]))) for i in images]

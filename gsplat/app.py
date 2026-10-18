@@ -1,13 +1,13 @@
-"""Phone video -> clean object-only Gaussian splat on a Modal GPU.
+"""Phone video -> clean object-only Gaussian splat on a Modal GPU (H100), and the live pipeline around it.
 
-    modal run app.py --video orbit.mp4                      # full run (~28 s warm) -> out/<video stem>/
+    modal run app.py --video orbit.mp4                      # one video (top only) -> runs/<video stem>/
+    modal run app.py --video orbit.mp4 --video2 orbit_reverse.mp4 --name merged   # top + flipped-over bottom
     modal run app.py --video orbit.mp4 --stop-after masks   # iterate on one stage
-    modal run app.py --video orbit.mp4 --video2 orbit_reverse.mp4 --name merged   # top + flipped bottom
 
-For the demo use the deployed app instead (no cold start): see client.py.
-
-Outputs land in out/<name>/: splat.spz (~3 MB) plus debug media and run.json (--ply adds a ~39 MB .ply, for local inspection only).
---gpu H100 roughly halves the pose stage; --scale sets the training resolution (default: auto from a pixel budget; 1.0 = full video resolution).
+`modal run` starts a fresh app, so it is always a cold start; client.py talks to the deployed one (warm/cold:
+README.md). A run writes runs/<name>/: splat.spz, heldout/ (8 masked video frames + heldout.json), spin/, run.json,
+and with --debug (the default here) the masks/poses/register contact sheets and the held-out PSNR.
+--scale sets the training resolution (default: auto from a pixel budget; 1.0 = full video resolution).
 """
 import json
 import os
@@ -42,7 +42,7 @@ HAS_LISTING = _has_secret("mint-listing", "MINT_LISTING", "the listing step afte
 HAS_BUYER = _has_secret("mint-buyer", "MINT_BUYER", "the buyer's rescan check (multiagent/buyer_agent)")
 MULTIAGENT_DIR = Path(__file__).resolve().parent.parent / "multiagent"
 LISTING_DIR = Path(__file__).resolve().parent.parent / "listing"
-LIVE_GPU = "H100"  # scans started by the upload webhook
+GPU = "H100"  # one pool for everything (webhook scans, client.py, modal run), so warming it covers them all
 PREWARM_ON = {"session.json", "bottom.mp4"}  # a scan has started: get a GPU container ready before video.mp4
 FLAGS = {"MINT_SUPABASE": "1" if HAS_SUPABASE else "0", "MINT_LISTING": "1" if HAS_LISTING else "0",
          "MINT_BUYER": "1" if HAS_BUYER else "0"}
@@ -174,7 +174,7 @@ def _replace_container(why: str) -> None:
     os._exit(1)
 
 
-@app.cls(gpu="L40S", cpu=8.0, memory=32768, volumes={"/models": models_vol},
+@app.cls(gpu=GPU, cpu=8.0, memory=32768, volumes={"/models": models_vol},
          secrets=SECRETS + LISTING_SECRETS, timeout=900, scaledown_window=300,
          retries=modal.Retries(max_retries=1, initial_delay=1.0))  # only crashes reach it: see run_scan
 class Splatter:
@@ -204,9 +204,9 @@ class Splatter:
 
     @modal.method()
     def run_scan(self, scan_id: str, batch_id: str | None = None, cfg: dict | None = None) -> dict:
-        """Storage mode. Reads scans/{scan_id}/top.* (+ bottom.* if present) from Supabase, writes
-        assets/splats/{scan_id}.spz + .json (manifest), assets/views/{scan_id}/ (8 reference views + views.json),
-        refreshes assets/splats/index.json (newest first; what listing/ingest.py polls without a key), then runs
+        """Storage mode. Reads scans/{scan_id}/video.* (+ bottom.* if present) from Supabase, writes
+        assets/splats/{scan_id}.spz + .json (manifest), assets/heldout/{scan_id}/ (8 masked video frames),
+        assets/spin/{scan_id}/ (spin frames), refreshes assets/splats/index.json (newest first; what listing/ingest.py polls without a key), then runs
         the listing pipeline (listing/, Jev + Gemini) and publishes assets/listings/{scan_id}.json + index.json for
         the website. Broadcasts `stage` / `passport_ready` / `listing_ready` on Realtime channel batch:{batch_id}.
         Started by on_upload (the Supabase webhook) when the phone's video lands; cfg {"listing": False} skips it."""
@@ -224,8 +224,7 @@ class Splatter:
         ev = Events(sb, batch_id)
         try:
             keys, videos, io = fetch_inputs(sb, scan_id)
-            res = run(self, videos if len(videos) > 1 else videos[0],
-                      {**(cfg or {}), "ply": False, "debug": False, "views": True, "rotate_cw": io["rotate_cw"]},
+            res = run(self, videos if len(videos) > 1 else videos[0], {**(cfg or {}), "rotate_cw": io["rotate_cw"]},
                       on_event=ev.stage_hook(scan_id))
             manifest = publish(sb, scan_id, batch_id, keys, res, io)
             ev.send("passport_ready", manifest)
@@ -293,13 +292,13 @@ class Splatter:
             if not HAS_BUYER:
                 return put_result(failed("INTERNAL", "The comparison service has no keys (Modal secret mint-buyer)."), {})
             # Like for like: a pass one side has and the other doesn't (the underside) would read as a difference.
-            listing_inputs = json.loads(sb.download(ASSETS, f"splats/{listing_id}.json")).get("inputs", [])
-            listing_two_pass = any(p.rsplit("/", 1)[-1].startswith("bottom.") for p in listing_inputs)
+            listing_manifest = json.loads(sb.download(ASSETS, f"splats/{listing_id}.json"))
+            listing_two_pass = listing_manifest.get("coverage") == "full" or any(
+                p.rsplit("/", 1)[-1].startswith("bottom.") for p in listing_manifest.get("inputs", []))
             keys, videos, io = fetch_inputs(sb, cid, verify=True)
             if len(videos) > 1 and not listing_two_pass:  # the listing never saw the underside: drop the rescan's
                 keys, videos, io["rotate_cw"] = keys[:1], videos[:1], io["rotate_cw"][:1]
-            res = run(self, videos if len(videos) > 1 else videos[0],
-                      {"ply": True, "debug": False, "views": True, "rotate_cw": io["rotate_cw"]},
+            res = run(self, videos if len(videos) > 1 else videos[0], {"ply": True, "rotate_cw": io["rotate_cw"]},
                       on_event=ev.stage_hook(cid))
             publish(sb, cid, cid, keys, res, io, index=False)
             ev.send("stage", {"scan_id": cid, "stage": "7_listing", "status": "started", "ms": 0})
@@ -339,8 +338,7 @@ class Splatter:
         except RuntimeError:
             pass
         _, videos, io = fetch_inputs(sb, listing_id)
-        spz = run(self, videos[0], {"ply": False, "debug": False, "views": False,
-                                    "rotate_cw": io["rotate_cw"][:1]})["files"]["splat.spz"]
+        spz = run(self, videos[0], {"spin": False, "rotate_cw": io["rotate_cw"][:1]})["files"]["splat.spz"]
         sb.upload(ASSETS, path, spz, "application/octet-stream")
         return spz
 
@@ -407,10 +405,12 @@ def api():
         try:
             doc = set_published(Supabase(), scan_id, body.state == "published", body.title.strip(),
                                 body.description.strip(), body.price_cad)
-        except RuntimeError as e:  # Supabase: no such listing document
-            raise HTTPException(404, f"no listing for scan {scan_id}") from e
-        except ValueError as e:
+        except LookupError as e:
+            raise HTTPException(404, str(e)) from e
+        except ValueError as e:  # not a listing that can be published (rejected or failed)
             raise HTTPException(409, str(e)) from e
+        except RuntimeError as e:  # Supabase failed mid-way: safe to press Publish again
+            raise HTTPException(502, f"storage error, try again: {str(e)[:200]}") from e
         return {"scan_id": scan_id, "published": doc["published"], "price_cad": body.price_cad}
 
     return web
@@ -420,7 +420,7 @@ def api():
 @modal.fastapi_endpoint(method="POST")
 def on_upload(body: dict) -> dict:
     """Supabase webhook (supabase_setup/webhook.sql): a file landed in Storage. For scans/{uuid}/video.mp4 (what the
-    iOS app uploads last) it starts Splatter.run_scan on an H100 and returns at once. Earlier files of the same scan
+    iOS app uploads last) it starts Splatter.run_scan and returns at once. Earlier files of the same scan
     (session.json when the scan is requested or picked up, bottom.mp4) only warm a container up, once per scan.
     The URL is public, so it only acts on a video that really is in the bucket, and only once per scan
     (Dict `mint-scan-jobs`)."""
@@ -434,7 +434,7 @@ def on_upload(body: dict) -> dict:
     uuid = r"[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}"
     if bucket != SCANS or not re.fullmatch(uuid, scan_id):
         return {"ok": True, "ignored": f"{bucket}/{name}"}
-    splatter = modal.Cls.from_name("mint-gsplat", "Splatter").with_options(gpu=LIVE_GPU)
+    splatter = modal.Cls.from_name("mint-gsplat", "Splatter")
     if file == "rescan.mp4":  # a buyer's verify rescan (uploaded last): compare it with its listing
         if not jobs.put(f"verify:{scan_id}", time.time(), skip_if_exists=True):
             return {"ok": True, "duplicate": scan_id}
@@ -455,18 +455,18 @@ def on_upload(body: dict) -> dict:
 
 
 @app.local_entrypoint()
-def main(video: str, video2: str = "", name: str = "", n_frames: int = 80, stop_after: str = "", iters: int = 1000,
-         batch: int = 4, cap: int = 200_000, scale: float = 0.0,
-         debug: bool = True, ply: bool = False, spz_sweep: bool = False, gpu: str = "", box_refine: bool = True, app_lr: float = 0.0, sh: int = 3, train_json: str = ""):
+def main(video: str, video2: str = "", name: str = "", stop_after: str = "", scale: float = 0.0, debug: bool = True,
+         ply: bool = False, box_refine: bool = True, train_json: str = "", gpu: str = ""):
+    """train_json: any train.DEFAULTS override, e.g. '{"iters": 1500}'. gpu: another GPU type to compare (its own
+    pool of containers, always cold)."""
     src = Path(video)
-    out_dir = Path("out") / (name or src.stem)
-    cfg = {"n_frames": n_frames, "stop_after": stop_after or None, "debug": debug, "ply": ply, "spz_sweep": spz_sweep, "box_refine": box_refine,
-           "train": {"iters": iters, "batch": batch, "cap_max": cap, "train_scale": scale or None,
-                     "appearance_lr": app_lr, "sh_degree": sh, **json.loads(train_json or "{}")}}
+    out_dir = Path("runs") / (name or src.stem)
+    cfg = {"stop_after": stop_after or None, "debug": debug, "ply": ply, "box_refine": box_refine,
+           "train": {"train_scale": scale or None, **json.loads(train_json or "{}")}}
 
     t0 = time.perf_counter()
     payload = [src.read_bytes(), Path(video2).read_bytes()] if video2 else src.read_bytes()
-    cls = Splatter.with_options(gpu=gpu) if gpu else Splatter  # e.g. --gpu H100 to compare
+    cls = Splatter.with_options(gpu=gpu) if gpu else Splatter
     res = cls().run.remote(payload, cfg)
     from client import save
 
