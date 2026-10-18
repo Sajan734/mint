@@ -14,6 +14,41 @@ public struct ImageGrid: Sendable {
         self.luma = luma
         self.chroma = chroma
     }
+
+    /// From brightness and colour difference (YCbCr's Cb and Cr, centred on 0), with colour strength measured
+    /// against the paper's own tint: under warm (or cool) room light white paper isn't colourless in the
+    /// camera image, and read as is it stopped counting as paper at night.
+    public init(width: Int, height: Int, luma: [UInt8], cb: [Float], cr: [Float]) {
+        let n = width * height
+        precondition(luma.count == n && cb.count == n && cr.count == n)
+        let (tu, tv) = Self.paperTint(luma: luma, cb: cb, cr: cr)
+        var chroma = [UInt8](repeating: 0, count: n)
+        for i in 0..<n {
+            let l = Float(luma[i]), u = cb[i] - tu * l, v = cr[i] - tv * l
+            let r = l + 1.402 * v, g = l - 0.344 * u - 0.714 * v, b = l + 1.772 * u
+            chroma[i] = UInt8(max(0, min(255, max(r, g, b) - min(r, g, b))))
+        }
+        self.init(width: width, height: height, luma: luma, chroma: chroma)
+    }
+
+    /// The room light's tint on the paper, as (Cb, Cr) per unit of brightness: the mean of the brightest
+    /// near-neutral pixels (the sheet is the brightest big thing in view). Capped, so a bright coloured item
+    /// can't pass for the white.
+    static func paperTint(luma: [UInt8], cb: [Float], cr: [Float]) -> (Float, Float) {
+        var hist = [Int](repeating: 0, count: 256)
+        for l in luma { hist[Int(l)] += 1 }
+        var bright = 255, count = 0
+        while bright > 0, count + hist[bright] < luma.count * 15 / 100 { count += hist[bright]; bright -= 1 }
+        var su: Float = 0, sv: Float = 0, k: Float = 0
+        for i in 0..<luma.count where Int(luma[i]) >= max(bright, 24) {
+            let l = Float(luma[i]), u = cb[i] / l, v = cr[i] / l
+            guard u * u + v * v <= 0.22 * 0.22 else { continue }
+            su += u; sv += v; k += 1
+        }
+        guard k >= Float(luma.count / 100) else { return (0, 0) }
+        let cap: Float = 0.16
+        return (min(cap, max(-cap, su / k)), min(cap, max(-cap, sv / k)))
+    }
 }
 
 /// Finds the item sitting on a sheet of paper: the sheet is the big bright colourless region, and
@@ -30,15 +65,23 @@ public enum ItemOnPaper {
     public static func segment(_ g: ImageGrid, chromaMax: UInt8 = 16) -> Result? {
         let w = g.width, h = g.height, n = w * h
 
-        // Paper: colourless and bright relative to the paper itself (shadows are darker).
-        var lumas: [UInt8] = []
-        for i in 0..<n where g.chroma[i] <= chromaMax && g.luma[i] >= 100 { lumas.append(g.luma[i]) }
+        // Paper: colourless and bright relative to the paper itself (shadows are darker). How bright follows
+        // the room: the brightest colourless pixels (the sheet) set the floor, 100 in good light, lower in a dim
+        // room, never under 40 (black plastic, shadows).
+        // Colourless relative to brightness: chromaMax on bright paper (luma 200), less in the dark, where a
+        // beige table's colour shrinks too.
+        func colourless(_ i: Int) -> Bool { Float(g.chroma[i]) <= max(4, Float(chromaMax) * Float(g.luma[i]) / 200) }
+        var neutral: [UInt8] = []
+        for i in 0..<n where colourless(i) { neutral.append(g.luma[i]) }
+        guard neutral.count > n / 50 else { return nil }
+        neutral.sort()
+        let floor = max(40, min(100, Float(neutral[neutral.count * 95 / 100]) * 0.5))
+        let lumas = neutral.filter { Float($0) >= floor }
         guard lumas.count > n / 50 else { return nil }
-        lumas.sort()
         let paperLuma = Float(lumas[lumas.count * 3 / 4])
-        let minLuma = UInt8(max(80, min(255, paperLuma * 0.62)))
+        let minLuma = UInt8(max(floor * 0.8, min(255, paperLuma * 0.62)))
         var white = [UInt8](repeating: 0, count: n)
-        for i in 0..<n where g.chroma[i] <= chromaMax && g.luma[i] >= minLuma { white[i] = 1 }
+        for i in 0..<n where g.luma[i] >= minLuma && colourless(i) { white[i] = 1 }
         // Bridge thin features: ruled lines run edge to edge and would cut the sheet into strips.
         for _ in 0..<2 { white = dilate(white, w, h) }
         for _ in 0..<2 { white = erode(white, w, h) }
