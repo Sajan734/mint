@@ -47,7 +47,7 @@ def photo_sets(paths: list[Path]) -> dict[str, list[Path]]:
 
 def as_views(name: str, images: list[Path]) -> Views:
     return Views(item_id=name, views=[
-        View(view_id=f"v{i:02d}", label=p.name, azimuth_deg=0, elevation_deg=0, image_path=str(p.resolve()))
+        View(view_id=f"p{i + 1:02d}", label=f"photo {i + 1}", image_path=str(p.resolve()))
         for i, p in enumerate(images)
     ])
 

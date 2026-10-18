@@ -185,8 +185,7 @@ def make_ctx(tmp_path):
     return RunContext(item_id="item", item_dir=item, run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache")
 
 
-VIEWS = Views(item_id="item", views=[View(view_id=f"v{i:02d}", label="x", azimuth_deg=0, elevation_deg=10,
-                                          image_path=f"v{i:02d}.png") for i in range(12)])
+VIEWS = Views(item_id="item", views=[View(view_id=f"v{i:02d}", label="x", image_path=f"v{i:02d}.png") for i in range(12)])
 
 
 def test_missing_baseline_runs_view_only_questions(fake_jev, tmp_path):

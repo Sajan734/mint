@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import statistics
 import sys
@@ -35,7 +36,7 @@ LISTING_ROOT = Path(__file__).resolve().parent.parent
 
 THRESHOLDS = {
     "usable_min": 0.60,  # item_usable P(yes) for a view to count
-    "min_usable_views": 6,  # fewer usable views -> uncertain
+    "min_usable_share": 0.5,  # fewer usable photos than this share of them -> uncertain (4 of the usual 8)
     "mismatch_below": 0.30,  # either aggregate below this -> mismatch
     "match_min": 0.60,  # same_product aggregate at or above this -> match
 }
@@ -118,7 +119,7 @@ def decide(agg: GateAggregate, thresholds: dict[str, Any] = THRESHOLDS,
     """Returns (verdict, reason key). Rules apply in order. claimed: the seller typed the product's name or its model
     is printed on it. Without a claim the baseline came from a search we inferred (brand, colour, category), so a
     photo that looks like a different product means the search found the wrong one: uncertain, never a mismatch."""
-    if agg.usable_views < thresholds["min_usable_views"]:
+    if agg.usable_views < max(1, math.ceil(thresholds["min_usable_share"] * agg.total_views)):
         return "uncertain", "too_few_views"
     if agg.same_category < thresholds["mismatch_below"] or agg.same_product < thresholds["mismatch_below"]:
         if not claimed:

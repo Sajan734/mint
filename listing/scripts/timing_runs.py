@@ -30,23 +30,21 @@ def line(name: str, data: dict) -> str:
     breakdown = data.get("critical_path_breakdown_ms", {}).get("result_json", {})
     path = " > ".join(p["stage"] for p in data.get("critical_path", {}).get("result_json", []))
     parts = " ".join(f"{k} {breakdown[k] / 1000:.1f}" for k in KINDS if breakdown.get(k))
-    return (f"{name:<22} result.json {m.get('result_json', 0) / 1000:5.1f} s  highlight {m.get('highlight_ready', 0) / 1000:5.1f} s"
-            f"  | path: {path} | {parts}")
+    return f"{name:<22} result.json {m.get('result_json', 0) / 1000:5.1f} s  | path: {path} | {parts}"
 
 
 async def one(item: Path, label: str, n: int) -> None:
     os.environ.pop("DEMO_MODE", None)
-    from pipeline import RUNS_ROOT, resolve_item, run_pipeline
+    from pipeline import RUNS_ROOT, run_pipeline
 
-    item_dir, _ = resolve_item(item)
+    item_dir = Path(item)
     start = time.perf_counter()
     result = await run_pipeline(item, demo_mode=False, demo_offline=False)
     total = time.perf_counter() - start
     data = json.loads((RUNS_ROOT / item_dir.name / "timings.json").read_text(encoding="utf-8"))
     data["outcome"] = {"kind": type(result).__name__, "total_s": round(total, 2)}
     if type(result).__name__ == "Listing":
-        data["outcome"] |= {"price_cad": result.price_cad, "highlight": result.highlight.status,
-                            "notes": result.condition_notes}
+        data["outcome"] |= {"title": result.title, "price_cad": result.price_cad, "notes": result.condition_notes}
     out = OUT / item_dir.name / f"{label}-{n}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(json.dumps(data, indent=2), encoding="utf-8")

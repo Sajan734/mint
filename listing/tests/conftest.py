@@ -34,3 +34,20 @@ def no_gemini_or_jev(monkeypatch):
     monkeypatch.setattr(google.genai, "Client", _OfflineClient)
     for module in (bl, cond, mg):
         monkeypatch.setattr(module, "AsyncTypeSafeClient", _OfflineClient)
+
+
+@pytest.fixture(autouse=True)
+def no_lens_or_sources(monkeypatch):
+    """identify's Lens search (with its photo upload) and listing_text's model sources search go straight to httpx.
+    Tests of those functions call the originals, imported before this patch."""
+    import stages.lens as lens
+    import stages.listing_text as lt
+
+    async def no_lens(views, item_id):
+        return [], {"error": "tests never call Lens"}
+
+    async def no_sources(identity):
+        return [], {"skipped": "tests never search for sources"}
+
+    monkeypatch.setattr(lens, "lens_matches", no_lens)
+    monkeypatch.setattr(lt, "fetch_sources", no_sources)

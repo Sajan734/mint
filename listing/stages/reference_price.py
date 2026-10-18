@@ -32,7 +32,7 @@ from contracts import Identity, PriceResultCheck, PriceSource, ReferencePrice, R
 from gemini import contract_schema, generate_json
 from stages._fixture import has_stub, load_stub
 from stages.baseline_lookup import SEARCH, _require_key, baseline_query, names_a_product
-from stages.identify import GEMINI, MissingKeyError, build_search_query, text_in_query
+from stages.identify import GEMINI, MissingKeyError
 
 # Real listings from Serper's shopping search. Prices come from the result's own price field, parsed in code;
 # Gemini only says which results are this product.
@@ -131,7 +131,7 @@ You check shopping search results against an item a seller is listing. For every
 index and:
 
 - same_product: from 0 to 1, how likely the result is the item's product.
-  - If a specific model is known (printed on the item, or named by the seller), the result must be that model \
+  - If a specific model is known (the description says so), the result must be that model \
 and variant (size, capacity, connectivity). A different model from the same brand or product line is NOT the \
 same product, even if it looks similar.
   - If only a brand or product line is known (for example a seller's name like "Lenovo ThinkPad wireless mouse"), \
@@ -299,11 +299,12 @@ def seller_names(kept: list[ShopResult]) -> str:
     return f"{shown} and {len(names) - cap} more" if len(names) > cap else shown
 
 
-def listings_price(amount: float, kept: list[ShopResult]) -> ReferencePrice:
-    note = f"Median new price of {len(kept)} current listings in Canada ({seller_names(kept)})."
+def listings_price(amount: float, kept: list[ShopResult], exact_model: bool = True) -> ReferencePrice:
+    what = "listings" if exact_model else "listings of this kind of product from the brand"
+    note = f"Median new price of {len(kept)} current {what} in Canada ({seller_names(kept)})."
     sources = [PriceSource(title=r.title, seller=r.seller, price_cad=r.price_cad, url=r.url)
                for r in kept[: SERPER_PRICE["max_sources"]]]
-    return ReferencePrice(amount_cad=amount, basis="new_retail", note=note, sources=sources)
+    return ReferencePrice(amount_cad=amount, basis="new_retail", note=note, sources=sources, exact_model=exact_model)
 
 
 def parse_results(payload: dict[str, Any], category: str) -> list[ShopResult]:
@@ -378,13 +379,11 @@ def pick_schema() -> dict[str, Any]:
 
 
 def price_query(identity: Identity, seller_name: str | None) -> str:
-    """What to search the shops for: the seller's name for the product, else the text read off the item, its model
-    and its kind. No colour: it doesn't change the price, and identify words it differently from run to run ("black",
-    "black and red"), which changed the results and so the price."""
+    """What to search the shops for: the seller's name for the product, else identify's search query (the product name
+    and its type). No colour: it doesn't change the price, and varied from run to run."""
     if seller_name and seller_name.strip():
         return seller_name.strip()
-    read = text_in_query(identity.visible_text, identity.search_query)
-    return build_search_query(identity.brand, identity.model, {}, identity.category, read)
+    return identity.search_query
 
 
 def pick_prompt(identity: Identity, query: str, seller_typed: bool, results: list[ShopResult]) -> str:
@@ -396,9 +395,11 @@ def pick_prompt(identity: Identity, query: str, seller_typed: bool, results: lis
     if identity.visible_text:
         lines.append(f"Text printed on the item: {', '.join(identity.visible_text)}.")
     if identity.model:
-        lines.append(f"The model is known: {identity.model} is printed on the item.")
-    elif not seller_typed:
-        lines.append("No model is printed on the item and the seller didn't name one.")
+        lines.append(f"The model is known: {identity.product_name}.")
+    else:
+        kind = f"{identity.brand} {identity.category}" if identity.brand else identity.category
+        lines.append(f"The exact model is not known, so any {kind} counts as this product, whatever its model; "
+                     "only another brand or another kind of product does not.")
     lines.append("Results:")
     lines += [f"{r.index}. {r.title} | seller: {r.seller or 'unknown'} | {r.price_text or 'no price'}" for r in results]
     return "\n".join(lines)
@@ -482,7 +483,7 @@ async def from_listings(identity: Identity, query: str,
     if problem := plausible(amount, identity.category):
         attempt["rejected"] = problem
         return None, attempt
-    return listings_price(amount, kept), attempt
+    return listings_price(amount, kept, exact_model=identity.model is not None), attempt
 
 
 def log_ready(attempt: dict[str, Any]) -> dict[str, Any]:

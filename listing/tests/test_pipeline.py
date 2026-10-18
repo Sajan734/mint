@@ -27,14 +27,13 @@ def test_item01_gives_listing(tmp_path):
     assert result.needs_seller_check is expected["needs_seller_check"]
     assert result.deal_rating.rating == expected["deal_rating"]
     assert result.deal_rating.asking_price_source == "suggested"
-    assert result.highlight.status == expected["highlight_status"]
     written = {p.stem for p in (tmp_path / "runs" / "item01").glob("*.json")}
     assert written == {
-        "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
-        "highlight", "deal_rating", "finalize", "result", "timings",
+        "load_photos", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
+        "deal_rating", "finalize", "result", "timings",
     }
     saved = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text(encoding="utf-8"))
-    assert saved["deal_rating"]["rating"] == "fair" and saved["highlight"]["status"] == "skipped"
+    assert saved["deal_rating"]["rating"] == "fair" and "highlight" not in saved
 
 
 def test_item02_gives_rejection(tmp_path):
@@ -42,35 +41,8 @@ def test_item02_gives_rejection(tmp_path):
     assert type(result).__name__ == "Rejection"
     assert result.match_check.verdict == "mismatch"
     assert "Sony WH-1000XM4" in result.match_check.reason  # the seller's name from input.json
-    for stage in ("finalize", "highlight", "deal_rating"):
+    for stage in ("finalize", "deal_rating"):
         assert not (tmp_path / "runs" / "item02" / f"{stage}.json").exists()
-
-
-def test_highlight_failure_still_gives_listing(tmp_path, monkeypatch):
-    import pipeline
-
-    async def broken(ctx, *args):
-        raise RuntimeError("Modal app isn't deployed")
-
-    monkeypatch.setattr(pipeline, "highlight", broken)
-    result = run(FIXTURES / "item01", tmp_path)
-    assert isinstance(result, Listing)
-    assert result.highlight.status == "failed" and result.highlight.splat_path is None
-    assert "RuntimeError: Modal app isn't deployed" in result.highlight.summary
-    saved = json.loads((tmp_path / "runs" / "item01" / "highlight.json").read_text(encoding="utf-8"))
-    assert saved["status"] == "failed"
-
-
-def test_highlight_failure_is_not_cached(tmp_path, monkeypatch):
-    import pipeline
-
-    async def broken(ctx, *args):
-        raise RuntimeError("Gemini is down")
-
-    monkeypatch.setattr(pipeline, "highlight", broken)
-    asyncio.run(run_pipeline(FIXTURES / "item01", runs_root=tmp_path / "runs", cache_root=tmp_path / "cache",
-                             demo_mode=True))
-    assert not (tmp_path / "cache" / "item01" / "highlight.json").exists()
 
 
 def demo_run(tmp_path, item=FIXTURES / "item01", **kwargs):
@@ -84,49 +56,12 @@ def cached_stages(tmp_path, item_id="item01"):
     return {s: stages.count(s) for s in stages}
 
 
-def test_cached_highlight_with_missing_file_is_reported(tmp_path):
-    from contracts import Highlight
-
-    demo_run(tmp_path)  # fills the cache, including the (stub) highlight
-    entry = next((tmp_path / "cache" / "item01").glob("highlight.*.json"))
-    gone = Highlight(status="produced", splat_path="runs/item01/gone/splat_highlighted.spz", summary="Marked a scuff.")
-    entry.write_text(gone.model_dump_json())  # a cached result whose file is in neither runs/ nor the cache
-    result = demo_run(tmp_path)
-    assert result.highlight.status == "failed"
-    assert "missing" in result.highlight.summary
-
-
-def fake_highlight_writing_a_file(calls):
-    from contracts import Highlight
-
-    async def fake(ctx, splat, views, baseline, identity, cond):
-        calls.append(ctx.item_id)
-        path = ctx.run_dir / "splat_highlighted.spz"
-        path.write_bytes(b"tinted splat")
-        return Highlight(status="produced", splat_path=str(path), summary="Marked scratches or scuffs in red.")
-
-    return fake
-
-
-def test_demo_cache_keeps_the_highlighted_splat(tmp_path, monkeypatch):
-    import pipeline
-
-    calls = []
-    monkeypatch.setattr(pipeline, "highlight", fake_highlight_writing_a_file(calls))
-    demo_run(tmp_path)
-    splat = tmp_path / "runs" / "item01" / "splat_highlighted.spz"
-    splat.unlink()  # e.g. runs/ was cleaned before the demo
-    result = demo_run(tmp_path)
-    assert calls == ["item01"]  # the second run came from the cache
-    assert result.highlight.status == "produced" and splat.read_bytes() == b"tinted splat"
-
-
 def test_offline_demo_needs_nothing_live(tmp_path, monkeypatch):
     import pipeline
 
     demo_run(tmp_path, asking_price_cad=120)
-    for name in ("render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price",
-                 "condition", "highlight"):
+    for name in ("load_photos", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price",
+                 "condition"):
         async def must_not_run(*args, name=name):
             raise AssertionError(f"{name} ran in an offline demo")
 
@@ -140,7 +75,7 @@ def test_offline_demo_needs_nothing_live(tmp_path, monkeypatch):
 def test_offline_demo_reports_a_cold_stage(tmp_path):
     from pipeline import DemoCacheMiss
 
-    with pytest.raises(DemoCacheMiss, match="'render'"):
+    with pytest.raises(DemoCacheMiss, match="'load_photos'"):
         demo_run(tmp_path, demo_offline=True)
 
 
@@ -150,38 +85,14 @@ def test_seller_name_is_part_of_the_cache_key(tmp_path):
     demo_run(tmp_path, item=item_dir)
     demo_run(tmp_path, item=item_dir, seller_name="Sony WH-1000XM4")
     counts = cached_stages(tmp_path)
-    assert counts["render"] == counts["identify"] == 1  # not affected by the seller's name
-    assert counts["baseline_lookup"] == counts["reference_price"] == 2
+    assert counts["load_photos"] == 1  # not affected by the seller's name
+    assert counts["identify"] == counts["baseline_lookup"] == counts["reference_price"] == 2  # all use it
 
 
-def test_listing_is_written_before_the_highlight_finishes(tmp_path, monkeypatch):
-    import pipeline
-    from contracts import Highlight
-
-    release = asyncio.Event()
-    seen = {}
-
-    async def slow_highlight(ctx, splat, views, baseline, identity, cond):
-        await release.wait()
-        return Highlight(status="skipped", summary="No highlighted splat: test.")
-
-    def posted(listing):
-        seen["status"] = listing.highlight.status
-        seen["file"] = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text())["highlight"]["status"]
-        release.set()
-
-    monkeypatch.setattr(pipeline, "highlight", slow_highlight)
-    result = run(FIXTURES / "item01", tmp_path, on_listing=posted)
-    assert seen == {"status": "pending", "file": "pending"}
-    assert result.highlight.status == "skipped"
-    final = json.loads((tmp_path / "runs" / "item01" / "result.json").read_text())
-    assert final["highlight"]["status"] == "skipped" and final["deal_rating"]["rating"] == "fair"
-
-
-def test_a_quick_highlight_is_in_the_first_write(tmp_path):
+def test_the_listing_reaches_the_hook(tmp_path):
     seen = []
-    result = run(FIXTURES / "item01", tmp_path, on_listing=lambda listing: seen.append(listing.highlight.status))
-    assert seen == ["skipped"] and result.highlight.status == "skipped"  # the stub is ready straight away
+    result = run(FIXTURES / "item01", tmp_path, on_listing=seen.append)
+    assert seen == [result]
 
 
 def test_rejection_reaches_the_hook(tmp_path):
@@ -298,14 +209,16 @@ def test_generic_identity_skips_search_and_still_prices(tmp_path, monkeypatch):
     for stage in ("baseline_lookup", "condition"):
         (item_dir / "stubs" / f"{stage}.json").unlink()
     identity = json.loads((item_dir / "stubs" / "identify.json").read_text())
-    identity.update(brand=None, model=None, visible_text=[], search_query="black over-ear headphones")
+    identity.update(brand=None, model=None, visible_text=[], search_query="over-ear headphones")
+    for derived in ("specificity", "product_name", "evidence"):
+        identity.pop(derived, None)
     (item_dir / "stubs" / "identify.json").write_text(json.dumps(identity))
 
     result = run(item_dir, tmp_path)
     assert isinstance(result, Listing)
     assert result.price_cad == 150 and result.condition_grade == "light_wear"
     assert result.needs_seller_check is True
-    assert len(asked) == 12 and all(b is None for b in asked)
+    assert len(asked) == 8 and all(b is None for b in asked)
 
 
 def test_seller_name_reaches_reference_price(tmp_path, monkeypatch):
@@ -367,39 +280,39 @@ def test_price_sources_reach_result_json(tmp_path, monkeypatch):
 
 def test_demo_mode_reads_cache_first(tmp_path):
     ctx = RunContext(item_id="item01", item_dir=FIXTURES / "item01", run_dir=tmp_path / "runs", cache_dir=tmp_path / "cache", demo_mode=True)
-    cached = Views.model_validate_json((FIXTURES / "item01" / "stubs" / "render.json").read_text(encoding="utf-8"))
-    cache.put(ctx.cache_dir, ctx.item_id, "render", cache.key("render", ctx.up_axis, ctx.manual_baseline, None), cached)
+    cached = Views.model_validate_json((FIXTURES / "item01" / "stubs" / "load_photos.json").read_text(encoding="utf-8"))
+    cache.put(ctx.cache_dir, ctx.item_id, "load_photos", cache.key("load_photos", ctx.manual_baseline, None), cached)
 
     async def must_not_run(ctx, *args):
         raise AssertionError("stage ran despite a cache hit")
 
-    result = asyncio.run(run_stage(ctx, "render", Views, must_not_run, None))
+    result = asyncio.run(run_stage(ctx, "load_photos", Views, must_not_run, None))
     assert result == cached
-    assert (ctx.run_dir / "render.json").is_file()
+    assert (ctx.run_dir / "load_photos.json").is_file()
 
 
 def test_demo_mode_fills_cache_on_miss(tmp_path):
     run_pipeline_kwargs = dict(runs_root=tmp_path / "runs", cache_root=tmp_path / "cache", demo_mode=True)
     asyncio.run(run_pipeline(FIXTURES / "item01", **run_pipeline_kwargs))
     assert set(cached_stages(tmp_path)) == {
-        "render", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
-        "highlight", "deal_rating", "finalize",
+        "load_photos", "identify", "baseline_lookup", "match_gate", "listing_text", "reference_price", "condition",
+        "deal_rating", "finalize",
     }
 
 
 # --- run order: stages start as soon as their inputs exist ------------------------------------------
 
 
-def slow_render(monkeypatch, seconds=0.15):
+def slow_photos(monkeypatch, seconds=0.15):
     import pipeline
 
-    original = pipeline.render
+    original = pipeline.load_photos
 
-    async def render(ctx, splat):
+    async def load_photos(ctx, *args):
         await asyncio.sleep(seconds)
-        return await original(ctx, splat)
+        return await original(ctx, *args)
 
-    monkeypatch.setattr(pipeline, "render", render)
+    monkeypatch.setattr(pipeline, "load_photos", load_photos)
 
 
 def stage_times(tmp_path, item):
@@ -407,10 +320,10 @@ def stage_times(tmp_path, item):
     return {k: (s["start_ms"], s["end_ms"]) for k, s in stages.items()}
 
 
-def test_with_a_seller_name_the_photo_search_starts_before_the_render_ends(tmp_path, monkeypatch):
+def test_with_a_seller_name_the_photo_search_starts_before_the_photos_load(tmp_path, monkeypatch):
     import pipeline
 
-    slow_render(monkeypatch)
+    slow_photos(monkeypatch)
     original_gate = pipeline.match_gate
 
     async def slow_gate(*args):
@@ -423,13 +336,13 @@ def test_with_a_seller_name_the_photo_search_starts_before_the_render_ends(tmp_p
     (item_dir / "input.json").write_text(json.dumps({"seller_name": "Sony WH-1000XM4"}))
     assert isinstance(run(item_dir, tmp_path), Listing)
     t = stage_times(tmp_path, "item_named")
-    assert t["baseline_lookup"][0] < t["render"][1]
+    assert t["baseline_lookup"][0] < t["load_photos"][1]
     assert t["listing_text"][0] >= t["identify"][1] and t["reference_price"][0] >= t["identify"][1]
     assert t["condition"][0] < t["match_gate"][1]  # beside the match check, not after it
 
 
 def test_without_a_seller_name_the_photo_search_waits_for_identify(tmp_path, monkeypatch):
-    slow_render(monkeypatch)
+    slow_photos(monkeypatch)
     run(FIXTURES / "item01", tmp_path)
     t = stage_times(tmp_path, "item01")
     assert t["baseline_lookup"][0] >= t["identify"][1]

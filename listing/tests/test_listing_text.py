@@ -12,6 +12,16 @@ from pipeline import ROOT
 from stages.identify import MissingKeyError
 from stages.listing_text import TEXT, identity_attributes, response_schema, template_draft, violations
 
+
+def remake(identity, update):
+    """identity with `update` applied and validated again, so specificity and product_name follow (model_copy
+    would keep the old ones)."""
+    from contracts import Identity
+
+    fields = {k: v for k, v in identity.model_dump().items() if k not in ("specificity", "product_name")}
+    return Identity.model_validate(fields | update)
+
+
 SONY = Identity(
     category="on-ear wireless headphones",
     brand="SONY",
@@ -94,7 +104,7 @@ def test_model_guess_flagged_when_identity_has_no_model():
 
 
 def test_identity_values_are_not_flagged():
-    identity = SONY.model_copy(update={"attributes": {"finish": "mint green"}})
+    identity = remake(SONY, {"attributes": {"finish": "mint green"}})
     d = lt.to_draft(CLEAN | {"description": "SONY WH-CH510 headphones in mint green."}, identity)
     assert violations(d, identity) == []
 
@@ -105,7 +115,7 @@ def test_template_draft_is_clean_and_short():
         assert violations(d, identity) == []
         assert len(d.title) < TEXT["title_limit_chars"]
     assert template_draft(SONY).title == "SONY WH-CH510 on-ear wireless headphones (blue)"
-    long = SONY.model_copy(update={"category": "lightweight foldable on-ear wireless headphones with microphone and case"})
+    long = remake(SONY, {"category": "lightweight foldable on-ear wireless headphones with microphone and case"})
     assert len(template_draft(long).title) < TEXT["title_limit_chars"]
 
 
@@ -190,3 +200,51 @@ def test_a_slow_gemini_gives_the_template_within_the_budget(tmp_path, monkeypatc
     assert draft == template_draft(identity)
     log = json.loads((tmp_path / "runs" / "listing_text_raw.json").read_text(encoding="utf-8"))
     assert log["source"] == "template" and "within" in log["error"]
+
+
+# --- an exact model: features from sources about it ------------------------------------------------
+
+from stages.listing_text import fetch_sources as real_fetch_sources  # noqa: E402  conftest replaces lt.fetch_sources
+
+SEARCH = json.loads((ROOT / "tests" / "data" / "serper_search_thinkpad.json").read_text(encoding="utf-8"))
+SOURCES = ["Logitech MX Master 3S: 8000 DPI sensor, quiet clicks, USB-C charging, 70 days on a full charge"]
+MX = Identity(category="wireless mouse", brand="Logitech", model="MX Master 3S", visible_text=["logi"],
+              search_query="Logitech MX Master 3S", confidence=0.9)
+
+
+def test_specs_pass_only_when_the_sources_state_them():
+    text = lt.to_draft({"title": "Logitech MX Master 3S Wireless Mouse, 8000 DPI",
+                        "description": "Logitech MX Master 3S wireless mouse with an 8000 DPI sensor and USB-C.",
+                        "tags": ["mouse"]}, MX)
+    assert lt.violations(text, MX, SOURCES) == []
+    assert any("no source gives: 8000 DPI" in p for p in lt.violations(text, MX))  # no sources: no specs
+
+
+def test_a_model_number_from_the_sources_is_allowed():
+    text = lt.to_draft({"title": "Logitech MX Master 3S (MXM3S-G)", "description": "A wireless mouse.",
+                        "tags": []}, MX)
+    assert lt.violations(text, MX, ["Logitech MX Master 3S MXM3S-G Graphite"]) == []
+    assert any("model number" in p for p in lt.violations(text, MX, SOURCES))
+
+
+def test_sources_reach_the_prompt(tmp_path, monkeypatch):
+    async def sources(identity):
+        return SOURCES, {"query": identity.product_name, "sources": SOURCES}
+
+    monkeypatch.setattr(lt, "fetch_sources", sources)
+    calls = fake_gemini(monkeypatch, [{"title": "Logitech MX Master 3S Wireless Mouse", "description":
+                                       "Logitech MX Master 3S wireless mouse with an 8000 DPI sensor.", "tags": []}])
+    draft = asyncio.run(lt.listing_text(ctx_for(tmp_path), MX))
+    assert "8000 DPI" in draft.description
+    assert "Sources about this exact product:\n- Logitech MX Master 3S: 8000 DPI" in calls[0]
+
+
+def test_no_exact_model_means_no_source_search():
+    sources, log = asyncio.run(real_fetch_sources(GENERIC))
+    assert sources == [] and "no exact model" in log["skipped"]
+
+
+def test_real_search_results_become_source_lines():
+    lines = lt.parse_sources(SEARCH)
+    assert len(lines) == lt.TEXT["max_sources"]
+    assert lines[0].startswith("ThinkPad Wireless Mouse | 4X30M56887. The ThinkPad Essential Wireless Mouse")

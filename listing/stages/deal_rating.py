@@ -28,6 +28,7 @@ DEAL = {
     "uncertainty": {
         "llm_estimate": 0.20,
         "category_default": 0.35,
+        "line_price": 0.10,  # real listings, but of the brand's line: the exact model isn't known
         "match_uncertain": 0.15,
         "no_baseline": 0.10,
         "condition_check": 0.10,
@@ -43,6 +44,7 @@ ABOVE_FAIR = ("high", "overpriced")
 CONFIDENCE_NOTES = {
     "llm_estimate": "the new price is a model estimate, not looked up",
     "category_default": "the new price is a rough default for this kind of item, not looked up",
+    "line_price": "the new price is for this kind of product from the brand, not one exact model",
     "match_uncertain": "we couldn't confirm the scan is this exact product",
     "no_baseline": "the condition was judged without a reference photo",
     "condition_check": "the condition needs a check by the seller",
@@ -91,6 +93,8 @@ def uncertainty(
         weak.append("category_default")
     elif reference.basis == "llm_estimate":
         weak.append("llm_estimate")
+    elif not reference.exact_model:
+        weak.append("line_price")
     if match.verdict == "uncertain":
         weak.append("match_uncertain")
     if baseline.image_path is None:

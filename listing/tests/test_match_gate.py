@@ -24,6 +24,16 @@ from stages.match_gate import (
     load_raw,
 )
 
+
+def remake(identity, update):
+    """identity with `update` applied and validated again, so specificity and product_name follow (model_copy
+    would keep the old ones)."""
+    from contracts import Identity
+
+    fields = {k: v for k, v in identity.model_dump().items() if k not in ("specificity", "product_name")}
+    return Identity.model_validate(fields | update)
+
+
 ROOT = Path(__file__).resolve().parent.parent
 
 
@@ -98,7 +108,7 @@ def test_threshold_overrides():
     a = agg(0.95, 0.62)
     assert decide(a)[0] == "match"
     assert decide(a, THRESHOLDS | {"match_min": 0.65})[0] == "uncertain"
-    assert decide(agg(0.95, 0.9, usable=5), THRESHOLDS | {"min_usable_views": 5})[0] == "match"
+    assert decide(agg(0.95, 0.9, usable=5), THRESHOLDS | {"min_usable_share": 0.4})[0] == "match"
 
 
 @pytest.mark.parametrize("key", ["different_kind", "different_product", "too_few_views", "match", "uncertain"])
@@ -161,13 +171,13 @@ def test_item02_is_still_rejected_with_its_claim(tmp_path):
     ctx, identity, baseline = item_stage("item02", tmp_path)
     check = asyncio.run(mg.match_gate(ctx, None, baseline, identity, "Sony WH-1000XM4"))
     assert check.verdict == "mismatch"
-    model_only = asyncio.run(mg.match_gate(ctx, None, baseline, identity, None))  # QC45 is printed on it
-    assert model_only.verdict == "mismatch"
+    printed_only = asyncio.run(mg.match_gate(ctx, None, baseline, identity, None))  # QC45 printed, no seller name
+    assert printed_only.verdict == "uncertain"  # only the seller's own claim can reject
 
 
 def test_same_scores_without_a_claim_are_uncertain(tmp_path):
     ctx, identity, baseline = item_stage("item02", tmp_path)
-    unnamed = identity.model_copy(update={"model": None})
+    unnamed = remake(identity, {"model": None})
     check = asyncio.run(mg.match_gate(ctx, None, baseline, unnamed, None))
     assert check.verdict == "uncertain" and check.reason.startswith("The closest reference photo we found")
 
@@ -214,8 +224,7 @@ def fake_jev(monkeypatch):
     return calls
 
 
-VIEWS = Views(item_id="item", views=[View(view_id=f"v{i:02d}", label="x", azimuth_deg=0, elevation_deg=10,
-                                          image_path=f"v{i:02d}.png") for i in range(12)])
+VIEWS = Views(item_id="item", views=[View(view_id=f"v{i:02d}", label="x", image_path=f"v{i:02d}.png") for i in range(12)])
 
 
 def live_setup(tmp_path):
@@ -258,8 +267,7 @@ def test_all_views_failing_is_uncertain_not_a_crash(monkeypatch, tmp_path):
             raise TypeSafeError("service down")
 
     monkeypatch.setattr(mg, "AsyncTypeSafeClient", FailingClient)
-    views = Views(item_id="item", views=[View(view_id="v00", label="x", azimuth_deg=0, elevation_deg=10,
-                                              image_path=baseline.image_path)])
+    views = Views(item_id="item", views=[View(view_id="v00", label="x", image_path=baseline.image_path)])
     check = asyncio.run(mg.match_gate(ctx, views, baseline))
     assert check.verdict == "uncertain" and "Too few clear views" in check.reason
     saved = json.loads((ctx.run_dir / "match_gate_raw.json").read_text())
@@ -272,3 +280,16 @@ def test_missing_key_fails_early(monkeypatch, tmp_path):
     monkeypatch.delenv("TYPESAFE_API_KEY", raising=False)
     with pytest.raises(MissingKeyError, match="TYPESAFE_API_KEY"):
         asyncio.run(mg.match_gate(ctx, VIEWS, baseline))
+
+
+@pytest.mark.parametrize("usable, verdict", [(8, "match"), (4, "match"), (3, "uncertain")])
+def test_eight_photos_need_half_of_them_usable(usable, verdict):
+    assert decide(agg(0.95, 0.9, usable=usable, total=8))[0] == verdict
+
+
+def test_second_best_photo_decides_with_eight():
+    """The reference shows one side, so only some photos face it; one stray high photo can't make a match."""
+    views = [answer(i, product=0.2) for i in range(6)] + [answer(6, product=0.95), answer(7, product=0.55)]
+    assert decide(aggregate(views)) == ("uncertain", "uncertain")
+    views[7] = answer(7, product=0.8)
+    assert decide(aggregate(views)) == ("match", "match")

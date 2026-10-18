@@ -14,6 +14,15 @@ from stages.identify import GEMINI, MissingKeyError
 from stages.reference_price import CATEGORY_DEFAULTS, GENERIC_DEFAULT, PRICE_LOOKUP, category_default, plausible
 
 
+def remake(identity, update):
+    """identity with `update` applied and validated again, so specificity and product_name follow (model_copy
+    would keep the old ones)."""
+    from contracts import Identity
+
+    fields = {k: v for k, v in identity.model_dump().items() if k not in ("specificity", "product_name")}
+    return Identity.model_validate(fields | update)
+
+
 @pytest.fixture(autouse=True)
 def search_grounding_on(monkeypatch):
     """These tests cover the whole grounded -> ungrounded -> default chain, which runs once billing turns Search
@@ -189,7 +198,7 @@ def test_fixture_stub_used_without_calling_gemini(tmp_path, monkeypatch):
 # --- real listings (Serper shopping) ---------------------------------------------------------------
 
 THINKPAD = Identity(category="wireless mouse", brand="ThinkPad", visible_text=["ThinkPad"],
-                    attributes={"colour": "black"}, search_query="ThinkPad black wireless mouse", confidence=0.95)
+                    attributes={"colour": "black"}, search_query="ThinkPad wireless mouse", confidence=0.95)
 SHOPPING = json.loads((ROOT / "tests" / "data" / "serper_shopping_thinkpad.json").read_text(encoding="utf-8"))
 ESSENTIAL = (0, 4)  # "ThinkPad Essential Wireless Mouse 4x30m56887" (Lenovo $26.99) and 4x30m56888 ($36.73)
 
@@ -268,7 +277,8 @@ def test_listings_price_from_real_results(monkeypatch):
     assert [(s.seller, s.price_cad) for s in price.sources] == [("Lenovo", 26.99),
                                                                 (SHOPPING["shopping"][4]["source"], 36.73)]
     assert price.sources[0].title == ESSENTIAL_NAME and price.sources[0].url.startswith("https://")
-    assert price.note.startswith("Median new price of 2 current listings in Canada (Lenovo, ")
+    assert price.note.startswith("Median new price of 2 current listings of this kind of product from the brand")
+    assert price.exact_model is False  # THINKPAD has no model: a price for the line, flagged as such
     assert log["source"] == "serper_shopping"
     assert queries == ["ThinkPad wireless mouse"] and len(calls) == 1  # one search, one check, no estimate
     assert "0. Lenovo ThinkPad Essential Wireless Mouse 4x30m56887 | seller: Lenovo | $26.99" in calls[0]["contents"]
@@ -328,7 +338,7 @@ def test_a_printed_model_never_widens(monkeypatch):
     for entry in raw["results"]:
         entry["same_product"] = {2: 1.0, 0: 0.5, 4: 0.5, 1: 0.5}.get(entry["index"], 0.0)
     fake_gemini(monkeypatch, [(raw, []), ({"amount_cad": 47.0, "note": "x"}, SOURCES)])
-    named = THINKPAD.model_copy(update={"model": "4Y51D20848", "visible_text": ["ThinkPad", "4Y51D20848"]})
+    named = remake(THINKPAD, {"model": "4Y51D20848", "visible_text": ["ThinkPad", "4Y51D20848"]})
     _price, log = look_up(named)
     assert log["source"] == "search_grounded" and "only 1 matching listing" in log["attempts"][0]["rejected"]
 
@@ -337,7 +347,7 @@ def test_nothing_named_means_no_listings_price(monkeypatch):
     """Live on Supabase scan b458b7a0: nothing read off the item, so "computer mouse" priced any mouse."""
     queries = fake_search(monkeypatch)
     fake_gemini(monkeypatch, [({"amount_cad": 0, "note": "x"}, [])] * 2)
-    generic = THINKPAD.model_copy(update={"brand": None, "visible_text": [], "search_query": "black computer mouse"})
+    generic = remake(THINKPAD, {"brand": None, "visible_text": [], "search_query": "black computer mouse"})
     _price, log = look_up(generic)
     assert queries == [] and log["attempts"][0]["rejected"].startswith("nothing names the product")
 
@@ -390,27 +400,25 @@ def test_missing_serper_key_falls_back(monkeypatch):
 @pytest.mark.parametrize(
     "update, seller_name, expected",
     [
-        ({}, None, "ThinkPad wireless mouse"),  # no colour: identify words it differently each run
-        ({"brand": None}, None, "ThinkPad wireless mouse"),  # read text the brand rule dropped still names it
-        ({"model": "MS-1", "visible_text": ["ThinkPad", "MS-1"], "search_query": "ThinkPad MS-1 black mouse"}, None,
-         "ThinkPad MS-1 wireless mouse"),
+        ({}, None, "ThinkPad wireless mouse"),  # identify's search query: name and type, no colour
+        ({"model": "MS-1", "search_query": "ThinkPad MS-1 wireless mouse"}, None, "ThinkPad MS-1 wireless mouse"),
         ({}, "  Lenovo ThinkPad Essential  ", "Lenovo ThinkPad Essential"),  # the seller's name wins
     ],
 )
 def test_price_query(update, seller_name, expected):
-    assert rp.price_query(THINKPAD.model_copy(update=update), seller_name) == expected
+    assert rp.price_query(remake(THINKPAD, update), seller_name) == expected
 
 
 @pytest.mark.parametrize(
     "update, seller_typed, says",
     [
-        ({}, False, "No model is printed on the item and the seller didn't name one."),
-        ({}, True, "The seller says the product is: q"),  # Gemini judges whether that names a model or a line
-        ({"model": "MS-1", "visible_text": ["ThinkPad", "MS-1"]}, False, "The model is known: MS-1 is printed"),
+        ({}, False, "The exact model is not known, so any ThinkPad wireless mouse counts as this product"),
+        ({}, True, "The exact model is not known"),  # a seller's free text alone doesn't make it strict
+        ({"model": "MS-1", "visible_text": ["ThinkPad", "MS-1"]}, False, "The model is known: ThinkPad MS-1."),
     ],
 )
 def test_pick_prompt_says_whether_the_model_is_known(update, seller_typed, says):
-    prompt = rp.pick_prompt(THINKPAD.model_copy(update=update), "q", seller_typed, [])
+    prompt = rp.pick_prompt(remake(THINKPAD, update), "q", seller_typed, [])
     assert says in prompt
 
 

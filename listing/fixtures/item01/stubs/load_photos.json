@@ -1,0 +1,53 @@
+{
+  "item_id": "item01",
+  "views": [
+    {
+      "view_id": "p01",
+      "label": "photo 1",
+      "image_path": "fixtures/item01/photos/p01.jpg",
+      "source_url": null
+    },
+    {
+      "view_id": "p02",
+      "label": "photo 2",
+      "image_path": "fixtures/item01/photos/p02.jpg",
+      "source_url": null
+    },
+    {
+      "view_id": "p03",
+      "label": "photo 3",
+      "image_path": "fixtures/item01/photos/p03.jpg",
+      "source_url": null
+    },
+    {
+      "view_id": "p04",
+      "label": "photo 4",
+      "image_path": "fixtures/item01/photos/p04.jpg",
+      "source_url": null
+    },
+    {
+      "view_id": "p05",
+      "label": "photo 5",
+      "image_path": "fixtures/item01/photos/p05.jpg",
+      "source_url": null
+    },
+    {
+      "view_id": "p06",
+      "label": "photo 6",
+      "image_path": "fixtures/item01/photos/p06.jpg",
+      "source_url": null
+    },
+    {
+      "view_id": "p07",
+      "label": "photo 7",
+      "image_path": "fixtures/item01/photos/p07.jpg",
+      "source_url": null
+    },
+    {
+      "view_id": "p08",
+      "label": "photo 8",
+      "image_path": "fixtures/item01/photos/p08.jpg",
+      "source_url": null
+    }
+  ]
+}
