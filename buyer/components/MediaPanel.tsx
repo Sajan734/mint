@@ -1,4 +1,4 @@
-// Twin: seller/components/MediaPanel.tsx (identical except the frame spinner import, marked FRAME SPINNER)
+// Twin: seller/components/MediaPanel.tsx (keep identical after line 1)
 // Item media: one big square view (3D or the selected photo) and a row of tiles ("3D", then up to 3 photos).
 // Use <MediaPanel .../> for the stacked default, or <MediaProvider> + <MediaViewer/> + <MediaTiles/> to place the
 // two parts yourself (the selection lives in the provider).
@@ -6,11 +6,7 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react";
 import SplatViewer from "./SplatViewer";
-// FRAME SPINNER (buyer): the existing frame viewer, the 3D view when there is no splat.
-import SpinViewer from "./SpinViewer";
-const FrameSpin = ({ frames, alt }: { frames: string[]; alt: string }) => (
-  <SpinViewer frames={frames} alt={alt} variant="detail" />
-);
+import FrameSpin from "./FrameSpin"; // the frame viewer when there is no splat (each app has its own)
 
 export type MediaSelection = "3d" | number; // "3d" or an index into photos
 

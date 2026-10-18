@@ -34,6 +34,20 @@ describe("parseLiveIndex", () => {
     expect(parseLiveIndex(draft)).toEqual([]);
   });
 
+  it("shows listings written after listing/ dropped viewer_url (2026-10-17)", () => {
+    const current = {
+      scans: liveIndex.scans.map((d) => {
+        if (!d.market_listing) return d;
+        const listing: Record<string, unknown> = { ...d.market_listing.listing };
+        delete listing.viewer_url;
+        return { ...d, market_listing: { ...d.market_listing, listing } };
+      }),
+    };
+    const live = parseLiveIndex(current);
+    expect(live.map((m) => m.listing.item_id)).toEqual([LISTED]);
+    expect(live[0].listing.viewer_url).toBeNull();
+  });
+
   it("skips documents that break the schema and tolerates junk", () => {
     const bad = { scans: [{ status: "listed", published: true, market_listing: { listing: { title: "x" } } }] };
     expect(parseLiveIndex(bad)).toEqual([]);

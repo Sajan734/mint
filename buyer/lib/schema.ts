@@ -14,7 +14,7 @@ export const ListingSchema = z.object({
   price_cad: z.number().int().positive(),
   price_justification: z.array(z.string()),
   preview_images: z.array(z.string()),
-  viewer_url: z.string().nullable(),
+  viewer_url: z.string().nullish().transform((v) => v ?? null), // listing/ stopped writing it (47d6c02)
   needs_seller_check: z.boolean(),
   seller_check_reasons: z.array(z.string()),
 });
