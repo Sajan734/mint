@@ -25,6 +25,15 @@ An item can have **several passes** (recordings): the main lap, then usually the
 
 **How scans are taken (current app):** the item sits on a sheet of paper; the phone stays still; the paper is turned **clockwise** through a lap, with touch-ups from other heights as needed; the demonstrator taps stop. Then optionally another pass (item flipped over). A scan normally starts from the seller dashboard's "New product" ([DASHBOARD.md](DASHBOARD.md)), so `scan_id` is the dashboard's. The app records only; it doesn't track the turn, so `pose` = `pose_world` = the raw ARKit camera pose. **Relative to the item the camera orbits, but in ARKit's world the camera barely moves and the item turns**, so: mask the item (SAM 2) and get item-relative poses from VGGT on the masked frames, as in the hand-held-video fallback. ARKit poses still give metric scale and the (static) camera height. Older scans in `tools/` notes had manifests/keyframes; current ones don't.
 
+## Android scans (`capture.json` → `"platform": "android"`)
+
+Same folder, names and fields as iPhone scans; reconstruction needs no changes. What differs:
+
+- Poses are ARCore's `Camera.getPose()` (the physical camera, sensor orientation): camera-to-world, +x right, +y up, looking along −z, gravity +Y, metres. That's the same convention as ARKit's `camera.transform`, so `T_cv = translate(−anchor) · T · diag(1,−1,−1,1)` applies unchanged.
+- The video is scaled from ARCore's CPU camera image (the widest 4:3 one up to 1920 px): 960 × 720 when that image is at least 960 wide, otherwise its own size (never upscaled). Read `video_width` / `video_height`; `intrinsics` always match the video's pixels, and `sensor_width` / `sensor_height` are the CPU image's.
+- `exposure_locked` is false on phones that can't share their camera with the app (ARCore's autofocus then runs during the pass).
+- `device` is the maker, model and Android version (e.g. `"Google Pixel 9 Android 16"`).
+
 ## Conventions (CLAUDE.md §6.2, D2/D3)
 
 - **Orientation:** frames are in **sensor (landscape) orientation**, not rotated to portrait. The phone was held upright, so the item appears rotated 90° in players. Don't rotate the frames, or K stops matching.

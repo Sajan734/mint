@@ -9,6 +9,8 @@ scanner/
     Mint/                        the app: camera, coverage ring, tap to focus, recorder, uploader
     Packages/CoverageKit/        pure, unit-tested pieces (pose maths, file formats, fast sharpness, and the
                                  measured-but-shelved tracking work: hull, paper tracker)
+  android/                       the same app for Android (Kotlin, Compose, ARCore): app/ + coveragekit/ (the Kotlin port
+                                 of CoverageKit's paper read, turn coverage, sharpness and file formats, with its tests)
   supabase/                      Edge Function (signed uploads) + bucket SQL + setup guide
 ```
 
@@ -22,6 +24,19 @@ scanner/
 6. Pick the iPhone as the run destination, press **⌘R**. First launch: *Settings → General → VPN & Device Management → trust your developer certificate*.
 
 Tests: **⌘U** in Xcode (runs `CoverageKitTests`), or `cd ios/Packages/CoverageKit && swift test`.
+
+## Run it on an Android phone
+
+Same app, same screens, same Storage layout ([HANDOFF.md](HANDOFF.md)). Needs a phone with Google Play Services for AR (ARCore).
+
+1. Install **Android Studio** (it brings the SDK and a JDK). Open `scanner/android` and let Gradle sync.
+2. On the phone: *Settings → About phone →* tap *Build number* 7 times, then *Developer options → USB debugging → On*. Plug it in and allow the computer.
+3. Pick the phone as the run target and press **Run**, or from a shell: `cd scanner/android && ./gradlew :app:installDebug`.
+4. First launch asks for the camera and, if needed, installs Google Play Services for AR from the Play Store.
+
+Tests: `cd scanner/android && ./gradlew :coveragekit:test` (the CoverageKit tests, ported). Screens without a scan (design checks, debug builds only): `adb shell am start -n ca.htv11.mint.scanner/.MainActivity --es MintPreview review` (also `ready`, `recording`, `full`, `sending`, `finished`, `failed`, `verify`). Links: `adb shell am start -a android.intent.action.VIEW -d 'mint://scan?id=<uuid>'`.
+
+Differences from iOS: ARCore instead of ARKit (same pose convention: camera-to-world, +x right, +y up, looking along −z, gravity up, metres). Focus, exposure and white balance lock through ARCore's shared Camera2 device; on a phone that can't share its camera, ARCore drives it and `capture.json` says `"exposure_locked": false`. Scans are kept in the app's storage (`Android/data/ca.htv11.mint.scanner/files/scans/`, reachable over USB). **The Android Emulator can't run it live:** current emulator builds give the back camera id 10 (virtual scene) or 1 (emulated), and ARCore only opens camera 0, so the session fails to start. Every screen, link and the dashboard connection work there; scanning needs a real phone.
 
 ## Using it (the demo)
 
