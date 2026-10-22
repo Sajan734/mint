@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Mint mark: a mint dot on ink. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape android:shape="oval">
+            <solid android:color="#0B0F0E" />
+        </shape>
+    </item>
+    <item android:bottom="30dp" android:left="30dp" android:right="30dp" android:top="30dp">
+        <shape android:shape="oval">
+            <solid android:color="#3DDC97" />
+            <size android:width="48dp" android:height="48dp" />
+        </shape>
+    </item>
+</layer-list>
