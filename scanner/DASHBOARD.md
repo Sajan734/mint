@@ -10,6 +10,7 @@ Two places on the website open the scanner on the phone. Both are a **link with 
 - The website makes the id (`crypto.randomUUID()`), shows the QR, and then watches for results under that id. This is what `seller/` on the `seller-web` branch already does for listings (`seller/lib/scan.ts`: `mint://scan?id=…`).
 - **Reading the QR:** the iPhone Camera app (tap the banner), or **Mint itself**: its home screen ("Ready when you are") reads QR codes through its own camera, so for a demo just leave Mint open and point it at the screen.
 - On a phone, the link can also just be a tapped `<a href="mint://…">`.
+- The Android app ([README.md](README.md)) takes the same links: the phone's camera app or Google Lens opens Mint from the QR, and its waiting screen reads QR codes the same way.
 - Also accepted: `scan_id=` instead of `id=`, and the older `mintscan://` scheme.
 - After the scan the phone says "Look back at your computer" (listing) or "Look back at the listing" (verify).
 
