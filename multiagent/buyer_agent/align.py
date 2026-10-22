@@ -223,9 +223,9 @@ def align(a: Cloud, b: Cloud, max_points: int = 3000, seed: int = 0, upright: bo
             "rmse": err,  # trimmed, in units of the object's median radius
             "a_covered": float(np.mean(d_ab < FIT_EPS)),  # share of A with a B splat nearby
             "b_covered": float(np.mean(d_ba < FIT_EPS)),  # share of B with an A splat nearby
-            "ambiguity": float(err / runner_up)
-            if runner_up > 0
-            else 1.0,  # near 1 = another orientation fits as well
+            # near 1 = another orientation fits as well. err is measured after the scale search and the runner-up
+            # before it, so the ratio can pass 1 (AlignmentMetrics caps it at 1: crashed the check, 6c06ec3b)
+            "ambiguity": min(1.0, float(err / runner_up)) if runner_up > 0 else 1.0,
             "points_used": [len(an), len(bn)],
         },
     }
